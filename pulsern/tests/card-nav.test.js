@@ -7,10 +7,10 @@ import React from "react";
 import {
   AGAIN_GAP, REQUEUE_GAP, startSession, currentCard, atFrontier, canGoBack, canGoForward,
   canSkip, cardsLeft, skippedCount, sessionOutcome, saveCardView, goBack, goForward,
-  skipCurrent, gradeCurrent, jumpToSkipped, cardNavAction,
+  skipCurrent, gradeCurrent, jumpToSkipped, cardNavAction, undoGrade, sessionProgress,
 } from "../src/card-nav.js";
 import { nextSchedule } from "../src/srs.js";
-import { Flashcards } from "../src/App.jsx";
+import { Flashcards, ThemeToggle } from "../src/App.jsx";
 
 const deck = ["a", "b", "c", "d", "e", "f"];
 
@@ -91,6 +91,73 @@ describe("card history", () => {
     nav = goBack(nav);
     expect(currentCard(nav).id).toBe("a");
     expect(canGoBack(nav)).toBe(false);
+  });
+});
+
+describe("one grade per undone card", () => {
+  it("grades the requeued visit once: walking back cannot advance the schedule or XP again", () => {
+    let nav = startSession(["a", "b"]);
+    let srs = {};
+    let xp = 0;
+    const grade = (g) => {
+      const result = gradeCurrent(nav, g);
+      if (!result.recorded) return false;
+      const id = currentCard(nav).id;
+      srs = { ...srs, [id]: nextSchedule(srs[id], g) };
+      xp += g === "good" ? 5 : g === "easy" ? 8 : 0;
+      nav = result.nav;
+      return true;
+    };
+    expect(grade("good")).toBe(true);
+    nav = goBack(nav);
+    nav = undoGrade(nav);
+    delete srs.a;
+    xp -= 5;
+    nav = goForward(nav).nav;
+    expect(grade("good")).toBe(true);
+    expect(currentCard(nav).id).toBe("a");
+    expect(grade("good")).toBe(true);
+    expect(srs.a.interval).toBe(3);
+    const awarded = xp;
+    nav = goBack(nav);
+    nav = goBack(nav);
+    nav = goBack(nav);
+    expect(currentCard(nav)).toMatchObject({ id: "a", grade: "good" });
+    expect(grade("good")).toBe(false);
+    expect(srs.a.interval).toBe(3);
+    expect(xp).toBe(awarded);
+  });
+});
+
+describe("undo clears every copied grade", () => {
+  it("does not count an undone card as reviewed", () => {
+    let nav = startSession(["a", "b"]);
+    nav = skipCurrent(nav).nav;
+    nav = gradeCurrent(nav, "good").nav;
+    expect(currentCard(nav).id).toBe("a");
+    nav = gradeCurrent(nav, "good").nav;
+    expect(sessionProgress(nav).done).toBe(2);
+    nav = goBack(nav);
+    nav = undoGrade(nav);
+    expect(nav.entries.filter((e) => e.id === "a").every((e) => e.grade == null)).toBe(true);
+    expect(sessionProgress(nav).done).toBe(1);
+  });
+});
+
+describe("undo stays unfinished", () => {
+  it("keeps an undone card in the queue when Next moves on", () => {
+    let nav = startSession(["a", "b", "c"]);
+    nav = gradeCurrent(nav, "good").nav;
+    nav = goBack(nav);
+    nav = undoGrade(nav);
+    expect(currentCard(nav)).toMatchObject({ id: "a", grade: null });
+    nav = goForward(nav).nav;
+    expect(currentCard(nav).id).toBe("b");
+    expect(nav.queue).toContain("a");
+    nav = gradeCurrent(nav, "good").nav;
+    nav = gradeCurrent(nav, "good").nav;
+    expect(currentCard(nav)).toMatchObject({ id: "a", grade: null });
+    expect(sessionOutcome(nav)).toBe("studying");
   });
 });
 
@@ -204,6 +271,8 @@ describe("keyboard", () => {
     expect(cardNavAction({ key: "ArrowRight", target: { tagName: "SELECT", closest: () => null } })).toBeNull();
     expect(cardNavAction({ key: "ArrowLeft", target: { tagName: "DIV", isContentEditable: true, closest: () => null } })).toBeNull();
     expect(cardNavAction({ key: "ArrowLeft", target: dialogBtn })).toBeNull();
+    expect(cardNavAction({ key: "ArrowRight", target: { tagName: "BUTTON", getAttribute: () => "radio", closest: () => null } })).toBeNull();
+    expect(cardNavAction({ key: "ArrowLeft", target: { tagName: "BUTTON", getAttribute: () => "tab", closest: () => null } })).toBeNull();
     expect(cardNavAction({ key: "ArrowRight", ctrlKey: true, target: div })).toBeNull();
     expect(cardNavAction({ key: "ArrowLeft", metaKey: true, target: div })).toBeNull();
     expect(cardNavAction({ key: "ArrowRight", altKey: true, target: div })).toBeNull();
@@ -213,6 +282,18 @@ describe("keyboard", () => {
     for (const key of ["Enter", "1", "2", "3", "4", "a", "h", "g", "e", " ", "Escape"]) {
       expect(cardNavAction({ key, target: div })).toBeNull();
     }
+  });
+});
+
+describe("theme toggle while locked", () => {
+  it("is a 44px header control for exams and locked access", () => {
+    const src = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+    expect(src).toMatch(/\(examLock \|\| locked\) && \(\s*<ThemeToggle/);
+    expect(src).toMatch(/\.theme-compact\{[^}]*min-width:44px;min-height:44px/);
+    const html = renderToStaticMarkup(React.createElement(ThemeToggle, { theme: "light", onToggle() {} }));
+    expect(html).toContain('aria-label="Night mode"');
+    expect(html).toContain("theme-compact");
+    expect(renderToStaticMarkup(React.createElement(ThemeToggle, { theme: "dim", onToggle() {} }))).toContain('aria-label="Light mode"');
   });
 });
 

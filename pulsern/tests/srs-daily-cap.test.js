@@ -1,7 +1,7 @@
 /* The 20-a-day new-card cap holds for the whole LOCAL day — across queue
    rebuilds (remounts, focus changes) and reloads — not per queue build. */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { dueQueue, nextSchedule, NEW_PER_DAY, newCardAllowance, noteNewCard } from "../src/srs.js";
+import { dueQueue, nextSchedule, NEW_PER_DAY, newCardAllowance, noteNewCard, refundNewCard } from "../src/srs.js";
 import { migrateBlob } from "../src/state.js";
 
 const card = (id) => ({ id, cat: "Pharmacology", topic: "t", front: "f", back: "b" });
@@ -68,6 +68,36 @@ describe("daily new-card limit", () => {
     expect(migrateBlob({}, []).fcNew).toEqual({ day: null, count: 0 });
     expect(newCardAllowance(migrateBlob({}, []).fcNew)).toBe(NEW_PER_DAY);
     expect(migrateBlob({ fcNew: "junk" }, []).fcNew).toEqual({ day: null, count: 0 });
+  });
+
+  it("does not charge the same new card again after its schedule is rolled back", () => {
+    let fcNew = noteNewCard({ day: null, count: 0 }, "2026-07-13", "c1");
+    expect(fcNew).toEqual({ day: "2026-07-13", count: 1, ids: ["c1"] });
+    fcNew = noteNewCard(fcNew, "2026-07-13", "c1");
+    expect(fcNew.count).toBe(1);
+    expect(newCardAllowance(fcNew)).toBe(NEW_PER_DAY - 1);
+    fcNew = noteNewCard(fcNew, "2026-07-13", "c2");
+    expect(fcNew).toMatchObject({ count: 2, ids: ["c1", "c2"] });
+    const saved = migrateBlob(JSON.parse(JSON.stringify({ fcNew })), []);
+    expect(noteNewCard(saved.fcNew, "2026-07-13", "c1").count).toBe(2);
+    expect(saved.fcNew.ids).toEqual(["c1", "c2"]);
+  });
+
+  it("puts an undone new card back in the queue after the day's allowance is used up", () => {
+    let fcNew = { day: null, count: 0 };
+    const map = {};
+    for (let i = 0; i < NEW_PER_DAY; i++) {
+      fcNew = noteNewCard(fcNew, "2026-07-13", `c${i}`);
+      map[`c${i}`] = nextSchedule(undefined, "good");
+    }
+    delete map.c19;
+    expect(dueQueue(deck, map, newCardAllowance(fcNew))).not.toContain("c19");
+    fcNew = refundNewCard(fcNew, "2026-07-13", "c19");
+    expect(newCardAllowance(fcNew)).toBe(1);
+    expect(fcNew.ids).not.toContain("c19");
+    expect(dueQueue(deck, map, newCardAllowance(fcNew))).toContain("c19");
+    fcNew = noteNewCard(fcNew, "2026-07-13", "c19");
+    expect(fcNew.count).toBe(NEW_PER_DAY);
   });
 
   it("the default limit keeps the single-build behaviour, and never exceeds NEW_PER_DAY", () => {

@@ -40,15 +40,50 @@ beforeEach(async () => {
   page = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
   page.on("pageerror", (e) => { throw e; });
   await page.goto(`${base}tests/browser/question-nav.html`);
-  await page.waitForFunction(() => window.T?.ready, null, { timeout: 60_000 });
-}, 90_000);
+  /* Cold start: Vite compiles App.jsx on the first visit while other
+     browser suites compile too, which can take over a minute. */
+  await page.waitForFunction(() => window.T?.ready, null, { timeout: 110_000 });
+}, 130_000);
 
 const stem = () => page.locator(".stem").first().innerText();
 const stats = () => page.locator("[data-testid=stats]").innerText();
 const skip = () => page.getByRole("button", { name: "Skip this question without scoring it" });
 const next = () => page.getByRole("button", { name: "Next question" });
 const back = () => page.getByRole("button", { name: "Back to the previous question" });
+/* Answer options are real radios (one answer) or checkboxes (select all). */
+const choice = (name) => page.getByRole("radio", { name }).or(page.getByRole("checkbox", { name }));
 const visible = async (locator) => { await locator.waitFor({ state: "visible" }); };
+
+describe("answer radio keys", () => {
+  it("moves focus and selection with the arrow keys, and 1–9 still pick", async () => {
+    await page.evaluate(() => window.T.mountPractice(false));
+    await page.getByRole("button", { name: "New questions" }).click();
+    await visible(page.locator(".stem"));
+    const stemBefore = await stem();
+    const focusIndex = () => page.evaluate(() => [...document.querySelectorAll("[role=radio]")].indexOf(document.activeElement));
+    const checked = (i) => page.getByRole("radio").nth(i).getAttribute("aria-checked");
+    await page.getByRole("radio").nth(0).focus();
+    await page.keyboard.press("ArrowDown");
+    expect(await focusIndex()).toBe(1);
+    expect(await checked(1)).toBe("true");
+    await page.keyboard.press("ArrowUp");
+    expect(await focusIndex()).toBe(0);
+    expect(await checked(0)).toBe("true");
+    await page.keyboard.press("End");
+    expect(await focusIndex()).toBe(3);
+    expect(await checked(3)).toBe("true");
+    await page.keyboard.press("Home");
+    expect(await focusIndex()).toBe(0);
+    await page.keyboard.press("ArrowLeft");
+    expect(await focusIndex()).toBe(3);
+    expect(await checked(3)).toBe("true");
+    await page.keyboard.press("2");
+    expect(await checked(1)).toBe("true");
+    expect(await focusIndex()).toBe(3);
+    await page.keyboard.press(" ");
+    expect(await stem()).toBe(stemBefore);
+  }, 60_000);
+});
 
 describe("practice questions", () => {
   it("moves back and forward, and a skip does not count as wrong", async () => {
@@ -73,7 +108,7 @@ describe("practice questions", () => {
     await page.getByRole("button", { name: "Review 1 skipped" }).click();
     await page.waitForFunction((t) => document.querySelector(".stem")?.textContent === t, first);
 
-    await page.getByRole("button", { name: "Beta choice" }).click();
+    await choice("Beta choice").click();
     await page.getByRole("button", { name: "Check answer" }).click();
     await visible(page.getByText(/RATIONALE\d/));
     const afterWrong = await stats();
@@ -88,7 +123,7 @@ describe("practice questions", () => {
 
     await back().click();
     await visible(page.getByText(/RATIONALE\d/));
-    expect(await page.getByRole("button", { name: "Beta choice" }).isDisabled()).toBe(true);
+    expect(await choice("Beta choice").isDisabled()).toBe(true);
     await visible(page.getByText("Answered earlier"));
     expect(await stats()).toBe(afterWrong);
 
@@ -125,6 +160,21 @@ describe("practice questions", () => {
 });
 
 describe("case-study steps", () => {
+  it("shows the AI label and the verify note after Begin case", async () => {
+    await page.evaluate(() => window.T.mountCase());
+    await page.getByRole("button", { name: /Pharmacology/ }).click();
+    await page.getByRole("button", { name: "Open case →" }).click();
+    await page.getByRole("button", { name: "Begin case →" }).click();
+    await visible(page.getByText("CASESTEP0"));
+    await visible(page.getByText(/AI-assisted case that passed automated quality checks/));
+    await visible(page.getByText(/Verify it against your course materials/));
+    await visible(page.getByRole("button", { name: "Report a problem with this case study" }));
+    await choice("First action").click();
+    await page.getByRole("button", { name: "Check answer" }).click();
+    await visible(page.getByText(/CASERATIONALE0/));
+    await visible(page.getByRole("button", { name: "Report a problem with this case study" }));
+  }, 60_000);
+
   it("skips a step without scoring it, and Back shows an answer read-only", async () => {
     await page.evaluate(() => window.T.mountCase());
     await page.getByRole("button", { name: /Pharmacology/ }).click();
@@ -139,7 +189,7 @@ describe("case-study steps", () => {
 
     await back().click();
     await page.waitForFunction(() => /CASESTEP0/.test(document.querySelector(".stem")?.textContent ?? ""));
-    await page.getByRole("button", { name: "First action" }).click();
+    await choice("First action").click();
     await page.getByRole("button", { name: "Check answer" }).click();
     await visible(page.getByText(/CASERATIONALE0/));
     expect(await stats()).toMatch(/^1 recorded, 1 correct, 0 wrong/);
@@ -148,7 +198,7 @@ describe("case-study steps", () => {
     await page.waitForFunction(() => /CASESTEP1/.test(document.querySelector(".stem")?.textContent ?? ""));
     await back().click();
     await visible(page.getByText(/CASERATIONALE0/));
-    expect(await page.getByRole("button", { name: "First action" }).isDisabled()).toBe(true);
+    expect(await choice("First action").isDisabled()).toBe(true);
     expect(await stats()).toMatch(/^1 recorded, 1 correct, 0 wrong/);
   }, 60_000);
 

@@ -65,17 +65,47 @@ export const TOUR_STEPS = [
     tab: "today",
     focus: "today-round",
     title: "The tools around the questions",
-    body: "The round button opens lab reference ranges and Help. Listen reads a question, case, or card aloud and highlights the words, then reads the rationale after you answer. Readiness exams are their own sitting: 85 questions, a clock, feedback after you finish, and each form once. Light and dim are in the header. Home, in that same header, brings you back here.",
+    body: "The floating 🧪 button opens the lab reference ranges, a quick lookup, and Help over any screen, mid-question too, and you can drag it anywhere. Listen reads a question, case, or card aloud and highlights the words, then reads the rationale after you answer. Readiness exams are their own sitting: 85 questions, a clock, feedback after you finish, and each form once. Light and night mode live in the menu. The PulseRN logo brings you back here.",
   },
 ];
 
-export function tourStepAt(index) {
-  if (!Number.isInteger(index) || index < 0 || index >= TOUR_STEPS.length) return null;
-  return TOUR_STEPS[index];
+/* The short tour a new student sees after their first answer. Three steps,
+   each on a real screen. The full walk-through stays in the menu. */
+export const QUICK_TOUR_STEPS = [
+  {
+    id: "quick-round",
+    tab: "today",
+    focus: "today-round",
+    title: "Your daily round",
+    body: "Built by a working hospital RN, for the way you learn and remember under pressure. One tap runs today's round: due flashcards first, then 8 adaptive questions, about 10 minutes.",
+  },
+  {
+    id: "quick-practice",
+    tab: "qbank",
+    focus: "qbank",
+    title: "Practice, cases, and cards",
+    body: "Practice adapts to you across all eight client-needs categories. Use Focus to drill one area. Cases walk the six NCJMM steps, and Cards bring facts back on real calendar dates.",
+  },
+  {
+    id: "quick-tools",
+    tab: "today",
+    focus: "monitor",
+    title: "Tools and progress",
+    body: "The floating 🧪 button opens lab ranges, a quick lookup, and Help without leaving the question. Drag it anywhere. After 12 answers, the monitor shows a readiness range, labeled as an estimate. The full tour, night mode, and settings are in the menu.",
+  },
+];
+
+export function tourStepsFor(mode) {
+  return mode === "quick" ? QUICK_TOUR_STEPS : TOUR_STEPS;
 }
 
-export function isLastTourStep(index) {
-  return index === TOUR_STEPS.length - 1;
+export function tourStepAt(index, steps = TOUR_STEPS) {
+  if (!Number.isInteger(index) || index < 0 || index >= steps.length) return null;
+  return steps[index];
+}
+
+export function isLastTourStep(index, steps = TOUR_STEPS) {
+  return index === steps.length - 1;
 }
 
 /* Tab wraps inside a dialog. A focus that is not on a control (index -1)

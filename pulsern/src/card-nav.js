@@ -171,9 +171,11 @@ export function gradeCurrent(nav, grade) {
   if (!e || e.grade) return { nav, recorded: false };
   const entries = nav.entries.map((entry, i) => {
     if (entry.id !== e.id) return entry;
-    const cleared = { ...entry, skippedVisit: false };
-    if (i === nav.index) return { ...cleared, grade, show: false, typed: "" };
-    return cleared;
+    /* An earlier visit left ungraded by Undo is the same card. Lock it
+       with this grade so walking back cannot record a second schedule
+       change or a second XP award. */
+    if (i === nav.index || !entry.grade) return { ...entry, skippedVisit: false, grade, show: false, typed: i === nav.index ? "" : entry.typed };
+    return { ...entry, skippedVisit: false };
   });
   let queue = nav.queue.filter((id) => id !== e.id);
   if (grade === "again") queue = insertGap(queue, e.id, AGAIN_GAP);
@@ -209,8 +211,53 @@ export function cardNavAction(event) {
   if (target?.isContentEditable) return null;
   const tag = target?.tagName?.toUpperCase?.() ?? "";
   if (FIELD.test(tag)) return null;
-  if (typeof target?.closest === "function" && target.closest("[role='dialog'], .lab-drawer, .fab-menu")) return null;
+  if (typeof target?.closest === "function" && target.closest("[role='dialog'], [role='radiogroup'], .lab-drawer, .fab-menu")) return null;
+  const role = typeof target?.getAttribute === "function" ? target.getAttribute("role") : target?.role;
+  if (role === "radio" || role === "checkbox" || role === "tab") return null;
   if (key === "ArrowLeft") return "back";
   if (key === "ArrowRight") return "next";
   return null;
+}
+
+/* Where the student is in this sitting, for the "3 / 12" indicator.
+   total  = every distinct card offered in this sitting
+   done   = distinct cards whose latest grade is not "again"
+   position = distinct cards opened up to and including the one on screen */
+export function sessionProgress(nav) {
+  if (!nav) return { position: 0, total: 0, done: 0 };
+  const ids = new Set([...(nav.entries ?? []).map((e) => e.id), ...(nav.queue ?? [])]);
+  const latest = new Map();
+  for (const e of nav.entries ?? []) latest.set(e.id, e.grade || null);
+  let done = 0;
+  for (const g of latest.values()) if (g && g !== "again") done += 1;
+  const upto = new Set((nav.entries ?? []).slice(0, Math.max(0, Math.min(nav.index, nav.entries.length - 1)) + 1).map((e) => e.id));
+  const total = ids.size;
+  const position = nav.index >= (nav.entries?.length ?? 0) ? total : Math.min(upto.size, total);
+  return { position, total, done: Math.min(done, total) };
+}
+
+/* Undo is offered on a graded card the student walked Back to, as long as
+   that card has not been opened again later in the sitting. */
+export function canUndoGrade(nav) {
+  const e = currentCard(nav);
+  if (!e || !e.grade) return false;
+  return !nav.entries.slice(nav.index + 1).some((later) => later.id === e.id);
+}
+
+/* Clear the grade on every visit of this card and show the answer again
+   so it can be re-graded. A copied grade on an earlier visit would still
+   count as reviewed. An "again" re-queue for this card is withdrawn. The
+   caller restores the card's previous schedule. */
+export function undoGrade(nav) {
+  if (!canUndoGrade(nav)) return nav;
+  const e = currentCard(nav);
+  const entries = nav.entries.map((entry, i) => {
+    if (entry.id !== e.id) return entry;
+    return i === nav.index ? { ...entry, grade: null, show: true } : { ...entry, grade: null };
+  });
+  /* The grade is gone, so the card is unfinished again. Next from this
+     history entry only restores the next opened card; without a queue
+     entry the undone card would vanish from the sitting. */
+  const queue = nav.queue.includes(e.id) ? nav.queue : [...nav.queue, e.id];
+  return { ...nav, entries, queue };
 }

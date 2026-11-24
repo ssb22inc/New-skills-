@@ -257,14 +257,14 @@ import { emptyAbility, updateAbility, itemRating, readinessFrom, pickTargetRatin
 import { migrateBlob } from "./state.js";
 import { ngnExt, fourFn, validQ, scoreItem, scoreCaseStep, isFullCredit, sumScores } from "./ngn.js";
 import { NGN_SAMPLES, CALC_SAMPLES, COVERAGE_SAMPLES } from "./ngn-samples.js";
-import { LAB_GROUPS } from "./labs.js";
 import { CASE_STUDIES } from "./case-studies.js";
-import { dueQueue, nextSchedule, migrateLegacySrs, NEW_PER_DAY, newCardAllowance, noteNewCard } from "./srs.js";
+import { dueQueue, nextSchedule, migrateLegacySrs, NEW_PER_DAY, newCardAllowance, noteNewCard, refundNewCard } from "./srs.js";
 import {
   startSession as startCardSession, currentCard, atFrontier, canGoBack as canGoBackCard,
   canGoForward as canGoForwardCard, canSkip as canSkipCard, cardsLeft, skippedCount as skippedCardCount,
   sessionOutcome, saveCardView, goBack as goBackCard, goForward as goForwardCard, skipCurrent as skipCard,
   gradeCurrent as gradeCard, jumpToSkipped as jumpToSkippedCard, cardNavAction,
+  sessionProgress as cardProgress, canUndoGrade, undoGrade,
 } from "./card-nav.js";
 import { pickCategory, seededRandom, seedFrom, STARVE_WINDOW } from "./weak-spots.js";
 import { updateMissSchedule, reviewPools, sessionPool } from "./question-review.js";
@@ -273,7 +273,15 @@ import {
   forward, fallbackSkip, jumpToSkipped, skippedCount, currentEntry, nextUnvisited,
   heldIds, checkpointAfter,
 } from "./question-nav.js";
-import { QuestionNav } from "./question-nav.jsx";
+import { QuestionNav, OPEN_LABS_EVENT } from "./question-nav.jsx";
+import { LabFab, resetLabFab, useLabSettleKey } from "./lab-fab.jsx";
+import { onRadioKeyDown, radioTabIndex } from "./radio-group.js";
+import { cycleTab, tabbables } from "./focus-trap.js";
+import { LabPanel } from "./lab-panel.jsx";
+import { FocusBar } from "./focus-sheet.jsx";
+import { TabIcon } from "./tab-icons.jsx";
+import { useStudyKeys, shortcutHint, digitPickEnabled, studySurfaceBlocked, CARD_SHORTCUT_HINT } from "./study-keys.js";
+import { choiceState, choiceClasses, CHOICE_BADGE } from "./choice-state.js";
 import Calculator from "./calculator.jsx";
 import ExamCenter from "./exam.jsx";
 import { useExamHomeExit } from "./exam-leave.js";
@@ -296,7 +304,7 @@ import {
 } from "./first-answer.js";
 import { hasDraftAnswer, planLeaveRequest } from "./home-nav.js";
 import { useSessionReport } from "./session-report.js";
-import { tourMark, tourStepAt } from "./tour.js";
+import { tourMark, tourStepAt, tourStepsFor } from "./tour.js";
 import { LeaveDialog, Tour, useTourDismissScroll, useTourPlacement } from "./tour.jsx";
 
 const STORE_KEY = "pulsern-v1";
@@ -435,6 +443,8 @@ export default function App() {
   const [calibration, setCalibration] = useState({}); // bank item ratings {id: {rating}}
   const [bankQs, setBankQs] = useState(null);       // shared bank; null → offline fallback
   const [menuOpen, setMenuOpen] = useState(false);  // header menu
+  const [tourMode, setTourMode] = useState("quick"); // quick (auto, after the first answer) | full (from the menu)
+  const menuBtnRef = useRef(null);
   const [labOpen, setLabOpen] = useState(false);    // lab-values drawer
   const [helpOpen, setHelpOpen] = useState(false);  // help & contact center
   const [tourStep, setTourStep] = useState(null);   // null = closed, otherwise an index into TOUR_STEPS
@@ -522,12 +532,38 @@ export default function App() {
        back to step 0 is what made Next look like a dead control for anyone
        who had not dismissed it yet. */
     if (locked && tourStep != null) setTourStep(null);
-    else if (tourStep == null && shouldAutoOpenTour({ loaded, tourSeen, ent, locked, sessionLive })) setTourStep(0);
-  }, [loaded, tourSeen, ent, locked, tourStep, sessionLive]);
+    else if (tourStep == null && shouldAutoOpenTour({ loaded, tourSeen, ent, locked, sessionLive, firstAnswerOwed: activating })) { setTourMode("quick"); setTourStep(0); }
+  }, [loaded, tourSeen, ent, locked, tourStep, sessionLive, activating]);
 
   /* The tour shows the real screen for the step. Positioning runs again
      when that screen replaces a placeholder, such as the flashcard queue. */
-  useTourPlacement(tourStep, tab, setTab);
+  const tourSteps = tourStepsFor(tourMode);
+  /* The 🧪 Labs chip in every question's nav row opens the drawer. */
+  useEffect(() => {
+    const open = () => { setMenuOpen(false); setHelpOpen(false); setLabOpen(true); };
+    window.addEventListener(OPEN_LABS_EVENT, open);
+    return () => window.removeEventListener(OPEN_LABS_EVENT, open);
+  }, []);
+  /* Escape closes the header menu and hands focus back to ☰. */
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      setMenuOpen(false);
+      menuBtnRef.current?.focus();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
+  /* A short pulse on the header stat chip whenever XP goes up. */
+  const [xpPulse, setXpPulse] = useState(0);
+  const lastXp = useRef(xp);
+  useEffect(() => {
+    if (loaded && xp > lastXp.current) setXpPulse((n) => n + 1);
+    lastXp.current = xp;
+  }, [xp, loaded]);
+  useTourPlacement(tourStep, tab, setTab, tourSteps);
   const [homeScroll, setHomeScroll] = useState(0);
   useTourDismissScroll(homeScroll, tourStep != null, tab);
 
@@ -795,7 +831,8 @@ export default function App() {
   ], [bankCases]);
   const newAllowance = newCardAllowance(fcNew, todayStr());
   const dueCount = useMemo(() => dueQueue(allCards, srsMap, newAllowance).length, [allCards, srsMap, newAllowance]);
-  const onNewCard = () => setFcNew((f) => noteNewCard(f, todayStr()));
+  const onNewCard = (id) => setFcNew((f) => noteNewCard(f, todayStr(), id));
+  const onRefundNewCard = (id) => setFcNew((f) => refundNewCard(f, todayStr(), id));
   const allQuestions = useMemo(
     () => [...(bankQs ?? [...QUESTIONS, ...NGN_SAMPLES, ...CALC_SAMPLES, ...COVERAGE_SAMPLES]), ...customQs],
     [bankQs, customQs]
@@ -883,6 +920,7 @@ export default function App() {
     setLabOpen(false);
     setHelpOpen(false);
     if (destination === "tour") {
+      setTourMode("full");
       setTourStep(0);
       return;
     }
@@ -927,35 +965,37 @@ export default function App() {
   };
 
   return (
-    <div className={"app" + (shield ? " shield" : "") + (isOwner ? " owner" : "") + (scrolling ? " scrolling" : "")} data-theme={theme}>
+    <div className={"app" + (shield ? " shield" : "") + (isOwner ? " owner" : "") + (scrolling ? " scrolling" : "") + (sessionLive ? " in-session" : "") + " tab-" + tab} data-theme={theme}>
       <Style />
       <header className={"top" + (menuOpen ? " menu-open" : "")}>
         {/* Exam lockdown: while a readiness exam runs, all navigation and
             references disappear — only the exam (and its calculator) exists,
             just like the real testing center. */}
+        {/* PR #177 added a separate Home pill. The logo is the Home action now
+            (same goHome handler, 44 px target, labelled "PulseRN home"), and
+            Today in the tab bar does the same, so the header keeps one row:
+            logo · streak/XP chip · menu. Night mode moved into the menu. */}
         <button type="button" className="brand brand-btn" onClick={goHome} aria-label="PulseRN home">
           <span className="pulse-dot" aria-hidden="true" />
           <span className="brand-name">PULSE<em>RN</em></span>
         </button>
-        <button type="button" className="home-btn" onClick={goHome}>Home</button>
         <div className="top-stats mono">
           {examLock ? (
             <span className="exam-lock-chip" title="References stay closed until you submit or end the exam">🔒 EXAM</span>
           ) : (
-            <>
-              <span title="Experience points">◆ {xp} XP</span>
-              <span title="Day streak">🔥 {streak.count}</span>
-            </>
+            <span key={xpPulse} className={"stat-chip" + (xpPulse ? " pulse" : "")} role="img" aria-label={`${streak.count} day streak, ${xp} XP`}>
+              <span aria-hidden="true">🔥 {streak.count}</span><span className="stat-sep" aria-hidden="true" /><span aria-hidden="true">◆ {xp} XP</span>
+            </span>
           )}
-          <button
-            className="theme-btn"
-            onClick={() => setTheme(theme === "light" ? "dim" : "light")}
-            title="Light mode reads best for long study sessions; dim mode cuts glare for night review"
-
-          >
-            {theme === "light" ? "☾ Dim" : "☀ Light"}
-          </button>
-          {!examLock && <button className="theme-btn menu-btn" onClick={() => setMenuOpen((m) => !m)} aria-label="Menu" aria-expanded={menuOpen}>☰</button>}
+          {(examLock || locked) && (
+            <ThemeToggle theme={theme} onToggle={() => setTheme(theme === "light" ? "dim" : "light")} />
+          )}
+          {!examLock && (
+            <button ref={menuBtnRef} type="button" className="theme-btn menu-btn" onClick={() => setMenuOpen((m) => !m)}
+              aria-label={menuOpen ? "Close menu" : "Menu"} aria-expanded={menuOpen}>
+              <span aria-hidden="true">{menuOpen ? "✕" : "☰"}</span>
+            </button>
+          )}
         </div>
         {menuOpen && !examLock && (
           <>
@@ -963,10 +1003,14 @@ export default function App() {
             <nav className="menu-panel" aria-label="Main menu">
               {!locked && <>
                 <button type="button" className="menu-item" onClick={goHome}>🏠 Home</button>
-                <button type="button" className="menu-item" onClick={() => { setLabOpen(true); setMenuOpen(false); }}>🧪 Lab values reference</button>
+                <button type="button" className="menu-item" onClick={() => { setHelpOpen(false); setLabOpen(true); setMenuOpen(false); }}>🧪 Lab values reference</button>
                 <button type="button" className="menu-item" onClick={() => goSection("exams")}>📝 Readiness exams</button>
                 <button type="button" className="menu-item" onClick={() => goSection("plans")}>💳 Plans & upgrades</button>
-                <button type="button" className="menu-item" onClick={() => { setHelpOpen(true); setMenuOpen(false); }}>💬 Help & contact</button>
+                <button type="button" className="menu-item" onClick={() => { setLabOpen(false); setHelpOpen(true); setMenuOpen(false); }}>💬 Help & contact</button>
+                <button type="button" className="menu-item" onClick={() => setTheme(theme === "light" ? "dim" : "light")}
+                  title="Light mode reads best for long study sessions; night mode cuts glare for late review">
+                  {theme === "light" ? "🌙 Night mode" : "☀ Light mode"}
+                </button>
                 <button type="button" className="menu-item" onClick={() => { window.location.assign("/about/"); }}>🩺 Meet the RN behind PulseRN</button>
                 <button type="button" className="menu-item" onClick={openTour}>🎓 Tour</button>
                 <button type="button" className="menu-item" onClick={() => goSection("stats")}>⚙ Settings & Stats</button>
@@ -1011,36 +1055,46 @@ export default function App() {
           {tab === "today" && <Today xp={xp} streak={streak} bestRun={bestRun} log={log} readiness={readiness} readyLabel={readyLabel} catStats={catStats} daily={daily} dueCount={dueCount} go={goSection}
             record={record} questions={allQuestions} provider={provider}
             ability={ability} calibration={calibration} plan={plan} missSchedule={missSchedule}
-            newAllowance={newAllowance} onNewCard={onNewCard}
+            newAllowance={newAllowance} onNewCard={onNewCard} onRefundNewCard={onRefundNewCard}
             profile={profile} setProfile={setProfile} showProfile={profilePrompt} dismissProfileCard={() => setProfileCardDismissed(true)}
             fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)}
             cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} addXp={(n) => setXp((x) => x + n)}
             needsFirstAnswer={activating} quizKick={quizKick} appliedQuizKick={appliedQuizKick} accessPending={accessPending}
-            homeEpoch={homeEpoch} tourHold={tourStep != null} tourFocus={tourStep == null ? null : tourStepAt(tourStep)?.focus} onSession={onSession} />}
-          {tab === "qbank" && <QBank key={sectionEpoch} record={record} log={log} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} missSchedule={missSchedule} isOwner={isOwner} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep)?.focus} />}
-          {tab === "case" && <CaseStudy key={sectionEpoch} record={record} provider={provider} cases={allCases} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep)?.focus} />}
-          {tab === "cards" && <Flashcards key={sectionEpoch} addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)} newAllowance={newAllowance} onNewCard={onNewCard} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep)?.focus} />}
+            homeEpoch={homeEpoch} tourHold={tourStep != null} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} onSession={onSession} />}
+          {tab === "qbank" && <QBank key={sectionEpoch} record={record} log={log} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} missSchedule={missSchedule} isOwner={isOwner} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
+          {tab === "case" && <CaseStudy key={sectionEpoch} record={record} provider={provider} cases={allCases} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
+          {tab === "cards" && <Flashcards key={sectionEpoch} addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)} newAllowance={newAllowance} onNewCard={onNewCard} onRefundNewCard={onRefundNewCard} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
           {tab === "exams" && <ExamCenter record={record} examResults={examResults} setExamResults={setExamResults} cats={CATS} ent={ent} isOwner={isOwner} onRunning={setExamLock} onAttempt={(f) => setEnt((e) => (e ? { ...e, examsLeft: Math.max(0, e.examsLeft - 1), attempted: [...e.attempted, f] } : e))} onUpgrade={() => goSection("plans")} onSession={onSession} bindExit={examLeave.bindExit} onScored={examLeave.onScored} onLeaveSubmit={examLeave.onLeaveSubmit} />}
           {tab === "plans" && <Paywall ent={ent} onRefresh={refreshEnt} trialBanner={ent?.status === "trial"} />}
-          {tab === "stats" && <Stats log={log} catStats={catStats} popStats={popStats} acc={acc} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => goSection("plans")} profile={profile} setProfile={setProfile} tourFocus={tourStep == null ? null : tourStepAt(tourStep)?.focus} />}
+          {tab === "stats" && <Stats xp={xp} streak={streak} bestRun={bestRun} readiness={readiness} readyLabel={readyLabel} log={log} catStats={catStats} popStats={popStats} acc={acc} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => goSection("plans")} profile={profile} setProfile={setProfile} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
           {tourStep != null && <div className="tour-scroll-room" aria-hidden="true" />}
         </>}
       </main>
 
       {!locked && !examLock && !activating && !accessPending && (
         <nav className="tabs" aria-label="Sections">
-          {[["today", "Today"], ["qbank", "Practice"], ["case", "Case Study"], ["cards", "Cards"], ["stats", "Stats"]].map(([k, label]) => (
-            <button key={k} type="button" className={tab === k ? "tab on" : "tab"} onClick={() => goSection(k)}>{label}</button>
+          {[["today", "Today"], ["qbank", "Practice"], ["case", "Cases"], ["cards", "Cards"], ["stats", "Stats"]].map(([k, label]) => (
+            <button key={k} type="button" className={tab === k ? "tab on" : "tab"} aria-current={tab === k ? "page" : undefined} onClick={() => goSection(k)}>
+              <TabIcon name={k} /><span className="tab-label">{label}</span>
+            </button>
           ))}
         </nav>
       )}
 
-      {!examLock && !locked && <Fab onLabs={() => setLabOpen(true)} onHelp={() => setHelpOpen(true)} />}
-      {!examLock && <LabRef open={labOpen} setOpen={setLabOpen} />}
-      <HelpCenter open={helpOpen} setOpen={setHelpOpen} provider={provider} />
+      {/* The draggable 🧪 study toolkit floats on every study screen, in a
+          question too, and settles clear of every button (src/float-pos.js).
+          Readiness exams keep exam conditions, so it is not shown there. */}
+      {!examLock && !locked && (
+        <LabFab hidden={tourStep != null || menuOpen || labOpen || helpOpen} open={labOpen || helpOpen}
+          settleKey={tab} onOpen={() => { setMenuOpen(false); setLabOpen(true); }} />
+      )}
+      <Toolkit open={!examLock && (labOpen || helpOpen)} section={helpOpen ? "help" : "labs"}
+        onSection={(k) => { setLabOpen(k === "labs"); setHelpOpen(k === "help"); }}
+        onClose={() => { setLabOpen(false); setHelpOpen(false); }} provider={provider} />
       {tourStep != null && !locked && (
         <Tour
           step={tourStep}
+          steps={tourSteps}
           activating={activating}
           onBack={() => setTourStep((n) => Math.max(0, (n ?? 0) - 1))}
           onNext={() => setTourStep((n) => (n ?? 0) + 1)}
@@ -1054,18 +1108,33 @@ export default function App() {
   );
 }
 
+/* Compact theme control for the two states where the menu cannot offer
+   Night mode: a readiness exam (the menu is locked away) and a locked
+   account (the menu is up, but study actions including the theme item
+   are not). 44px, same colours as the menu item. */
+export function ThemeToggle({ theme, onToggle }) {
+  const night = theme === "light";
+  return (
+    <button type="button" className="theme-btn theme-compact" onClick={onToggle}
+      aria-label={night ? "Night mode" : "Light mode"}
+      title={night ? "Night mode cuts glare for late review" : "Light mode reads best for long study sessions"}>
+      <span aria-hidden="true">{night ? "🌙" : "☀"}</span>
+    </button>
+  );
+}
+
 /* ================= HELP & CONTACT =================
    AI support chat for how-do-I and study questions, plus direct contact.
    The chat never gives medical advice and points account/billing issues
    to a human. */
 
 const SUPPORT_CONTEXT = `You are PulseRN's friendly in-app helper. PulseRN is an adaptive NCLEX-RN study app.
-How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories (weaker categories come up more often) and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions are scheduled to come back on a review date (tomorrow, then further out each time they are answered correctly), show up first in the Today round when due, and can be reviewed anytime in "Review misses". NGN items and case-study steps earn NCSBN-style partial credit. Case Study tab = a library of full NCJMM case walkthroughs (for example sepsis, DKA, and preeclampsia) with the AI tutor available on every step. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade; Back, Skip, and Next move through this sitting, and Skip does not change the schedule; dosage-calculation cards include an on-screen calculator). Left and Right arrow keys move between cards when you are not typing. Read aloud: practice questions (including the Today round and Review misses), case studies and flashcards have a 🔊 Listen button that reads the item aloud in a natural voice while highlighting the part being read; after answering, a second Listen button reads the result and rationale. Students can change the speed (0.8×, 1×, 1.25×) and turn on "Read each new one" for hands-free study. The answer is never read before the student answers. Read aloud is not available in readiness exams, which keep exam conditions. Stats tab = your plan, performance by category, exam date, sign out. The round floating button at the bottom right opens Lab values (searchable normal ranges; its AI lookup also answers general NCLEX study questions) and the Help chat. The ☰ menu has Home, Readiness exams (ten standardized 85-question NCLEX-style exams with a 2h50m clock, no feedback until the end, and a readiness estimate; each exam can be taken only ONCE per account, never repeated), Plans & upgrades, Lab values, Help & contact, Tour (a guided walk through Today, adaptive practice, missed-question review, case studies, flashcards, and Stats; students can open it again anytime), Settings, Sign out. A Home button in the header is on every screen. During a question it confirms before clearing the open round; checked answers stay saved. During a readiness exam it ends and scores the exam, then goes home.
+How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories (weaker categories come up more often) and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions are scheduled to come back on a review date (tomorrow, then further out each time they are answered correctly), show up first in the Today round when due, and can be reviewed anytime in "Review misses". NGN items and case-study steps earn NCSBN-style partial credit. Case Study tab = a library of full NCJMM case walkthroughs (for example sepsis, DKA, and preeclampsia) with the AI tutor available on every step. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade; Back, Skip, and Next move through this sitting, and Skip does not change the schedule; dosage-calculation cards include an on-screen calculator). Left and Right arrow keys move between cards when you are not typing. Read aloud: practice questions (including the Today round and Review misses), case studies and flashcards have a 🔊 Listen button that reads the item aloud in a natural voice while highlighting the part being read; after answering, a second Listen button reads the result and rationale. Students can change the speed (0.8×, 1×, 1.25×) and turn on "Read each new one" for hands-free study. The answer is never read before the student answers. Read aloud is not available in readiness exams, which keep exam conditions. Stats tab = your plan, performance by category, exam date, sign out. The floating 🧪 button is on every study screen, including during a question; students can drag it anywhere and it moves itself off buttons. Tapping it opens the Study toolkit over the current screen without losing their place: Labs & lookup (searchable normal ranges; its AI lookup also answers general NCLEX study questions) and the Help chat. The ☰ menu has Home, Readiness exams (ten standardized 85-question NCLEX-style exams with a 2h50m clock, no feedback until the end, and a readiness estimate; each exam can be taken only ONCE per account, never repeated), Plans & upgrades, Lab values, Help & contact, Tour (a guided walk through Today, adaptive practice, missed-question review, case studies, flashcards, and Stats; students can open it again anytime), Settings, Sign out. The PulseRN logo in the header is the Home button on every screen, and the ☰ menu also has night/light mode. During a question it confirms before clearing the open round; checked answers stay saved. During a readiness exam it ends and scores the exam, then goes home.
 Profile & texts: Stats has a Profile card where students add their name and mobile number and can opt in to study-reminder texts and/or offer texts (each optional; reply STOP to any text to unsubscribe; msg & data rates may apply). Email is the account email.
 Plans: every new account gets a free 7-day pass with full study access (no exams). Access passes are one-time payments that do not auto-renew: 30-day $99 (1 self-assessment), 60-day $159 (2), 90-day $219 (3), 180-day $319 (4), 360-day $379 (5), 730-day $439 (6). Add-ons, also one-time: 7-day renewal pass $45 (content only, never charged automatically) or an extra self-assessment $45. Refunds: if paid access has not been used, a full refund can be requested within 7 days of purchase; after 7 days, or once paid access has been used, payments are non-refundable, except where the law requires otherwise (see the Terms). Partner discount codes can be entered on the Plans page. All content is the property of the app's owner and may not be used outside PulseRN. Under any answered question: an AI tutor button and a ⚠ button for reporting a problem with the question.
 Rules: help with app navigation and NCLEX study strategy; you may explain nursing concepts in an educational exam-prep register but NEVER give real-world medical or dosing advice. For account, billing, data-deletion, or anything you can't resolve, direct the user to email sheldon@pulsern.app or call 786-408-4357. Keep answers under 120 words, warm and plain. Plain text only — no markdown, no asterisks, no headers.`;
 
-function HelpCenter({ open, setOpen, provider }) {
+function HelpPanel({ provider, inputRef }) {
   const [msgs, setMsgs] = useState([]); // {role: "you"|"ai", text}
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1094,127 +1163,114 @@ function HelpCenter({ open, setOpen, provider }) {
     setBusy(false);
   };
 
-  if (!open) return null;
   return (
-    <>
-      <div className="lab-overlay" onClick={() => setOpen(false)} />
-      <aside className="lab-drawer open" aria-label="Help and contact">
-        <div className="lab-head">
-          <p className="eyebrow">Help & contact</p>
-          <button className="theme-btn" onClick={() => setOpen(false)} aria-label="Close">✕ Close</button>
-        </div>
-        <div className="help-contact">
-          <p className="small"><strong>Reach a human:</strong> <a href="mailto:sheldon@pulsern.app">sheldon@pulsern.app</a> · <a href="tel:+17864084357">786-408-4357</a></p>
-        </div>
-        <div className="lab-body help-chat" aria-live="polite">
-          {!msgs.length && <p className="small">Ask me anything. For example: How does readiness work? Where do I set my exam date? What's the difference between preload and afterload? Account or billing questions go to the email above.</p>}
-          {msgs.map((m, i) => (
-            <p key={i} className={m.role === "you" ? "chat-msg you" : "chat-msg ai"}>{m.text}</p>
-          ))}
-          {busy && <p className="chat-msg ai">…</p>}
-        </div>
-        <div className="help-input">
-          <input className="select" style={{ marginTop: 0 }} placeholder="Type a question…" value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") send(); }} />
-          <button className="btn" onClick={send} disabled={busy || !input.trim()}>Send</button>
-        </div>
-      </aside>
-    </>
+    <div className="hp">
+      <div className="help-contact">
+        <p className="small"><strong>Reach a human:</strong> <a href="mailto:sheldon@pulsern.app">sheldon@pulsern.app</a> · <a href="tel:+17864084357">786-408-4357</a></p>
+      </div>
+      <div className="lab-body help-chat" aria-live="polite">
+        {!msgs.length && <p className="small">Ask me anything. For example: How does readiness work? Where do I set my exam date? What's the difference between preload and afterload? Account or billing questions go to the email above.</p>}
+        {msgs.map((m, i) => (
+          <p key={i} className={m.role === "you" ? "chat-msg you" : "chat-msg ai"}>{m.text}</p>
+        ))}
+        {busy && <p className="chat-msg ai">…</p>}
+      </div>
+      <div className="help-input">
+        <input ref={inputRef} className="select" style={{ marginTop: 0 }} placeholder="Type a question…" aria-label="Type a question for the PulseRN helper" value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") send(); }} />
+        <button className="btn" onClick={send} disabled={busy || !input.trim()}>Send</button>
+      </div>
+    </div>
   );
 }
 
-/* ================= FLOATING ACTION BUTTON =================
-   RN pack prompt 5, visible edition: the edge controls collapse into one
-   round floating button above the tab bar. Tap to expand Labs + Help;
-   it fades while scrolling and disappears entirely during exams. */
-function Fab({ onLabs, onHelp }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      {open && <div className="fab-overlay" onClick={() => setOpen(false)} />}
-      {open && (
-        <div className="fab-menu">
-          <button className="fab-mini" onClick={() => { setOpen(false); onLabs(); }}>🧪 <span>Lab values</span></button>
-          <button className="fab-mini" onClick={() => { setOpen(false); onHelp(); }}>💬 <span>Help</span></button>
-        </div>
-      )}
-      <button className={open ? "fab open" : "fab"} onClick={() => setOpen((o) => !o)}
-        aria-label={open ? "Close quick actions" : "Open quick actions: lab values and help"} aria-expanded={open}>
-        {open ? "✕" : "🧪"}
-      </button>
-    </>
-  );
-}
+/* ================= FLOATING STUDY TOOLKIT =================
+   One draggable 🧪 button (src/lab-fab.jsx) on every study screen opens
+   this toolkit over whatever the student is doing: lab ranges + the AI
+   lookup, and the help chat. Nothing navigates and nothing unmounts, so the
+   question, case step, or card underneath keeps its place and answers.
+   A bottom sheet on phones, a side panel on wider screens. Escape or ✕
+   closes and hands focus back to whatever opened it. */
 
-/* ================= LAB VALUES DRAWER =================
-   Always-available normal ranges so students never leave the app to look
-   one up — and see them so often they stick. Flip open from the LABS tab
-   on the right edge or the header menu. */
-
-function LabRef({ open, setOpen }) {
-  const [q, setQ] = useState("");
-  const [aiAnswers, setAiAnswers] = useState({}); // {query: text} — session cache
-  const [aiBusy, setAiBusy] = useState(false);
-  const needle = q.trim().toLowerCase();
-  const groups = LAB_GROUPS
-    .map((g) => ({ ...g, rows: g.rows.filter(([n, v]) => !needle || n.toLowerCase().includes(needle) || v.toLowerCase().includes(needle) || g.group.toLowerCase().includes(needle)) }))
-    .filter((g) => g.rows.length);
-
-  const askAi = async () => {
-    const query = q.trim();
-    if (!query || aiBusy) return;
-    setAiBusy(true);
-    try {
-      const t = await askModel("deepseek", `You are an NCLEX-review study reference. The student typed: "${query}"
-
-If it names a laboratory test, vital sign, or monitored parameter: reply with the standard adult normal reference range exactly as NCLEX review textbooks teach it, one short line formatted "Name: range (units)", plus one more short line for a commonly tested therapeutic or critical value if relevant.
-
-Otherwise, treat it as an NCLEX study question and answer it: plain, clear language, under 110 words, focused on what the exam tests. Verify silently first and give only the final, correct answer — no thinking out loud, no self-correction, no analogies outside the clinical domain.
-
-Both cases: plain text only (no markdown), educational exam-prep register only — never real-world dosing or treatment instructions.`, 400);
-      setAiAnswers((m) => ({ ...m, [query.toLowerCase()]: t }));
-    } catch (e) {
-      setAiAnswers((m) => ({ ...m, [query.toLowerCase()]: "The AI lookup is unavailable right now. Try again in a moment." }));
-    } finally {
-      setAiBusy(false);
+export function Toolkit({ open, section = "labs", onSection, onClose, provider, ask = askModel }) {
+  const asideRef = useRef(null);
+  const titleRef = useRef(null);
+  const returnTo = useRef(null);
+  const wasOpen = useRef(false);
+  const tabIds = { labs: "tk-tab-labs", help: "tk-tab-help" };
+  useEffect(() => {
+    if (open && !wasOpen.current) {
+      returnTo.current = document.activeElement;
+      requestAnimationFrame(() => titleRef.current?.focus());
     }
-  };
-  const aiHit = aiAnswers[needle];
+    if (!open && wasOpen.current) {
+      const back = returnTo.current;
+      const target = back && document.contains(back) && back !== document.body ? back : document.querySelector(".lab-fab");
+      target?.focus?.();
+    }
+    wasOpen.current = open;
+  }, [open]);
+  useEffect(() => {
+    const el = asideRef.current;
+    if (el) el.inert = !open;
+  }, [open]);
+  /* Escape closes from anywhere. Tab and Shift+Tab stay inside the
+     dialog, including when focus is still on the heading. */
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); onClose(); return; }
+      if (e.key !== "Tab") return;
+      const next = cycleTab(tabbables(asideRef.current), document.activeElement, e.shiftKey);
+      if (!next) return;
+      e.preventDefault();
+      next.focus();
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [open, onClose]);
   return (
     <>
-      {open && <div className="lab-overlay" onClick={() => setOpen(false)} />}
-      <aside className={open ? "lab-drawer open" : "lab-drawer"} aria-hidden={!open} aria-label="Normal lab and vital-sign reference ranges">
-        <div className="lab-head">
-          <p className="eyebrow">Normal reference ranges</p>
-          <button className="theme-btn" onClick={() => setOpen(false)} aria-label="Close">✕ Close</button>
+      {open && <div className="lab-overlay tk-overlay" onClick={onClose} />}
+      <aside ref={asideRef} className={open ? "lab-drawer toolkit open" : "lab-drawer toolkit"} role="dialog" aria-modal={open ? "true" : undefined}
+        aria-hidden={!open} aria-labelledby="tk-title">
+        <div className="tk-grab" aria-hidden="true" />
+        <div className="tk-head">
+          <div>
+            <h2 id="tk-title" className="tk-title" ref={titleRef} tabIndex={-1}>Study toolkit</h2>
+            <p className="tk-sub">Your place is saved. Close anytime.</p>
+          </div>
+          <button type="button" className="tk-close" onClick={onClose} aria-label="Close study toolkit">✕</button>
         </div>
-        <input className="select lab-search" placeholder="Search a lab value or ask any NCLEX question…" value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && !groups.length && !aiHit) askAi(); }} />
-        <div className="lab-body">
-          {groups.map((g) => (
-            <div key={g.group} className="lab-group">
-              <p className="lab-group-name mono">{g.group.toUpperCase()}</p>
-              {g.rows.map(([n, v]) => (
-                <div key={n} className="lab-row"><span>{n}</span><span className="mono lab-val">{v}</span></div>
-              ))}
-            </div>
+        <div className="tk-tabs" role="tablist" aria-label="Toolkit sections" onKeyDown={(e) => {
+          const tabs = [...e.currentTarget.querySelectorAll("[role='tab']")];
+          const i = tabs.indexOf(e.target);
+          if (i < 0) return;
+          const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : null;
+          const next = step == null ? (e.key === "Home" ? 0 : e.key === "End" ? tabs.length - 1 : null) : (i + step + tabs.length) % tabs.length;
+          if (next == null) return;
+          e.preventDefault();
+          e.stopPropagation();
+          tabs[next].focus();
+          tabs[next].click();
+        }}>
+          {[["labs", "🧪 Labs & lookup", "Normal lab and vital-sign reference ranges"], ["help", "💬 Help & contact", "Help and contact"]].map(([k, label, aria]) => (
+            <button key={k} type="button" role="tab" id={tabIds[k]} aria-selected={section === k} aria-controls={`tk-panel-${k}`}
+              tabIndex={section === k ? 0 : -1}
+              className={section === k ? "tk-tab on" : "tk-tab"} onClick={() => onSection(k)} title={aria}>{label}</button>
           ))}
-          {!groups.length && !aiHit && (
-            <div className="lab-ai">
-              <p className="small">“{q}” isn't in the built-in list. Ask the AI: lab values come back as ranges, and study questions get a short explanation.</p>
-              <button className="btn" onClick={askAi} disabled={aiBusy}>{aiBusy ? "Thinking…" : "🧠 Ask AI"}</button>
-            </div>
-          )}
-          {aiHit && (
-            <div className="lab-ai">
-              <p className="lab-group-name mono">AI LOOKUP</p>
-              <p className="small" style={{ whiteSpace: "pre-wrap" }}>{aiHit}</p>
-              <p className="small">✨ AI answer. Verify it against your course materials before relying on it.</p>
-            </div>
-          )}
-          <p className="small tip">Study reference only. Ranges vary slightly by lab and textbook, so verify against your course materials.</p>
+        </div>
+        <div className="tk-body">
+          <div id="tk-panel-labs" role="tabpanel" aria-labelledby={tabIds.labs} hidden={section !== "labs"} aria-label="Normal lab and vital-sign reference ranges">
+            <LabPanel ask={ask} />
+          </div>
+          <div id="tk-panel-help" role="tabpanel" aria-labelledby={tabIds.help} hidden={section !== "help"} className="tk-help">
+            <HelpPanel provider={provider} />
+          </div>
+        </div>
+        <div className="tk-foot">
+          <button type="button" className="tk-reset" onClick={resetLabFab}>↺ Reset 🧪 button position</button>
         </div>
       </aside>
     </>
@@ -1284,7 +1340,7 @@ function Today(props) {
   if (stage === "cards") return (
     <div className="stack">
       <p className="eyebrow stage-label">TODAY'S ROUND · STEP 1 OF 2 · CARDS</p>
-      <Flashcards addXp={props.addXp} cards={props.cards} srsMap={props.srsMap} setSrsMap={props.setSrsMap} touchDay={props.touchDay} ready={props.ready} fcFlips={props.fcFlips} onFlip={props.onFlip} newAllowance={props.newAllowance} onNewCard={props.onNewCard} embedded onDone={() => setStage("quiz")} onSession={props.onSession} />
+      <Flashcards addXp={props.addXp} cards={props.cards} srsMap={props.srsMap} setSrsMap={props.setSrsMap} touchDay={props.touchDay} ready={props.ready} fcFlips={props.fcFlips} onFlip={props.onFlip} newAllowance={props.newAllowance} onNewCard={props.onNewCard} onRefundNewCard={props.onRefundNewCard} embedded onDone={() => setStage("quiz")} onSession={props.onSession} />
     </div>
   );
 
@@ -1310,7 +1366,7 @@ function Today(props) {
   );
 
   return (
-    <div className="stack">
+    <div className="stack today-home">
       <section className={"card center" + tourMark(props.tourFocus, "today-round")} data-tour="today-round">
         <p className="eyebrow">One tap. The app picks what you study.</p>
 
@@ -1446,6 +1502,10 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
   const [lastCat, setLastCat] = useState(null);
   const [sessionN, setSessionN] = useState(0);
   const [mode, setMode] = useState("new"); // new | review
+  const [focusOpen, setFocusOpen] = useState(false); // Focus bottom sheet
+  const qKeys = useRef({});
+  qKeys.current = {}; // filled in below only while a question is on screen
+  useStudyKeys(qKeys);
 
   const answeredIds = [...new Set(log.map((l) => l.id))];
 
@@ -1612,6 +1672,7 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
   useEffect(() => {
     if (phase === "answering" && q) window.scrollTo(0, 0);
   }, [q?.id, phase]);
+  useLabSettleKey(q ? `${q.id}:${phase}` : phase);
 
   const TYPE_CHIPS =[["mc", "Multiple choice"], ["sata", "Select all"], ["order", "Ordering"], ["matrix", "Matrix"], ["bowtie", "Bow-tie"], ["cloze", "Cloze"], ["calc", "Dosage calc"], ["highlight", "Highlight"]];
 
@@ -1629,29 +1690,17 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
         </div>
         <Why>Built on the three highest-evidence techniques: retrieval practice (every item tests recall), interleaving (categories are deliberately mixed so back-to-back questions never share a topic), and spacing (questions come in short blocks of 8 with checkpoints, and every miss comes back on a scheduled review date: tomorrow, then 3, 7, and 15 days out as you keep getting it right). Difficulty adapts like the real NCLEX-RN (a computer-adaptive test), steering toward your weakest categories: categories where your ability estimate is lower come up more often, while every category stays in the mix. NGN items earn NCSBN-style partial credit.</Why>
 
-        <p className="eyebrow" style={{ marginTop: 10 }}>Focus: leave everything off for the full adaptive mix</p>
-        <div className="fchips" role="group" aria-label="Filter by category">
-          {CATS.map((c) => (
-            <button key={c} className={catFilter.includes(c) ? "fchip on" : "fchip"}
-              onClick={() => toggleIn(catFilter, setCatFilter)(c)}>{c}</button>
-          ))}
-        </div>
-        <div className="fchips" role="group" aria-label="Filter by question type">
-          {TYPE_CHIPS.map(([t, label]) => (
-            <button key={t} className={typeFilter.includes(t) ? "fchip on" : "fchip"}
-              onClick={() => toggleIn(typeFilter, setTypeFilter)(t)}>{label}</button>
-          ))}
-        </div>
-        <div className="fchips" role="group" aria-label="Filter by client population">
-          {[["peds", "🧒 Pediatrics"], ["geriatric", "👵 Geriatrics"], ["maternal", "🤰 Maternal"]].map(([p, label]) => (
-            <button key={p} className={popFilter.includes(p) ? "fchip on" : "fchip"}
-              onClick={() => toggleIn(popFilter, setPopFilter)(p)}>{label}</button>
-          ))}
-        </div>
-        {(catFilter.length > 0 || typeFilter.length > 0 || popFilter.length > 0) && (
-          <p className="small tip">Focused session: {catFilter.length ? catFilter.join(", ") : "all categories"} · {typeFilter.length ? typeFilter.map((t) => TYPE_CHIPS.find(([k]) => k === t)[1]).join(", ") : "all types"} · <button className="auth-switch" style={{ color: "var(--accent-ink)" }} onClick={() => { setCatFilter([]); setTypeFilter([]); setPopFilter([]); }}>clear</button></p>
-        )}
-
+        <FocusBar
+          open={focusOpen}
+          setOpen={setFocusOpen}
+          allLabel="Full adaptive mix"
+          onClear={() => { setCatFilter([]); setTypeFilter([]); setPopFilter([]); }}
+          groups={[
+            { label: "Client-needs category", options: CATS.map((c) => [c, c]), selected: catFilter, onToggle: toggleIn(catFilter, setCatFilter) },
+            { label: "Question type", options: TYPE_CHIPS, selected: typeFilter, onToggle: toggleIn(typeFilter, setTypeFilter) },
+            { label: "Client population", options: [["peds", "🧒 Pediatrics"], ["geriatric", "👵 Geriatrics"], ["maternal", "🤰 Maternal"]], selected: popFilter, onToggle: toggleIn(popFilter, setPopFilter) },
+          ]}
+        />
         <p className="small mono">{freshPool.length} new · {reviewPool.length} to review ({duePool.length} due today) · difficulty target {diffTarget}/3</p>
         <div className={"row" + tourMark(tourFocus, "qbank-review")} data-tour="qbank-review">
           <button className="btn" onClick={() => { setMode("new"); pickFrom(emptyNav(), "new"); }} disabled={!freshPool.length}>{freshPool.length ? "New questions" : "All questions seen"}</button>
@@ -1739,9 +1788,15 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
   const atEnd = nav.index >= 0 && nav.index === nav.entries.length - 1;
   const finishing = autoLimit != null && currentEntry(nav)?.status === "answered" && atEnd && sessionN >= autoLimit;
   const locked = phase !== "answering";
+  qKeys.current = {
+    back: onBack,
+    next: onMove,
+    primary: () => { if (phase === "answering") { if (canSubmit) submit(); } else onMove(); },
+    pick: (i) => { if (phase === "answering" && digitPickEnabled(q.type) && (q.type === "highlight" ? i < ext.tokens.length : i < q.options.length)) toggleSel(i); },
+  };
 
   return (
-    <div className="stack">
+    <div className="stack study-col">
       <section className="card">
         <div className="q-meta mono">
           <span>{q.cat.toUpperCase()}{mode === "review" ? " · RETRY" : ""}</span>
@@ -1789,13 +1844,13 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
         )}
 
         {q.type === "matrix" && (
-          <div className="ngn-matrix" role="table">
+          <div className="ngn-matrix" role="group" aria-label="Answer grid: one choice per row">
             <div className="mx-row mx-head" style={{ gridTemplateColumns: `2fr repeat(${ext.columns.length}, 1fr)` }}>
               <span />
               {ext.columns.map((c, ci) => <span key={ci} className="small mono mx-colhead">{c}</span>)}
             </div>
             {ext.rows.map((r, ri) => (
-              <div key={ri} className={ra(qReader, `row${ri}`, "mx-row")} style={{ gridTemplateColumns: `2fr repeat(${ext.columns.length}, 1fr)` }}>
+              <div key={ri} role="radiogroup" aria-label={r} className={ra(qReader, `row${ri}`, "mx-row")} style={{ gridTemplateColumns: `2fr repeat(${ext.columns.length}, 1fr)` }}>
                 <span className="small">
                   {phase === "feedback" && <strong>{sel[ri] === q.answer[ri] ? "✓ " : "✗ "}</strong>}{r}
                 </span>
@@ -1807,8 +1862,10 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
                     else if (sel[ri] === ci) cls += " wrong";
                   }
                   return (
-                    <button key={ci} type="button" className={cls} disabled={locked} onClick={() => setMatrixRow(ri, ci)} aria-label={`${r}: ${c}`}>
-                      {sel[ri] === ci ? "●" : "○"}
+                    <button key={ci} type="button" className={cls} disabled={locked} onClick={() => setMatrixRow(ri, ci)} aria-label={`${r}: ${c}`}
+                      role="radio" aria-checked={sel[ri] === ci} onKeyDown={onRadioKeyDown}
+                      tabIndex={radioTabIndex(sel[ri] === ci, ci, Number.isInteger(sel[ri]))}>
+                      <span className="ck radio mx-ck" aria-hidden="true" />
                     </button>
                   );
                 })}
@@ -1862,17 +1919,22 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
         )}
 
         {["mc", "sata", "order"].includes(q.type) && (
-        <div className="opts">
+        <div className="opts" role={q.type === "mc" ? "radiogroup" : q.type === "sata" ? "group" : undefined} aria-label={q.type === "order" ? undefined : "Answer choices"}>
           {q.options.map((opt, i) => {
             let cls = ra(qReader, `opt${i}`, "opt");
             if (q.type !== "order") {
-              if (sel.includes(i)) cls += " picked";
-              if (phase === "feedback") {
-                const correct = q.type === "mc" ? i === q.answer : q.answer.includes(i);
-                if (correct) cls += " right";
-                else if (sel.includes(i)) cls += " wrong";
-              }
-              return <button key={i} type="button" className={cls} disabled={locked} onClick={() => toggleSel(i)}>{q.type === "sata" ? (sel.includes(i) ? "☑ " : "☐ ") : ""}{opt}</button>;
+              const st = choiceState({ type: q.type, answer: q.answer, sel, index: i, checked: phase === "feedback" });
+              cls += choiceClasses(st);
+              const multi = q.type === "sata";
+              return (
+                <button key={i} type="button" className={cls} disabled={locked} onClick={() => toggleSel(i)}
+                  role={multi ? "checkbox" : "radio"} aria-checked={sel.includes(i)}
+                  onKeyDown={multi ? undefined : onRadioKeyDown}
+                  tabIndex={multi ? undefined : radioTabIndex(sel.includes(i), i, sel.length > 0)}>
+                  <span className={multi ? "ck" : "ck radio"} aria-hidden="true">{st === "wrong" ? "✗" : multi && sel.includes(i) ? "✓" : ""}</span>
+                  <span className="opt-text">{opt}{CHOICE_BADGE[st] && <span className="st-badge">{CHOICE_BADGE[st]}</span>}</span>
+                </button>
+              );
             }
             const pos = order.indexOf(i);
             if (pos !== -1) cls += " picked";
@@ -1894,10 +1956,12 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
             <button className="btn" disabled={!canSubmit} onClick={submit}>Check answer</button>
           </div>
         )}
+        {phase === "answering" && <p className="small tip kbd-hint">{shortcutHint(q.type)}</p>}
 
         {phase === "feedback" && (
           <div className={wasCorrect ? "feedback ok" : "feedback no"}>
             <p className={ra(fbReader, "verdict", "fb-head mono")}>
+              <span className="fb-badge" aria-hidden="true">{wasCorrect ? "✓" : credit.points > 0 ? "½" : "✗"}</span>
               {wasCorrect ? `CORRECT${credit.max > 1 ? ` · ${credit.points}/${credit.max} POINTS` : ""} · +${10 * q.diff} XP`
                 : credit.points > 0 ? `PARTIAL CREDIT · ${credit.points}/${credit.max} POINTS · IT RETURNS IN REVIEW MISSES`
                 : `INCORRECT${credit.max > 1 ? ` · 0/${credit.max} POINTS` : ""} · IT RETURNS IN REVIEW MISSES`}
@@ -1944,6 +2008,7 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
           onReview={onReviewSkipped}
           nextLabel={finishing ? "Continue" : "Next"}
           nextAria={finishing ? "Continue to Today" : "Next question"}
+          nextPrimary={phase === "feedback"}
           skipAria={currentEntry(nav)?.status === "answered" ? "Leave this answer and move on" : "Skip this question without scoring it"}
         />
       </section>
@@ -1963,6 +2028,10 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
   const [ok, setOk] = useState(false);
   const [nav, setNav] = useState(() => emptyNav());
   const justScored = useRef(false);
+  const [chartOpen, setChartOpen] = useState(false); // sticky patient chart (phone: collapsed bar)
+  const cKeys = useRef({});
+  cKeys.current = {};
+  useStudyKeys(cKeys);
   const cs = caseIdx == null ? null : cases[caseIdx];
   /* Bank cases carry a dbId; locally-bundled ones don't, so fall back to the
      title, which carries a unique index in migration 005. */
@@ -2054,6 +2123,7 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
     inSession: caseIdx != null,
     hasDraft: phase === "answering" && Array.isArray(sel) && sel.length > 0,
   });
+  useLabSettleKey(cs ? `${caseKey}:${step}:${phase}` : "cases");
 
   if (caseIdx == null) {
     // sub-category accordion: cases stay tucked away until a group is opened
@@ -2065,17 +2135,17 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
     ].map((g) => ({ ...g, items: cases.map((c, i) => ({ c, i })).filter(({ c }) => g.match(c)) }))
      .filter((g) => g.items.length > 0);
     const openGroup = groups.find((g) => g.key === catFilter[0]);
-    const list = openGroup ? openGroup.items : [];
+    const list = openGroup ? openGroup.items : cases.map((c, i) => ({ c, i }));
     return (
       <div className="stack">
         <section className={"card" + tourMark(tourFocus, "cases")} data-tour="cases">
           <p className="eyebrow">Next Generation NCLEX</p>
           <h2 className="h2">Case studies · {cases.length} in the library</h2>
           <p className="small">Full clinical-judgment cases: read the chart, then work the NCJMM steps (recognize cues, analyze cues, prioritize hypotheses, generate solutions, take action, evaluate outcomes). Each step is scored with NCSBN-style partial credit: select-all steps earn a point for each correct choice and lose one for each incorrect choice, never below zero.</p>
-          <p className="small tip">Pick a sub-category to see its cases.</p>
-          <div className="fchips" role="group" aria-label="Case sub-categories">
+          <p className="small tip">Every case is listed below. Tap a sub-category to narrow the list.</p>
+          <div className="fchips scroll" role="group" aria-label="Case sub-categories">
             {groups.map((g) => (
-              <button key={g.key} className={catFilter[0] === g.key ? "fchip on" : "fchip"}
+              <button key={g.key} className={catFilter[0] === g.key ? "fchip on" : "fchip"} aria-pressed={catFilter[0] === g.key}
                 onClick={() => setCatFilter((f) => (f[0] === g.key ? [] : [g.key]))}>{g.key} · {g.items.length}</button>
             ))}
           </div>
@@ -2093,12 +2163,56 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
     );
   }
 
+  const pickCase = (i) => {
+    if (phase !== "answering" || !s || !digitPickEnabled(s.type) || i >= (s.options?.length ?? 0)) return;
+    if (s.type === "mc") setSel([i]);
+    else setSel((x) => x.includes(i) ? x.filter((y) => y !== i) : [...x, i]);
+  };
+  if (step >= 0 && s) {
+    cKeys.current = {
+      back: onCaseBack,
+      next: onCaseMove,
+      primary: () => { if (phase === "answering") { if (sel.length) submit(); } else if (phase === "feedback") onCaseMove(); },
+      pick: pickCase,
+    };
+  }
+  const chartSummary = cs.vitals.slice(0, 3).map(([k, v]) => `${k} ${v}`).join(" · ");
+  const aiCaseNote = cs.ai ? (
+    <p className="small case-ai-note">✨ AI-assisted case that passed automated quality checks. Verify it against your course materials.</p>
+  ) : null;
+  const chartBody = (
+    <>
+      <div className="q-meta mono">
+        <span>{cs.cat.toUpperCase()}</span>
+        <button className="auth-switch mono" style={{ color: "var(--accent-ink)", fontSize: 12, minHeight: 44, padding: "0 6px" }} onClick={() => setCaseIdx(null)}>← ALL CASES</button>
+      </div>
+      <p className="h2" style={{ fontSize: 17 }}>{cs.title}</p>
+      <p className="small">{cs.intro}</p>
+      <div className="chart mono">
+        {cs.vitals.map(([k, v]) => <span key={k} className="chip">{k} {v}</span>)}
+        {cs.labs.map(([k, v]) => <span key={k} className="chip lab">{k} {v}</span>)}
+      </div>
+      <p className="small note">Nurse's note: {cs.note}</p>
+    </>
+  );
+
   return (
-    <div className="stack">
+    <div className={step >= 0 ? "stack case-layout" : "stack study-col"}>
+      {step >= 0 ? (
+        <div className={chartOpen ? "case-chart-bar open" : "case-chart-bar"}>
+          {aiCaseNote}
+          <button type="button" className="case-chart-toggle" aria-expanded={chartOpen} onClick={() => setChartOpen((o) => !o)}>
+            <span aria-hidden="true">📋</span> Chart <span className="case-chart-sum">{chartSummary}</span>
+            <span aria-hidden="true">{chartOpen ? "▴" : "▾"}</span>
+          </button>
+          <ReportIssue key={`rc${caseKey}`} caseId={cs.dbId ?? null} label="case study" />
+          <div className="case-chart-body">{chartBody}</div>
+        </div>
+      ) : (
       <section className="card">
         <div className="q-meta mono">
           <span>{cs.cat.toUpperCase()}</span>
-          <button className="auth-switch mono" style={{ color: "var(--accent-ink)", fontSize: 11 }} onClick={() => setCaseIdx(null)}>← ALL CASES</button>
+          <button className="auth-switch mono" style={{ color: "var(--accent-ink)", fontSize: 12, minHeight: 44, padding: "0 6px" }} onClick={() => setCaseIdx(null)}>← ALL CASES</button>
         </div>
         <h2 className={ra(introReader, "case-title", "h2")}>{cs.title}</h2>
         {step === -1 && <ReadAloudBar reader={introReader} label="Listen to the case" />}
@@ -2109,40 +2223,49 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
           {cs.labs.map(([k, v]) => <span key={k} className="chip lab">{k} {v}</span>)}
         </div>
         <p className={ra(introReader, "case-note", "small note")}>Nurse's note: {cs.note}</p>
-        {cs.ai && <p className="small">✨ AI-assisted case that passed automated quality checks.</p>}
+        {aiCaseNote}
         <ReportIssue key={`rc${caseKey}`} caseId={cs.dbId ?? null} label="case study" />
         {step === -1 && <button className="btn" onClick={start}>Begin case →</button>}
       </section>
+      )}
 
+      <div className="stack case-main">
       {step >= 0 && phase !== "done" && (
-        <section className="card">
-          <p className={ra(stepReader, "instruction", "eyebrow")}>Step {step + 1} of {cs.steps.length} · {s.phase}</p>
+        <section className="card case-step">
+          <div className="step-progress" aria-hidden="true">
+            {cs.steps.map((_, i) => <span key={i} className={i === step ? "now" : stepScores[i] ? "done" : ""} />)}
+          </div>
+          <p className={ra(stepReader, "instruction", "eyebrow case-step-head")}>Step {step + 1} of {cs.steps.length} · {s.phase}</p>
           {phase === "answering" && <ReadAloudBar reader={stepReader} label="Listen to this step" />}
           <p className={ra(stepReader, "stem", "stem")}>{s.stem}</p>
-          <div className="opts">
+          <div className="opts" role={s.type === "sata" ? "group" : "radiogroup"} aria-label="Answer choices">
             {s.options.map((opt, i) => {
-              let cls = ra(stepReader, `opt${i}`, "opt");
-              if (sel.includes(i)) cls += " picked";
-              if (phase === "feedback") {
-                const corr = s.type === "mc" ? i === s.answer : s.answer.includes(i);
-                if (corr) cls += " right"; else if (sel.includes(i)) cls += " wrong";
-              }
+              const st = choiceState({ type: s.type, answer: s.answer, sel, index: i, checked: phase === "feedback" });
+              const cls = ra(stepReader, `opt${i}`, "opt case-opt") + choiceClasses(st);
+              const multi = s.type === "sata";
               return (
-                <button key={i} type="button" className={cls} disabled={phase !== "answering"} onClick={() => {
-                  if (phase !== "answering") return;
-                  if (s.type === "mc") setSel([i]);
-                  else setSel((x) => x.includes(i) ? x.filter((y) => y !== i) : [...x, i]);
-                }}>{s.type === "sata" ? (sel.includes(i) ? "☑ " : "☐ ") : ""}{opt}</button>
+                <button key={i} type="button" className={cls} disabled={phase !== "answering"} onClick={() => pickCase(i)}
+                  role={multi ? "checkbox" : "radio"} aria-checked={sel.includes(i)}
+                  onKeyDown={multi ? undefined : onRadioKeyDown}
+                  tabIndex={multi ? undefined : radioTabIndex(sel.includes(i), i, sel.length > 0)}>
+                  <span className={multi ? "ck" : "ck radio"} aria-hidden="true">{st === "wrong" ? "✗" : multi && sel.includes(i) ? "✓" : ""}</span>
+                  <span className="opt-text">{opt}{CHOICE_BADGE[st] && <span className="st-badge">{CHOICE_BADGE[st]}</span>}</span>
+                </button>
               );
             })}
           </div>
+          {phase === "feedback" && s.type === "sata" && (
+            <p className="choice-legend" aria-hidden="true"><span className="lg-ok">✓ picked, correct</span><span className="lg-miss">▭ missed</span><span className="lg-wrong">✗ picked, incorrect</span></p>
+          )}
           {phase === "answering" && currentEntry(nav)?.status === "skipped" && (
             <p className="small tip">Skipped. It stays out of your score until you answer it.</p>
           )}
           {phase === "answering" && <button className="btn" disabled={!sel.length} onClick={submit}>Check answer</button>}
+          {phase === "answering" && <p className="small tip kbd-hint">{shortcutHint(s.type)}</p>}
           {phase === "feedback" && (
             <div className={ok ? "feedback ok" : "feedback no"}>
               <p className={ra(caseFbReader, "verdict", "fb-head mono")}>
+                <span className="fb-badge" aria-hidden="true">{ok ? "✓" : credit.points > 0 ? "½" : "✗"}</span>
                 {ok ? "CORRECT" : credit.points > 0 ? "PARTIAL CREDIT" : "INCORRECT"} · {credit.points}/{credit.max} POINT{credit.max === 1 ? "" : "S"}{ok ? " · +30 XP" : ""}
               </p>
               <p className="small mono">Case score so far: {total.points}/{total.max} points</p>
@@ -2163,6 +2286,7 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
             onReview={onCaseReview}
             nextLabel={caseFinishing ? "Finish" : "Next"}
             nextAria={caseFinishing ? "Finish case" : "Next step"}
+            nextPrimary={phase === "feedback"}
             skipAria={currentEntry(nav)?.status === "answered" ? "Leave this answer and move on" : "Skip this question without scoring it"}
           />
         </section>
@@ -2177,6 +2301,7 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
           <button className="btn" onClick={() => setCaseIdx(null)}>Back to all cases</button>
         </section>
       )}
+      </div>
     </div>
   );
 }
@@ -2219,9 +2344,15 @@ const isCalcCard = (c) => /dosage|calculation|conversion|drip rate|drop factor/i
 
 const GRADE_WORD = { again: "Again", hard: "Hard", good: "Good", easy: "Easy" };
 
-export function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, embedded = false, onDone, fcFlips = 99, onFlip, newAllowance = NEW_PER_DAY, onNewCard, onSession, tourFocus = null }) {
+export function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, embedded = false, onDone, fcFlips = 99, onFlip, newAllowance = NEW_PER_DAY, onNewCard, onRefundNewCard, onSession, tourFocus = null }) {
   const [catFilter, setCatFilter] = useState([]); // empty = all categories
   const [calcOpen, setCalcOpen] = useState(false); // on-screen calculator for dosage cards
+  const [focusOpen, setFocusOpen] = useState(false); // Focus bottom sheet
+  const undoLog = useRef({}); // card id -> { prev schedule, xp } for Undo grade (this sitting only)
+  const countedNew = useRef(new Set()); // first grade already counted against today's new-card cap
+  const fKeys = useRef({});
+  fKeys.current = {};
+  useStudyKeys(fKeys);
   const filtered = useMemo(
     () => (catFilter.length
       ? cards.filter((c) => catFilter.some((f) => (f === CALC_CHIP ? isCalcCard(c) : f === c.cat)))
@@ -2259,6 +2390,7 @@ export function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = 
 
   useEffect(() => {
     const onKey = (e) => {
+      if (studySurfaceBlocked()) return;
       const action = cardNavAction(e);
       if (!action) return;
       e.preventDefault();
@@ -2267,6 +2399,7 @@ export function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+  useLabSettleKey(curId != null ? `${curId}:${show ? "back" : "front"}` : "cards");
 
   const onBack = () => setSession((s) => goBackCard(s));
   const onSkip = () => setSession((s) => skipCard(s).nav);
@@ -2277,11 +2410,35 @@ export function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = 
     if (!result.recorded) return;
     const id = currentCard(session).id;
     touchDay();
-    if (!srsMap[id]) onNewCard?.(); // first grade of a never-seen card counts against today's new-card cap
+    // first grade of a never-seen card counts against today's new-card cap.
+    // Undo refunds that charge; grading the card again counts it once.
+    if (!srsMap[id] && !countedNew.current.has(id)) { countedNew.current.add(id); onNewCard?.(id); }
+    const xpGain = g === "good" ? 5 : g === "easy" ? 8 : 0;
+    undoLog.current[id] = { prev: srsMap[id], xp: xpGain };
     setSrsMap((m) => ({ ...m, [id]: nextSchedule(m[id], g) }));
-    if (g === "good") addXp(5);
-    else if (g === "easy") addXp(8);
+    if (xpGain) addXp(xpGain);
     setSession(result.nav);
+  };
+  /* Undo: back on a card graded this sitting, put its previous schedule
+     back, take back the XP, and show the answer to grade again. */
+  const undo = () => {
+    if (!canUndoGrade(session)) return;
+    const id = currentCard(session).id;
+    const rec = undoLog.current[id];
+    if (rec) {
+      if (rec.prev === undefined) {
+        countedNew.current.delete(id);
+        onRefundNewCard?.(id);
+      }
+      setSrsMap((m) => {
+        const n = { ...m };
+        if (rec.prev === undefined) delete n[id]; else n[id] = rec.prev;
+        return n;
+      });
+      if (rec.xp) addXp(-rec.xp);
+      delete undoLog.current[id];
+    }
+    setSession((s) => undoGrade(s));
   };
 
   const interval = srsMap[curId]?.interval ?? 0;
@@ -2300,12 +2457,19 @@ export function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = 
   });
 
   const chips = !embedded && (
-    <div className="fchips" role="group" aria-label="Filter cards by category">
-      {[...CATS, CALC_CHIP].map((c) => (
-        <button key={c} className={catFilter.includes(c) ? "fchip on" : "fchip"}
-          onClick={() => setCatFilter((f) => f.includes(c) ? f.filter((x) => x !== c) : [...f, c])}>{c === CALC_CHIP ? "🧮 " + c : c}</button>
-      ))}
-    </div>
+    <FocusBar
+      open={focusOpen}
+      setOpen={setFocusOpen}
+      allLabel="All categories"
+      hint="Leave everything off to review every due card."
+      onClear={() => setCatFilter([])}
+      groups={[{
+        label: "Category",
+        options: [...CATS, CALC_CHIP].map((c) => [c, c === CALC_CHIP ? "🧮 " + c : c]),
+        selected: catFilter,
+        onToggle: (c) => setCatFilter((f) => f.includes(c) ? f.filter((x) => x !== c) : [...f, c]),
+      }]}
+    />
   );
 
   const frontier = atFrontier(session);
@@ -2372,14 +2536,25 @@ export function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = 
     );
   }
 
+  const prog = cardProgress(session);
+  const flip = () => { if (!show) onFlip?.(); setSession((s) => saveCardView(s, { show: !show, typed })); };
+  fKeys.current = {
+    primary: () => { if (!graded) flip(); },
+    pick: (i) => { if (show && !graded && i < 4) grade(["again", "hard", "good", "easy"][i]); },
+  };
   return (
-    <div className="stack">
+    <div className="stack study-col">
       {chips}
       <section className="card">
+        <div className="card-progress" role="progressbar" aria-label="Cards in this sitting" aria-valuemin={0} aria-valuemax={prog.total} aria-valuenow={prog.done} aria-valuetext={`Card ${prog.position} of ${prog.total}, ${prog.done} reviewed`}>
+          <span className="mono">{prog.position} / {prog.total}</span>
+          <div className="bar"><div className="bar-fill" style={{ width: `${prog.total ? Math.round((prog.done / prog.total) * 100) : 0}%` }} /></div>
+        </div>
         <p className="eyebrow">Spaced repetition · {cardsLeft(session)} in today's queue · deck of {filtered.length}{frontier ? "" : " · looking back"}</p>
         <p className="small mono" style={{ marginBottom: 6 }}>{cur.cat.toUpperCase()} · {cur.topic.toUpperCase()}{cur.ai ? " · ✨ AI" : ""}</p>
         <ReadAloudBar reader={cardReader} label={show ? "Listen to the answer" : "Listen to the card"} />
-        <button className={tourMark(tourFocus, "cards") + " " + ra(cardReader, show ? "card-back" : "card-front", "flashcard")} data-tour="cards" onClick={() => { if (!show) onFlip?.(); setSession((s) => saveCardView(s, { show: !show, typed })); }}>
+        <button key={`${curId}:${show ? "b" : "f"}`} className={tourMark(tourFocus, "cards") + " " + ra(cardReader, show ? "card-back" : "card-front", "flashcard") + (show ? " flip-in" : "")} data-tour="cards" onClick={flip}
+          aria-label={show ? `Answer: ${cur.back}. Tap to see the prompt again` : `Prompt: ${cur.front}. Tap to show the answer`}>
           <p className="fc-side mono">{show ? "ANSWER" : "PROMPT · TAP TO FLIP"}</p>
           <p className="fc-text">{show ? cur.back : cur.front}</p>
         </button>
@@ -2417,13 +2592,20 @@ export function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = 
             <button className="btn grade easy" onClick={() => grade("easy")}>Easy<span className="grade-sub">{interval < 1 ? "7d" : `${Math.min(interval * 3 + 1, 90)}d`}</span></button>
           </div>
         )}
-        {graded && <p className="small tip">Graded {GRADE_WORD[entry.grade] ?? entry.grade}. This visit is not graded again.</p>}
+        {!show && !graded && <button type="button" className="btn ghost show-answer" onClick={flip}>Show answer</button>}
+        {graded && (
+          <div className="undo-row">
+            <p className="small" style={{ margin: 0, flex: 1 }}>Graded {GRADE_WORD[entry.grade] ?? entry.grade}.{canUndoGrade(session) ? " Undo puts the old schedule back." : " This visit is not graded again."}</p>
+            {canUndoGrade(session) && <button type="button" className="btn ghost" onClick={undo}>↶ Undo grade</button>}
+          </div>
+        )}
         {!graded && (session.skipPasses[cur.id] ?? 0) > 0 && (
           <p className="small tip">Skipped earlier. It still has no grade, so the schedule has not changed.</p>
         )}
         {cardNav}
         {fcFlips < 3 && <p className="small tip">Typing (or saying) the answer before you flip is the retrieval attempt that builds the memory. The flip is just the check.</p>}
-        <p className="small tip">Enter flips the card · ← Back · → Next · grades set real calendar dates.{cur.ai ? " ✨ AI-assisted card that passed automated quality checks." : ""}</p>
+        <p className="small tip">Tap the card to flip · grades set real calendar dates.{cur.ai ? " ✨ AI-assisted card that passed automated quality checks." : ""}</p>
+        <p className="small tip kbd-hint">{CARD_SHORTCUT_HINT}</p>
         <Why label="how grading works">Graded "Hard" returns tomorrow; "Good" stretches to 3, 7, then 15 days; "Easy" pushes even further; "Again" re-queues it in this session. Skip does not change the schedule. Reviews land right before you'd forget. That's the spacing effect doing the work.</Why>
       </section>
     </div>
@@ -2432,23 +2614,24 @@ export function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = 
 
 /* ================= STATS ================= */
 
-function Stats({ log, catStats, popStats = [], acc, resetAll, provider, setProvider, customCount, examDate, setExamDate, isOwner = false, ent = null, onManagePlan, profile, setProfile, tourFocus = null }) {
+function Stats({ xp = 0, streak = null, bestRun = 0, readiness = null, readyLabel = "", log, catStats, popStats = [], acc, resetAll, provider, setProvider, customCount, examDate, setExamDate, isOwner = false, ent = null, onManagePlan, profile, setProfile, tourFocus = null }) {
 
   const [confirm, setConfirm] = useState(false);
   const p = AI_PROVIDERS.find((x) => x.id === provider) || AI_PROVIDERS[0];
+  const lvl = levelFor(xp);
   return (
-    <div className="stack">
-      <PlanCard ent={ent} onManage={onManagePlan} isOwner={isOwner} />
-      {profile !== undefined && log.length >= 1 && <ProfileCard key={profile?.updated_at ?? "new"} profile={profile} setProfile={setProfile} />}
-      <section className="card">
-        <p className="eyebrow">Exam date</p>
-        <p className="small">Set your NCLEX date and the Today tab will build you a weekly plan from your ability profile.</p>
-        <input type="date" className="select" aria-label="Exam date"
-          value={examDate ?? ""} min={addDays(1)}
-          onChange={(e) => setExamDate(e.target.value || null)} />
-        <p className="small tip">Haven't registered yet? Apply through your state's Board of Nursing, then sign up for the NCLEX at <a href="https://www.nclex.com" target="_blank" rel="noopener" style={{ color: "inherit", fontWeight: 600 }}>nclex.com</a> (official NCSBN site) and schedule through <a href="https://www.pearsonvue.com/us/en/nclex.html" target="_blank" rel="noopener" style={{ color: "inherit", fontWeight: 600 }}>Pearson VUE</a>.</p>
+    <div className="stack stats-grid">
+      <section className="card wide">
+        <p className="eyebrow">Readiness & progress</p>
+        <div className="stat-hero">
+          <div><span className="stat-big mono">{readiness == null ? "--" : `${Math.round((readiness.low + readiness.high) / 2)}`}</span><span className="stat-cap">Readiness (estimate){readiness == null ? " · 12+ answers needed" : ` · range ${readiness.low}–${readiness.high}%`}</span></div>
+          <div><span className="stat-big mono">{log.length ? `${Math.round(acc * 100)}%` : "--"}</span><span className="stat-cap">Accuracy · {log.length} answered</span></div>
+          <div><span className="stat-big mono">🔥 {streak?.count ?? 0}</span><span className="stat-cap">Day streak</span></div>
+          <div><span className="stat-big mono">{xp}</span><span className="stat-cap">XP · {lvl.name}</span></div>
+        </div>
+        {readyLabel && <p className="small tip">{readyLabel}. Readiness is an estimate from your work in PulseRN.</p>}
       </section>
-      <section className={"card" + tourMark(tourFocus, "stats")} data-tour="stats">
+      <section className={"card wide" + tourMark(tourFocus, "stats")} data-tour="stats">
         <p className="eyebrow">Performance</p>
         <h2 className="h2">{log.length ? `${Math.round(acc * 100)}% overall accuracy` : "No questions answered yet"}</h2>
         <p className="small">{log.length} answered · {log.filter((l) => l.correct).length} correct</p>
@@ -2473,6 +2656,16 @@ function Stats({ log, catStats, popStats = [], acc, resetAll, provider, setProvi
           </div>
         ))}
         <p className="small tip">Pediatric, geriatric, and maternal/newborn clients appear across every category. Use the 🧒 👵 🤰 focus chips in Practice to drill them, and track your accuracy here.</p>
+      </section>
+      <PlanCard ent={ent} onManage={onManagePlan} isOwner={isOwner} />
+      {profile !== undefined && log.length >= 1 && <ProfileCard key={profile?.updated_at ?? "new"} profile={profile} setProfile={setProfile} />}
+      <section className="card">
+        <p className="eyebrow">Exam date</p>
+        <p className="small">Set your NCLEX date and the Today tab will build you a weekly plan from your ability profile.</p>
+        <input type="date" className="select" aria-label="Exam date"
+          value={examDate ?? ""} min={addDays(1)}
+          onChange={(e) => setExamDate(e.target.value || null)} />
+        <p className="small tip">Haven't registered yet? Apply through your state's Board of Nursing, then sign up for the NCLEX at <a href="https://www.nclex.com" target="_blank" rel="noopener" style={{ color: "inherit", fontWeight: 600 }}>nclex.com</a> (official NCSBN site) and schedule through <a href="https://www.pearsonvue.com/us/en/nclex.html" target="_blank" rel="noopener" style={{ color: "inherit", fontWeight: 600 }}>Pearson VUE</a>.</p>
       </section>
       {isOwner && (
         <section className="card">
@@ -2700,7 +2893,7 @@ export function Style() {
         --pick-bg:#E8F4F0; --right-bg:#DDF2E7; --wrong-bg:#FBE7E3;
         --ok-bg:#E9F6EF; --ok-line:#BCE4CE; --no-bg:#FBEFEC; --no-line:#F0C8C0;
         --chip-bg:#EDF4F0; --lab-bg:#FDF3E3; --lab-line:#EED9B4; --lab-ink:#8A6215;
-        --tab-ink:#6B837C; --tab-on:#E6F1ED;
+        --tab-ink:#4A645C; --tab-on:#E6F1ED;
         --read-size:15.5px; --read-lh:1.55; --body-size:13.5px; --body-lh:1.55; --body-weight:400;
       }
       .app[data-theme="dim"]{
@@ -2733,23 +2926,23 @@ export function Style() {
         .top{flex-wrap:nowrap;padding:6px 8px;gap:6px}
         .brand-name{font-size:15px;letter-spacing:.04em}
         .home-btn{padding:8px 10px;font-size:13px}
-        .top-stats{gap:4px;font-size:11px}
+        .top-stats{gap:4px;font-size:12px}
         .theme-btn{padding:4px 7px}
       }
-      .theme-btn{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--accent-ink);background:var(--card);border:1px solid var(--line);border-radius:99px;padding:5px 10px;cursor:pointer}
+      .theme-btn{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:var(--accent-ink);background:var(--card);border:1px solid var(--line);border-radius:99px;padding:5px 10px;cursor:pointer}
       .theme-btn:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
 
       .body{flex:1;padding:16px 16px 96px}
       .stack{display:flex;flex-direction:column;gap:14px}
       .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
-      .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);margin-bottom:6px;font-weight:600}
+      .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);margin-bottom:6px;font-weight:600}
       .app[data-theme="dim"] .eyebrow{color:var(--accent-ink)}
       .h2{font-size:20px;font-weight:800;letter-spacing:-.01em;margin-bottom:6px}
       .small{font-size:var(--body-size);line-height:var(--body-lh);font-weight:var(--body-weight);color:var(--muted);margin-bottom:8px}
       .tip{border-top:1px dashed var(--line);padding-top:8px;margin-top:4px;margin-bottom:0}
       /* monitor (dark in both themes — instrument, not reading surface) */
       .monitor-card{background:var(--mon);border-radius:16px;padding:16px;color:#CFEADF}
-      .monitor-head{display:flex;justify-content:space-between;font-size:10.5px;letter-spacing:.16em;color:#6FA394;margin-bottom:8px}
+      .monitor-head{display:flex;justify-content:space-between;font-size:12px;letter-spacing:.16em;color:#6FA394;margin-bottom:8px}
       .blink{color:var(--ecg);animation:blink 1.4s steps(1) infinite}
       @keyframes blink{50%{opacity:.25}}
       .ecg{width:100%;height:44px;display:block}
@@ -2759,8 +2952,8 @@ export function Style() {
       .vitals{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
       .vital{text-align:center}
       .vital-num{display:block;font-family:'IBM Plex Mono',monospace;font-size:26px;font-weight:600;color:var(--ecg)}
-      .vital-lab{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.14em;color:#6FA394}
-      .monitor-note{margin-top:10px;font-size:10.5px;letter-spacing:.1em;color:#8FBCAD}
+      .vital-lab{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;color:#6FA394}
+      .monitor-note{margin-top:10px;font-size:12px;letter-spacing:.1em;color:#8FBCAD}
       /* buttons & bars */
       .btn{background:var(--teal);color:var(--btn-ink);border:none;border-radius:10px;padding:12px 16px;font-family:'Archivo',sans-serif;font-weight:700;font-size:14px;cursor:pointer;margin-top:6px}
       .btn:disabled{opacity:.4;cursor:default}
@@ -2770,7 +2963,8 @@ export function Style() {
       .row{display:flex;gap:8px;flex-wrap:wrap}
       /* Back / Next / Skip. Sticky so a long stem on a phone does not
          bury the controls under the tab bar. 48px targets, three across. */
-      .q-nav-wrap{position:sticky;bottom:calc(62px + env(safe-area-inset-bottom));z-index:4;background:var(--card);padding:8px 0 2px;margin-top:12px;border-top:1px solid var(--line)}
+      .q-nav-wrap{--q-nav-stick-bottom:calc(62px + env(safe-area-inset-bottom));position:sticky;bottom:var(--q-nav-stick-bottom);z-index:4;background:var(--card);padding:8px 0 2px;margin-top:12px;border-top:1px solid var(--line)}
+      .q-nav-wrap.q-nav-flat{position:static}
       .q-skipped{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
       .q-skipped-count{margin:0}
       .q-skipped .btn{margin-top:0;min-height:48px;padding:10px 12px;font-size:14px}
@@ -2786,7 +2980,7 @@ export function Style() {
       .bar-fill{height:100%;background:var(--teal);border-radius:99px;transition:width .4s}
       .bar-fill.low{background:var(--coral)}
       /* questions — the primary reading surface */
-      .q-meta{display:flex;justify-content:space-between;font-size:10px;letter-spacing:.1em;color:var(--muted);margin-bottom:10px;gap:8px;flex-wrap:wrap}
+      .q-meta{display:flex;justify-content:space-between;font-size:12px;letter-spacing:.1em;color:var(--muted);margin-bottom:10px;gap:8px;flex-wrap:wrap}
       .stem{font-size:var(--read-size);line-height:var(--read-lh);font-weight:500;margin-bottom:14px}
       .opts{display:flex;flex-direction:column;gap:9px;margin-bottom:8px}
       .opt{display:flex;align-items:flex-start;gap:8px;text-align:left;background:var(--surface);border:1.5px solid var(--line);border-radius:10px;padding:12px 14px;font-family:'Archivo',sans-serif;font-size:14px;line-height:1.5;font-weight:var(--body-weight);cursor:pointer;color:var(--ink)}
@@ -2800,17 +2994,21 @@ export function Style() {
       .mx-row:first-child{border-top:none}
       .mx-row>span{padding:10px 12px}
       .mx-head{background:var(--surface)}
-      .mx-colhead{text-align:center;font-size:10px;letter-spacing:.08em}
+      .mx-colhead{text-align:center;font-size:12px;letter-spacing:.08em}
       .mx-cell{background:var(--surface);border:none;border-left:1px solid var(--line);padding:12px 4px;font-size:16px;cursor:pointer;color:var(--ink)}
       .mx-cell.picked{background:var(--pick-bg);color:var(--accent-ink);font-weight:700}
+      .mx-cell{min-height:48px;display:flex;align-items:center;justify-content:center}
+      .mx-cell.picked .mx-ck{border-color:var(--teal);box-shadow:inset 0 0 0 5px var(--teal)}
+      .mx-cell.right .mx-ck{border-color:var(--teal)}
+      .mx-cell.wrong .mx-ck{border-color:var(--danger-ink);box-shadow:inset 0 0 0 5px var(--danger-ink)}
       .mx-cell.right{background:var(--right-bg);color:var(--accent-ink);font-weight:700}
       .mx-cell.wrong{background:var(--wrong-bg);color:var(--coral)}
       /* NGN: bow-tie */
       .bt-cols{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px}
       @media (max-width:520px){.bt-cols{grid-template-columns:1fr}}
       .bt-col{display:flex;flex-direction:column;gap:6px;background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:8px}
-      .bt-label{margin-bottom:2px;font-size:10px;letter-spacing:.08em}
-      .bt-opt{padding:9px 10px;font-size:13px}
+      .bt-label{margin-bottom:2px;font-size:12px;letter-spacing:.08em}
+      .bt-opt{padding:9px 10px;font-size:13px;min-height:44px}
       /* NGN: cloze */
       .cloze-dd{display:inline-block;margin:0 4px;background:var(--surface);color:var(--ink);border:1.5px solid var(--teal);border-radius:8px;padding:6px 8px;font-family:'Archivo',sans-serif;font-size:14px;font-weight:600;max-width:100%}
       .cloze-dd:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
@@ -2831,13 +3029,14 @@ export function Style() {
       .fab-mini{display:flex;align-items:center;gap:8px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:24px;padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(8,20,16,.25)}
       .lab-overlay{position:fixed;inset:0;background:rgba(8,20,16,.45);z-index:48}
       .lab-drawer{position:fixed;top:0;right:0;bottom:0;width:min(360px,92vw);z-index:49;background:var(--card);border-left:1px solid var(--line);transform:translateX(102%);transition:transform .22s ease;display:flex;flex-direction:column;padding:14px 14px calc(14px + env(safe-area-inset-bottom))}
+      .lab-drawer:not(.open){visibility:hidden;transition:transform .22s ease,visibility 0s linear .22s}
       .lab-drawer.open{transform:translateX(0)}
       .lab-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
       .lab-head .eyebrow{margin:0}
       .lab-search{margin:0 0 10px}
       .lab-body{overflow-y:auto;flex:1}
       .lab-group{margin-bottom:14px}
-      .lab-group-name{font-size:10px;letter-spacing:.12em;color:var(--accent-ink);margin-bottom:6px}
+      .lab-group-name{font-size:12px;letter-spacing:.12em;color:var(--accent-ink);margin-bottom:6px}
       .lab-row{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px dashed var(--line);font-size:14px}
       .lab-val{color:var(--accent-ink);font-size:12.5px;text-align:right;white-space:nowrap}
       /* flashcard typed recall */
@@ -2851,7 +3050,7 @@ export function Style() {
       .hl-token.wrong{border-color:var(--coral);background:var(--wrong-bg)}
       .exhibit{margin-bottom:12px}
       .exhibit-tab{border:1px solid var(--line);border-radius:10px;margin-bottom:6px;background:var(--surface);overflow:hidden}
-      .exhibit-tab summary{padding:10px 12px;font-size:11px;letter-spacing:.06em;font-weight:700;color:var(--accent-ink);cursor:pointer}
+      .exhibit-tab summary{padding:10px 12px;font-size:12px;letter-spacing:.06em;font-weight:700;color:var(--accent-ink);cursor:pointer}
       .exhibit-body{white-space:pre-wrap;padding:0 12px 10px;margin:0;font-family:'IBM Plex Mono',monospace;font-size:13px}
       /* focus filter chips + dosage calc */
       .fchips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
@@ -2882,14 +3081,14 @@ export function Style() {
       .why-body{margin-top:6px;padding:8px 10px;background:var(--surface);border-radius:8px}\n      .fc-scale{width:100%;max-width:340px;display:block;margin:8px auto}\n      .fc-pair{display:flex;gap:10px;align-items:center;justify-content:center;margin:8px 0}\n      .fc-arrow{color:var(--accent-ink);font-weight:700}\n      .fc-anti{background:var(--right-bg)}
       .exh-wrap{margin:4px 0 10px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px}
       .exh-svg{width:100%;display:block}
-      .vital-range{display:block;font-size:9.5px;color:var(--ecg);opacity:.75;margin-top:1px}
+      .vital-range{display:block;font-size:12px;color:var(--ecg);opacity:.75;margin-top:1px}
       /* floating UI never fights the content: fade out while scrolling */
       .app.scrolling .fab{opacity:0;pointer-events:none}
       .exam-head-card{padding:10px 18px}
       /* on-screen calculator */
       .calc-pad{max-width:260px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px}
       .calc-screen{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin-bottom:8px;text-align:right}
-      .calc-pending{display:block;font-size:11px;color:var(--muted);min-height:14px}
+      .calc-pending{display:block;font-size:12px;color:var(--muted);min-height:14px}
       .calc-display{display:block;font-size:22px;font-weight:700;color:var(--ink);overflow:hidden}
       .calc-row{display:flex;gap:6px;margin-bottom:6px}
       .calc-key{flex:1;padding:11px 0;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600;cursor:pointer}
@@ -2933,25 +3132,26 @@ export function Style() {
       .feedback{border-radius:12px;padding:14px;margin-top:8px}
       .feedback.ok{background:var(--ok-bg);border:1px solid var(--ok-line)}
       .feedback.no{background:var(--no-bg);border:1px solid var(--no-line)}
-      .fb-head{font-size:11px;letter-spacing:.12em;font-weight:600;margin-bottom:8px}
+      .fb-head{font-size:12px;letter-spacing:.12em;font-weight:600;margin-bottom:8px}
       .feedback.ok .fb-head{color:var(--accent-ink)} .feedback.no .fb-head{color:var(--danger-ink)}
       .rationale{font-size:var(--body-size);line-height:1.7;font-weight:var(--body-weight);color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px}
       /* case study */
       .chart{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
-      .chip{background:var(--chip-bg);border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:11px;font-weight:600;color:var(--accent-ink)}
+      .chip{background:var(--chip-bg);border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:12px;font-weight:600;color:var(--accent-ink)}
       .chip.lab{background:var(--lab-bg);border-color:var(--lab-line);color:var(--lab-ink)}
       .note{font-style:italic}
       /* flashcards */
       .flashcard{width:100%;min-height:170px;background:linear-gradient(160deg,#0C201D,#123A32);color:#EAF6F0;border:none;border-radius:14px;padding:20px;display:flex;flex-direction:column;justify-content:center;gap:12px;cursor:pointer;text-align:center}
       .flashcard:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
-      .fc-side{font-size:10px;letter-spacing:.18em;color:#6FA394}
+      .fc-side{font-size:12px;letter-spacing:.18em;color:#6FA394}
 
       .fc-text{font-size:18px;font-weight:700;line-height:1.5}
       .grades{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
       .grade{margin-top:0;padding:11px 4px;font-size:13px;color:#fff}
-      .grade.again{background:var(--coral)} .grade.hard{background:var(--amber);color:#3A2A08} .grade.good{background:var(--teal);color:var(--btn-ink)} .grade.easy{background:#0A5A4E}
+      .grade.again{background:var(--danger-ink);color:#fff} .grade.hard{background:var(--amber);color:#3A2A08} .grade.good{background:var(--teal);color:var(--btn-ink)} .grade.easy{background:#0A5A4E;color:#fff}
+      .app[data-theme="dim"] .grade.again{color:#1C0E0C}
       .grade{display:flex;flex-direction:column;align-items:center;gap:2px}
-      .grade-sub{font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:400;opacity:.85}
+      .grade-sub{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600}
       .btn.danger{background:var(--coral);color:#fff}
       .select{width:100%;margin-top:4px;background:var(--surface);color:var(--ink);border:1.5px solid var(--line);border-radius:10px;padding:12px;font-family:'Archivo',sans-serif;font-size:14px;font-weight:600}
       .select:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
@@ -2963,6 +3163,7 @@ export function Style() {
       .stage-label{text-align:center;margin-bottom:0}
       .rationale.tutor{border-left:4px solid var(--teal)}
       .tutor-btn{margin-bottom:8px;display:block}
+      .case-chart-bar > .tutor-btn{margin:0 14px 12px}
       /* Read aloud: a big, obvious Listen button, then small chips for stop,
          speed and auto-read. The part being read gets a soft teal wash
          (follow-along), never a new color. */
@@ -2985,9 +3186,198 @@ export function Style() {
       .cat-top .small{margin-bottom:0}
       /* tabs */
       .tabs{position:fixed;bottom:0;left:0;right:0;max-width:560px;margin:0 auto;display:flex;background:var(--card);border-top:1px solid var(--line);padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
-      .tab{flex:1;background:none;border:none;padding:10px 2px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.02em;color:var(--tab-ink);cursor:pointer;border-radius:8px;font-weight:600}
+      .tab{flex:1;background:none;border:none;padding:10px 2px;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.02em;color:var(--tab-ink);cursor:pointer;border-radius:8px;font-weight:600}
       .tab.on{color:var(--accent-ink);background:var(--tab-on)}
       .tab:focus-visible{outline:3px solid var(--amber);outline-offset:-3px}
+
+      /* ===== Flagship UX layer (local prototype) ===== */
+      .top{flex-wrap:nowrap;min-height:56px}
+      .top-stats{gap:8px}
+      .stat-chip{display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:6px 12px;border-radius:999px;background:var(--chip-bg);border:1px solid var(--line);color:var(--accent-ink);font-size:13px;font-weight:600;white-space:nowrap}
+      .stat-sep{width:1px;height:14px;background:var(--line)}
+      .stat-chip.pulse{animation:statPulse .6s ease-out}
+      @keyframes statPulse{0%{transform:scale(1)}35%{transform:scale(1.12);box-shadow:0 0 0 4px var(--pick-bg)}100%{transform:scale(1)}}
+      .menu-btn{position:relative;z-index:43;min-width:44px;min-height:44px;padding:0;display:inline-flex;align-items:center;justify-content:center;font-size:18px;border-radius:12px}
+      .theme-compact{min-width:44px;min-height:44px;padding:0;display:inline-flex;align-items:center;justify-content:center;font-size:18px;border-radius:12px}
+      .menu-btn:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+      .menu-item{min-height:48px}
+      /* tab bar: icon + label */
+      .tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:54px;padding:6px 2px;font-family:'Archivo',sans-serif;font-size:12px;letter-spacing:0;font-weight:700}
+      .tab-ico{display:block}
+      .tab-label{display:block;white-space:nowrap;font-size:12px;line-height:1.2}
+      .tab.on .tab-ico{transform:translateY(-1px)}
+      /* Focus trigger + bottom sheet */
+      .focus-bar{display:flex;align-items:center;gap:8px;margin:2px 0 10px}
+      .focus-trigger{flex:1;min-width:0;min-height:44px;display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);font-family:'Archivo',sans-serif;font-size:14px;font-weight:600;cursor:pointer;text-align:left}
+      .focus-trigger.on{border-color:var(--teal);background:var(--pick-bg)}
+      .focus-trigger:focus-visible,.focus-clear:focus-visible,.fchip:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+      .focus-k{color:var(--accent-ink);font-weight:700}
+      .focus-v{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .focus-n{min-width:22px;height:22px;border-radius:11px;background:var(--teal);color:var(--btn-ink);font-size:12px;display:inline-flex;align-items:center;justify-content:center;padding:0 6px}
+      .focus-caret{color:var(--accent-ink)}
+      .focus-clear{min-width:44px;min-height:44px;border-radius:50%;border:1.5px solid var(--line);background:var(--card);color:var(--ink);font-size:15px;cursor:pointer}
+      .sheet-overlay{position:fixed;inset:0;z-index:60;background:rgba(8,20,16,.45);display:flex;align-items:flex-end;justify-content:center}
+      .sheet{width:100%;max-width:560px;max-height:82vh;overflow:auto;background:var(--card);color:var(--ink);border-radius:20px 20px 0 0;padding:10px 16px calc(16px + env(safe-area-inset-bottom));box-shadow:0 -12px 40px rgba(8,20,16,.3);animation:sheetUp .22s ease-out}
+      @keyframes sheetUp{from{transform:translateY(24px);opacity:.6}to{transform:none;opacity:1}}
+      .sheet-grip{width:44px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 8px}
+      .sheet-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+      .sheet-title{margin:0}
+      .sheet-x{margin:0;min-width:44px;min-height:44px;padding:0}
+      .sheet-group{margin-top:12px}
+      .sheet .fchip{min-height:44px;padding:10px 14px;font-size:14px}
+      .sheet .fchip.on::before{content:"✓ "}
+      .sheet-actions{position:sticky;bottom:-16px;background:var(--card);padding:12px 0 4px;margin-top:12px}
+      .sheet-actions .btn{flex:1;min-height:48px;margin:0}
+      .fchips.scroll{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+      .fchips.scroll::-webkit-scrollbar{display:none}
+      .fchips.scroll .fchip{flex:0 0 auto;min-height:44px}
+      /* Labs chip in the nav row; the floating button stays off study screens */
+      .q-skipped{gap:8px}
+      .q-skipped-count{flex:1}
+      /* ---- Floating 🧪 study toolkit (draggable, settles clear of every target) ---- */
+      .fab.lab-fab{left:0;top:0;right:auto;bottom:auto;touch-action:none;user-select:none;-webkit-user-select:none;
+        transition:transform .28s cubic-bezier(.2,.8,.2,1),opacity .2s,box-shadow .2s;box-shadow:0 6px 18px rgba(8,20,16,.32),0 0 0 3px var(--card);font-size:24px;cursor:grab}
+      .fab.lab-fab.dragging{transition:none;cursor:grabbing;box-shadow:0 12px 28px rgba(8,20,16,.42),0 0 0 3px var(--card)}
+      .fab.lab-fab:focus-visible{outline:3px solid var(--accent-ink);outline-offset:3px}
+      .app.scrolling .fab.lab-fab{opacity:.25}
+      .lab-overlay.tk-overlay{background:rgba(8,20,16,.32)}
+      .lab-drawer.toolkit{width:min(420px,94vw);padding:0;gap:0;box-shadow:-12px 0 32px rgba(8,20,16,.18)}
+      .tk-grab{display:none}
+      .tk-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 16px 10px}
+      .tk-title{font-size:20px;font-weight:800;letter-spacing:-.01em;color:var(--ink);outline:none}
+      .tk-sub{font-size:13px;color:var(--muted);margin-top:2px}
+      .tk-close{width:44px;height:44px;flex:none;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:18px;font-weight:700;cursor:pointer}
+      .tk-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0 16px 10px;padding:4px;border-radius:14px;background:var(--bar-bg)}
+      .tk-tab{min-height:44px;border:none;border-radius:10px;background:transparent;color:var(--muted);font:inherit;font-size:14px;font-weight:700;cursor:pointer}
+      .tk-tab.on{background:var(--card);color:var(--ink);box-shadow:0 1px 4px rgba(8,20,16,.14)}
+      .tk-body{flex:1;overflow-y:auto;padding:0 16px 8px;overscroll-behavior:contain}
+      .tk-body [role=tabpanel][hidden]{display:none}
+      .tk-help .hp{display:flex;flex-direction:column;min-height:100%}
+      .tk-foot{padding:8px 16px calc(10px + env(safe-area-inset-bottom));border-top:1px solid var(--line);display:flex;justify-content:center}
+      .tk-reset{min-height:44px;padding:0 14px;border:none;background:transparent;color:var(--accent-ink);font:inherit;font-size:13px;font-weight:700;cursor:pointer;border-radius:10px}
+      .tk-reset:hover{background:var(--surface)}
+      .lp-search{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:8px;background:var(--card);border:2px solid var(--teal);border-radius:14px;padding:0 4px 0 12px;margin-bottom:10px;box-shadow:0 4px 12px rgba(8,20,16,.06)}
+      .lp-search:focus-within{border-color:var(--accent-ink);box-shadow:0 0 0 3px var(--accent-ink)}
+      .lp-search-icon{font-size:20px;color:var(--accent-ink);font-weight:700}
+      .lp-input{flex:1;min-width:0;min-height:50px;border:none;background:transparent;color:var(--ink);font:inherit;font-size:16px;outline:none}
+      .lp-input::placeholder{color:var(--muted);opacity:1}
+      .lp-input::-webkit-search-cancel-button{display:none}
+      .lp-clear{width:44px;height:44px;border:none;border-radius:10px;background:var(--surface);color:var(--ink);font-size:15px;font-weight:700;cursor:pointer}
+      .lp-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 6px}
+      .lp-count{font-size:13px;color:var(--muted)}
+      .lp-all{min-height:44px;padding:0 10px;border:none;background:transparent;color:var(--accent-ink);font:inherit;font-size:13px;font-weight:700;cursor:pointer;border-radius:10px}
+      .lp-groups{display:flex;flex-direction:column;gap:8px}
+      .lp-group{border:1px solid var(--line);border-radius:14px;background:var(--card);overflow:hidden}
+      .lp-group.open{border-color:var(--teal)}
+      .lp-group-h{margin:0;font-size:inherit}
+      .lp-group-btn{width:100%;min-height:52px;display:flex;align-items:center;gap:10px;padding:0 14px;border:none;background:var(--surface);color:var(--ink);font:inherit;font-size:15px;font-weight:700;text-align:left;cursor:pointer}
+      .lp-group-btn:disabled{cursor:default;opacity:1}
+      .lp-group-name{flex:1}
+      .lp-group-n{min-width:28px;padding:2px 8px;border-radius:999px;background:var(--chip-bg);color:var(--accent-ink);font-size:12px;font-weight:700;text-align:center}
+      .lp-chev{color:var(--muted);font-size:14px;width:14px;text-align:center}
+      .lp-rows{margin:0;padding:2px 14px 6px}
+      .lp-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px;min-height:44px;padding:11px 0;border-top:1px solid var(--line)}
+      .lp-row:first-child{border-top:none}
+      .lp-row dt{font-size:14px;color:var(--ink);font-weight:500}
+      .lp-row dd{margin:0;font-size:13px;font-weight:700;color:var(--accent-ink);text-align:right}
+      .lp mark{background:var(--lab-bg);color:var(--ink);border-radius:3px;padding:0 1px}
+      .lp-ask{margin-top:4px;padding:16px;border:1px dashed var(--teal);border-radius:14px;background:var(--surface)}
+      .lp-ask-title{font-size:15px;font-weight:700;color:var(--ink)}
+      .lp-ask-body{font-size:14px;color:var(--muted);margin:4px 0 12px;line-height:1.5}
+      .lp-ask-btn{width:100%;min-height:48px;margin:0}
+      .lp-ai{margin-top:10px;padding:16px;border-radius:14px;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--teal);box-shadow:0 4px 14px rgba(8,20,16,.08)}
+      .lp-ai:focus{outline:2px solid var(--accent-ink);outline-offset:2px}
+      .lp-ai-eyebrow{font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--accent-ink);margin-bottom:8px;overflow-wrap:anywhere}
+      .lp-ai-text{font-size:15px;line-height:1.6;color:var(--ink);white-space:pre-wrap}
+      .lp-ai-note{font-size:12.5px;color:var(--muted);margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+      .lp-disclaimer{font-size:12.5px;color:var(--muted);margin:14px 2px 6px;line-height:1.5}
+      @media (max-width:760px){
+        .lab-drawer.toolkit{top:auto;left:0;right:0;bottom:0;width:auto;height:min(80vh,680px);border-left:none;border-top:1px solid var(--line);border-radius:20px 20px 0 0;transform:translateY(104%);box-shadow:0 -12px 32px rgba(8,20,16,.22)}
+        .lab-drawer.toolkit.open{transform:translateY(0)}
+        .tk-grab{display:block;width:44px;height:5px;border-radius:3px;background:var(--line);margin:8px auto 0}
+        .tk-head{padding-top:8px}
+      }
+      @media (prefers-reduced-motion:reduce){.fab.lab-fab,.lab-drawer.toolkit{transition:none}}
+      .app.in-session .q-nav-wrap.card-nav{padding-right:0}
+      /* Cards: session progress + flip */
+      .card-progress{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+      .card-progress .mono{font-size:13px;font-weight:600;color:var(--accent-ink);white-space:nowrap}
+      .card-progress .bar{flex:1;margin:0}
+      .flashcard.flip-in{animation:cardFlip .32s ease-out}
+      @keyframes cardFlip{0%{transform:perspective(900px) rotateY(-80deg);opacity:.4}100%{transform:perspective(900px) rotateY(0);opacity:1}}
+      .fc-side{color:#9CC7B9}
+      .show-answer{width:100%;min-height:48px;margin-top:10px}
+      .undo-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}
+      .undo-row .btn{margin:0;min-height:44px}
+      /* Correct-answer confirmation */
+      .feedback.ok{animation:okIn .45s ease-out}
+      @keyframes okIn{0%{transform:scale(.98);box-shadow:0 0 0 0 rgba(14,124,107,.35)}60%{box-shadow:0 0 0 8px rgba(14,124,107,0)}100%{transform:none}}
+      .fb-badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--teal);color:var(--btn-ink);font-size:13px;margin-right:8px;vertical-align:-5px}
+      .feedback.no .fb-badge{background:var(--danger-ink);color:#fff}
+      .app[data-theme="dim"] .feedback.no .fb-badge{color:#2A0E0A}
+      .opt.st-picked-correct{animation:pickOk .4s ease-out}
+      @keyframes pickOk{0%{transform:scale(1)}40%{transform:scale(1.015)}100%{transform:scale(1)}}
+      /* Real check boxes / radios on choice rows */
+      .ck{flex:0 0 22px;width:22px;height:22px;margin-top:1px;border:2px solid var(--muted);border-radius:6px;background:var(--card);display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;line-height:1;color:var(--btn-ink)}
+      .ck.radio{border-radius:50%}
+      .opt.picked .ck{border-color:var(--teal);background:var(--teal)}
+      .opt.picked .ck.radio{background:var(--card);box-shadow:inset 0 0 0 4px var(--teal)}
+      .opt-text{flex:1}
+      .st-badge{display:block;margin-top:4px;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:.02em}
+      .opt.st-picked-correct{border-color:var(--teal);background:var(--right-bg)}
+      .opt.st-picked-correct .st-badge{color:var(--accent-ink)}
+      .opt.st-missed{border:2px dashed var(--amber);background:var(--lab-bg);font-weight:600}
+      .opt.st-missed .st-badge{color:var(--lab-ink)}
+      .opt.st-missed .ck{border-color:var(--lab-ink);border-style:dashed;background:var(--card)}
+      .opt.st-wrong{border-color:var(--coral);background:var(--wrong-bg)}
+      .opt.st-wrong .st-badge{color:var(--danger-ink)}
+      .opt.st-wrong .ck{border-color:var(--danger-ink);background:var(--danger-ink);color:#fff}
+      .app[data-theme="dim"] .opt.st-wrong .ck{color:#2A0E0A}
+      .choice-legend{display:flex;flex-wrap:wrap;gap:6px 12px;margin:8px 0 0}
+      .choice-legend span{font-size:12px;font-weight:600}
+      .lg-ok{color:var(--accent-ink)} .lg-miss{color:var(--lab-ink)} .lg-wrong{color:var(--danger-ink)}
+      /* Case study: sticky patient chart */
+      .case-chart-bar{position:sticky;top:60px;z-index:20;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 6px 16px rgba(8,20,16,.10)}
+      .case-chart-toggle{width:100%;min-height:48px;display:flex;align-items:center;gap:8px;padding:10px 14px;background:none;border:none;color:var(--ink);font-family:'Archivo',sans-serif;font-size:14px;font-weight:700;cursor:pointer;text-align:left}
+      .case-chart-toggle:focus-visible{outline:3px solid var(--amber);outline-offset:-3px;border-radius:14px}
+      .case-chart-sum{flex:1;min-width:0;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .case-chart-body{padding:0 14px 12px;max-height:46vh;overflow:auto}
+      .case-chart-bar:not(.open) .case-chart-body{display:none}
+      .stat-hero{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:4px}
+      .stat-hero > div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px}
+      .stat-big{display:block;font-size:24px;font-weight:600;color:var(--accent-ink);line-height:1.2}
+      .stat-cap{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+      @media (min-width:1024px){.stat-hero{grid-template-columns:repeat(4,minmax(0,1fr))}}
+      .case-main{min-width:0}
+      .step-progress{display:flex;gap:4px;margin:0 0 10px}
+      .step-progress span{flex:1;height:5px;border-radius:3px;background:var(--bar-bg)}
+      .step-progress span.done{background:var(--teal)}
+      .step-progress span.now{background:var(--amber)}
+      .kbd-hint{display:none}
+      @media (hover:hover) and (pointer:fine){.kbd-hint{display:block}}
+      /* Desktop: a wider canvas and two columns where it helps */
+      @media (min-width:1024px){
+        .app{max-width:1120px}
+        .tabs{max-width:1120px}
+        .body{padding:24px 32px 110px}
+        .study-col{max-width:780px;margin:0 auto;width:100%}
+        .today-home{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+        .today-home > *{grid-column:1}
+        .today-home > .stack{grid-column:2;grid-row:1 / span 4}
+        .stats-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+        .stats-grid > .wide{grid-column:1 / -1}
+        .case-layout{display:grid;grid-template-columns:minmax(300px,380px) minmax(0,1fr);gap:18px;align-items:start}
+        .case-layout .case-chart-bar{top:76px}
+        .case-layout .case-chart-body{max-height:calc(100vh - 220px)}
+        .case-layout .case-chart-bar .case-chart-body{display:block}
+        .case-layout .case-chart-toggle{pointer-events:none}
+        .case-layout .case-chart-toggle span[aria-hidden="true"]:last-child{display:none}
+        .sheet-overlay{align-items:center}
+        .sheet{border-radius:20px;max-width:620px}
+      }
+      @media (prefers-reduced-motion: reduce){
+        .stat-chip.pulse,.flashcard.flip-in,.feedback.ok,.opt.st-picked-correct,.sheet{animation:none}
+      }
     `}</style>
   );
 }

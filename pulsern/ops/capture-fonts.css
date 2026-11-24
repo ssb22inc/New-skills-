@@ -1,0 +1,37 @@
+/* Glyphs outside the Archivo and IBM Plex latin files. Each machine was
+   picking its own fallback, so the line boxes moved. These faces are the
+   pinned @fontsource packages, read from node_modules when the capture
+   server runs. Nothing here is a committed font file. */
+@font-face {
+  font-family: "PulseRN Capture Symbols";
+  src: url("../node_modules/@fontsource/dejavu-sans/files/dejavu-sans-latin-400-normal.woff2") format("woff2");
+  unicode-range: U+207A, U+207B, U+21BA;
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "PulseRN Capture Symbols";
+  src: url("../node_modules/@fontsource/noto-sans-symbols/files/noto-sans-symbols-symbols-400-normal.woff2") format("woff2");
+  unicode-range: U+2315, U+24D8;
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "PulseRN Capture Symbols";
+  src: url("../node_modules/@fontsource/noto-sans-symbols-2/files/noto-sans-symbols-2-symbols-400-normal.woff2") format("woff2");
+  unicode-range: U+25B4, U+25B6, U+25BE, U+25C6, U+25CF, U+2715, U+1F6E1;
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: block;
+}
+.app {
+  font-family: "Archivo", "PulseRN Capture Symbols", system-ui, sans-serif !important;
+}
+.mono {
+  font-family: "IBM Plex Mono", "PulseRN Capture Symbols", ui-monospace, monospace !important;
+}
+button, input, textarea, select {
+  font-family: inherit !important;
+}

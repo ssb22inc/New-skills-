@@ -15,10 +15,10 @@ export function useTourDismissScroll(token, tourOpen, tab) {
   }, [token, tourOpen, tab]);
 }
 
-export function useTourPlacement(tourStep, tab, setTab) {
+export function useTourPlacement(tourStep, tab, setTab, steps = TOUR_STEPS) {
   useEffect(() => {
     if (tourStep == null) return undefined;
-    const step = tourStepAt(tourStep);
+    const step = tourStepAt(tourStep, steps);
     if (!step) return undefined;
     if (step.tab && step.tab !== tab) {
       setTab(step.tab);
@@ -43,7 +43,7 @@ export function useTourPlacement(tourStep, tab, setTab) {
       cancelAnimationFrame(frame);
       observer?.disconnect();
     };
-  }, [tourStep, tab, setTab]);
+  }, [tourStep, tab, setTab, steps]);
 }
 
 /* The dialog sits over the app. Focus starts on its primary action, Tab
@@ -85,9 +85,9 @@ function useModal(token, onEscape) {
 
 /* Bottom sheet so the step stays on screen on a phone and on a wide fold.
    The screen behind it is the real section for this step. */
-export function Tour({ step, activating, onBack, onNext, onSkip, onHome, onAnswer }) {
-  const current = TOUR_STEPS[step] ?? TOUR_STEPS[0];
-  const last = isLastTourStep(step);
+export function Tour({ step, steps = TOUR_STEPS, activating, onBack, onNext, onSkip, onHome, onAnswer }) {
+  const current = steps[step] ?? steps[0];
+  const last = isLastTourStep(step, steps);
   const ref = useModal(step, onSkip);
 
   const forward = () => {
@@ -102,14 +102,14 @@ export function Tour({ step, activating, onBack, onNext, onSkip, onHome, onAnswe
   return (
     <div className="tour-overlay" role="dialog" aria-modal="true" aria-labelledby="tour-title" ref={ref}>
       <div className="tour-card">
-        <p className="eyebrow">Tour · {step + 1} of {TOUR_STEPS.length}</p>
+        <p className="eyebrow">Tour · {step + 1} of {steps.length}</p>
         <h2 className="h2" id="tour-title">{current.title}</h2>
         <p className="small">{current.body}</p>
         {activating && step === 0 && (
           <p className="small">Your free pass is on. When you finish or skip, your first question is waiting on Today.</p>
         )}
         <div className="tour-dots" aria-hidden="true">
-          {TOUR_STEPS.map((item, index) => (
+          {steps.map((item, index) => (
             <span key={item.id} className={index === step ? "dot on" : "dot"} />
           ))}
         </div>

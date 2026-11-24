@@ -1,5 +1,41 @@
 /* Back, Next, and Skip. Large targets for a phone held in one hand.
-   The count is the way back to anything skipped this sitting. */
+   The count is the way back to anything skipped this sitting.
+   The row sticks above the tab bar on a long item, and stays in flow
+   when sticking would cover Check answer. The lab reference is the
+   draggable 🧪 study toolkit (src/lab-fab.jsx). nextPrimary=false
+   keeps Next secondary while "Check answer" is the one primary action. */
+import React, { useEffect, useRef } from "react";
+
+export const OPEN_LABS_EVENT = "pulsern:open-labs";
+
+/* True when Check answer would meet the sticky navigation row, including
+   a button that starts just above the row and extends into it. */
+export function navCoversCheck(box, stickTop, navHeight) {
+  if (!box || navHeight <= 0) return false;
+  const slotBottom = stickTop + navHeight;
+  return box.bottom > stickTop + 1 && box.top < slotBottom - 1;
+}
+
+/* Top of the stuck row: viewport minus the used bottom offset (tab bar plus
+   the safe-area inset) minus the row's own height. */
+export function stickySlotTop(viewportHeight, rowHeight, bottomOffset) {
+  return viewportHeight - bottomOffset - rowHeight;
+}
+
+/* The used bottom offset, in pixels, including env(safe-area-inset-bottom).
+   A fixed probe resolves the CSS variable; reading the custom property
+   itself would leave the calc() unresolved. */
+export function readStickBottom(el, viewHeight = window.innerHeight) {
+  const probe = document.createElement("div");
+  probe.style.cssText = "position:fixed;left:0;width:0;height:0;margin:0;padding:0;border:0;pointer-events:none;visibility:hidden;bottom:var(--q-nav-stick-bottom)";
+  el.appendChild(probe);
+  const offset = viewHeight - probe.getBoundingClientRect().bottom;
+  probe.remove();
+  return offset;
+}
+export function openLabs() {
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(OPEN_LABS_EVENT));
+}
 
 export function QuestionNav({
   canBack,
@@ -18,10 +54,40 @@ export function QuestionNav({
   reviewLabel = "Review skipped",
   emptyReviewAria = "No skipped questions",
   layout = "sticky",
+  nextPrimary = true,
 }) {
   const skippedLabel = skipped === 1 ? "1 skipped" : `${skipped} skipped`;
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || layout !== "sticky") return undefined;
+    let frame = 0;
+    const place = () => {
+      frame = 0;
+      el.classList.add("q-nav-flat");
+      const natural = el.getBoundingClientRect();
+      const bottomOffset = readStickBottom(el);
+      el.dataset.stickBottom = String(Math.round(bottomOffset));
+      const stickTop = stickySlotTop(window.innerHeight, natural.height, bottomOffset);
+      const checks = [...(el.parentElement?.querySelectorAll("button") ?? [])].filter((node) => !el.contains(node) && /check answer/i.test(node.textContent || ""));
+      const coversCheck = checks.some((node) => navCoversCheck(node.getBoundingClientRect(), stickTop, natural.height));
+      el.classList.toggle("q-nav-flat", coversCheck);
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(place); };
+    schedule();
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
+    ro?.observe(el.parentElement || document.body);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+      ro?.disconnect();
+    };
+  }, [layout]);
   return (
-    <div className={layout === "inline" ? "q-nav-wrap card-nav" : "q-nav-wrap"}>
+    <div ref={ref} className={(layout === "inline" ? "q-nav-wrap card-nav" : "q-nav-wrap") + " q-nav-flat"}>
       <div className="q-skipped">
         <p className="small mono q-skipped-count">{skippedLabel}</p>
         <button
@@ -41,7 +107,7 @@ export function QuestionNav({
         <button type="button" className="btn ghost" disabled={!canSkip} onClick={onSkip} aria-label={skipAria}>
           Skip
         </button>
-        <button type="button" className="btn" disabled={!canNext} onClick={onNext} aria-label={nextAria}>
+        <button type="button" className={nextPrimary ? "btn" : "btn ghost"} disabled={!canNext} onClick={onNext} aria-label={nextAria}>
           {nextLabel}
         </button>
       </div>

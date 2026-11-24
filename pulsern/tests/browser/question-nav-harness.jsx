@@ -63,6 +63,8 @@ const CASE = {
   vitals: [["HR", "88/min"]],
   labs: [["K", "4.0 mEq/L"]],
   note: "Awake and talking. No distress noted on arrival to the unit this morning.",
+  ai: true,
+  dbId: "nav-case",
   steps: [0, 1, 2].map((i) => ({
     phase: "Take Action",
     type: "mc",
