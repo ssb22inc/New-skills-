@@ -29,7 +29,7 @@
      invoice. */
 
 import { llmCall } from "./llm.mjs";
-import { GEN_MODEL, REVIEW_MODEL, REVIEWER_NAME, REVIEW_SEES_IMAGES, assertCrossFamily } from "./models.mjs";
+import { GEN_MODEL, REVIEW_MODEL, REVIEWER_NAME, reviewerFor, assertCrossFamily } from "./models.mjs";
 
 export const REVIEW_MIN_TOKENS = 24000;
 export const REVIEW_EFFORT = "medium";
@@ -61,8 +61,8 @@ export function resetReviewSpend() {
    judging rendered visuals as a student sees them. effort: "high" for
    reviews where one miss reaches every student at once. */
 export async function review(prompt, maxTokens = 8000, { writer = GEN_MODEL, responseFormat = null, images = null, effort = REVIEW_EFFORT } = {}) {
-  assertCrossFamily(writer, REVIEW_MODEL);
-  if (images?.length && !REVIEW_SEES_IMAGES) throw new Error(`${REVIEW_MODEL} accepts text only, so it cannot review images`);
+  const model = reviewerFor({ images: !!images?.length });
+  assertCrossFamily(writer, model);
   const messages = images?.length
     ? [{ role: "user", content: [
         { type: "text", text: prompt },
@@ -70,7 +70,7 @@ export async function review(prompt, maxTokens = 8000, { writer = GEN_MODEL, res
       ] }]
     : undefined;
   const res = await llmCall({
-    model: REVIEW_MODEL,
+    model,
     prompt,
     messages,
     maxTokens: Math.max(maxTokens, REVIEW_MIN_TOKENS),

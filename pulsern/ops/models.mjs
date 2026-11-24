@@ -22,9 +22,10 @@ export const GEN_MODEL = "anthropic/claude-sonnet-4.6";
    on reads the reviewer from here. OpenRouter only. */
 export const REVIEW_MODEL = "deepseek/deepseek-v4-pro-0813";
 export const REVIEWER_NAME = "DeepSeek";
-/* OpenRouter models list, 2026-11-24: this id is text -> text.
-   Image parts must not be sent to it as if it could see them. */
-export const REVIEW_SEES_IMAGES = false;
+/* OpenRouter models list, 2026-11-24: deepseek-v4-pro-0813 is text only.
+   gpt-6.1-sol accepts images. Image reviews use that id, still on OpenRouter. */
+export const IMAGE_REVIEW_MODEL = "openai/gpt-6.1-sol";
+export const reviewerFor = ({ images = false } = {}) => (images ? IMAGE_REVIEW_MODEL : REVIEW_MODEL);
 
 /* Reasoning models reject or silently ignore sampling temperature. Sending
    0.7 to one is at best a no-op and at worst a 400 that would take a factory

@@ -49,10 +49,14 @@ describe("review()", () => {
     expect(sent[0].reasoning).toEqual({ effort: REVIEW_EFFORT });
   });
 
-  /* This reviewer is text-only. An image must stop the call, not be sent unseen. */
-  it("refuses images instead of sending them to a text-only reviewer", async () => {
-    await expect(review("look at this", 8000, { images: [Buffer.from([137, 80, 78, 71])] })).rejects.toThrow(/text only/);
-    expect(sent).toHaveLength(0);
+  /* DeepSeek is text-only. Images go to the vision reviewer on OpenRouter. */
+  it("sends images to the vision reviewer, not the text reviewer", async () => {
+    await review("look at this", 8000, { images: [Buffer.from([137, 80, 78, 71])] });
+    expect(sent[0].model).toBe("openai/gpt-6.1-sol");
+    const content = sent[0].messages[0].content;
+    expect(content[0]).toEqual({ type: "text", text: "look at this" });
+    expect(content[1].type).toBe("image_url");
+    expect(content[1].image_url.url).toMatch(/^data:image\/png;base64,/);
   });
   it("can raise the effort for high-stakes reviews", async () => {
     await review("x", 8000, { effort: "high" });

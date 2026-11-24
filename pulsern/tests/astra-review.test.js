@@ -364,9 +364,8 @@ describe("digests", () => {
     }
     const ok = (findings = []) => ({ text: JSON.stringify({ assessment: "ok", findings }), usage: {}, model: "m" });
 
-    /* This reviewer is text-only. A changed image stops the review before
-       any request, instead of being sent as if the model could see it. */
-    it("does not send a changed image to a text-only reviewer", async () => {
+    /* Images go to the vision reviewer. Both versions must be in that request. */
+    it("sends both versions of a changed image to the vision reviewer", async () => {
       const path = "pulsern/public/diagram.png";
       const dir = repoWith([[path, PNG(10), PNG(200)]]);
       const sent = [];
@@ -374,20 +373,24 @@ describe("digests", () => {
       process.env.OPENROUTER_API_KEY = "test-key";
       globalThis.fetch = async (url, init) => {
         sent.push(JSON.parse(init.body));
-        return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ model: "deepseek/deepseek-v4-pro-0813", choices: [{ message: { content: JSON.stringify({ assessment: "ok", findings: [] }) } }], usage: { cost: 0 } }) };
+        return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ model: sent.at(-1).model, choices: [{ message: { content: JSON.stringify({ assessment: "ok", findings: [] }) }, finish_reason: "stop" }], usage: { cost: 0 } }) };
       };
       try {
         const outDir = mkdtempSync(join(tmpdir(), "astra-out-"));
         const { report } = await runReview({ base: "b", head: "HEAD", outDir, rulesPath: "CLAUDE.md", cwd: dir });
         expect(report.error, report.error).toBeNull();
-        expect(report.verdict).toBe("FAIL");
-        expect(report.findings[0].title).toMatch(/cannot see images/);
+        expect(report.model).toBe("openai/gpt-6.1-sol");
       } finally {
         globalThis.fetch = realFetch;
         if (realKey === undefined) delete process.env.OPENROUTER_API_KEY; else process.env.OPENROUTER_API_KEY = realKey;
         rmSync(dir, { recursive: true, force: true });
       }
-      expect(sent).toHaveLength(0);
+      expect(sent).toHaveLength(1);
+      expect(sent[0].model).toBe("openai/gpt-6.1-sol");
+      const content = sent[0].messages[0].content;
+      expect(Array.isArray(content)).toBe(true);
+      const urls = content.filter((c) => c.type === "image_url").map((c) => c.image_url.url);
+      expect(urls).toEqual([`data:image/png;base64,${PNG(10).toString("base64")}`, `data:image/png;base64,${PNG(200).toString("base64")}`]);
     });
 
     it("diffs text stored under an image name", () => {
@@ -868,7 +871,7 @@ describe("running a review end to end (Astra finding #5)", () => {
     expect(cut.report.error).toMatch(/truncated/i);
   });
 
-  it("does not ask a text-only reviewer to approve an image", async () => {
+  it("sends an image change to the vision reviewer", async () => {
     const dir = mkdtempSync(join(tmpdir(), "astra-img-"));
     const run = (...x) => execFileSync("git", x, { cwd: dir });
     run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t");
@@ -877,12 +880,11 @@ describe("running a review end to end (Astra finding #5)", () => {
     run("add", "-A"); run("commit", "-qm", "b"); run("tag", "b");
     writeFileSync(join(dir, "pulsern/public/dot.png"), encodeCanonicalPng({ width: 1, height: 1, colour: 0, pixels: [0] }));
     run("add", "-A"); run("commit", "-qm", "h");
-    let called = false;
-    const { code, report } = await runReview({ base: "b", head: "HEAD", outDir: mkdtempSync(join(tmpdir(), "astra-out-")), rulesPath: "CLAUDE.md", cwd: dir }, { callModel: async () => { called = true; return { text: JSON.stringify({ assessment: "ok", findings: [] }), finishReason: "stop", usage: {} }; } });
-    expect(called).toBe(false);
-    expect(code).toBe(1);
-    expect(report.verdict).toBe("FAIL");
-    expect(report.findings[0].title).toMatch(/cannot see images/);
+    let called = null;
+    const { code, report } = await runReview({ base: "b", head: "HEAD", outDir: mkdtempSync(join(tmpdir(), "astra-out-")), rulesPath: "CLAUDE.md", cwd: dir }, { callModel: async (req) => { called = req.model; return { text: JSON.stringify({ assessment: "ok", findings: [] }), finishReason: "stop", usage: {}, model: req.model }; } });
+    expect(called).toBe("openai/gpt-6.1-sol");
+    expect(code).toBe(0);
+    expect(report.model).toBe("openai/gpt-6.1-sol");
     rmSync(dir, { recursive: true, force: true });
   });
 
