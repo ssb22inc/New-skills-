@@ -1,6 +1,6 @@
 /* Missed questions come back on a real LOCAL calendar date. */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { updateMissSchedule, deriveMissSchedule, reviewPools, todayPool, sessionPool } from "../src/question-review.js";
+import { updateMissSchedule, deriveMissSchedule, reviewPools, todayPool, sessionPool, expandTrialQuestions } from "../src/question-review.js";
 import { migrateBlob } from "../src/state.js";
 
 const CATS = [
@@ -134,5 +134,17 @@ describe("Today round and Review Misses pools", () => {
   it("Review misses reaches a miss that is not due once the due ones are held", () => {
     const pool = sessionPool(bank, { log, schedule, fresh, mode: "review", held: [1, 3] });
     expect(pool.map((x) => x.id)).toEqual([2]);
+  });
+
+  it("serves a missed trial question after its id was prefixed", () => {
+    const builtIn = q(7);
+    builtIn.stem = "Which finding is priority?";
+    const trialLog = [{ id: "guest-7", cat: "Pharmacology", diff: 2, correct: false }];
+    const pool = expandTrialQuestions([builtIn], trialLog);
+    const schedule = { "guest-7": { interval: 1, due: "2026-10-16" } };
+    const review = reviewPools(pool, trialLog, schedule).review;
+    expect(review.map((item) => item.id)).toEqual(["guest-7"]);
+    expect(review[0].stem).toBe("Which finding is priority?");
+    expect(sessionPool(pool, { log: trialLog, schedule, fresh: [], mode: "review" }).map((item) => item.id)).toEqual(["guest-7"]);
   });
 });

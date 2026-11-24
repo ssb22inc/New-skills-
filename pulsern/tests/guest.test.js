@@ -3,7 +3,7 @@
    collision-free handoff into the account blob. */
 import { describe, it, expect } from "vitest";
 import {
-  GUEST_KEY, GUEST_LIMIT, guestPool, emptyGuest, guestAnswer, guestRemaining, mergeGuestIntoBlob, loadGuest, saveGuest, clearGuest, guestClearOnSave, guestFresh, guestSummary,
+  GUEST_KEY, GUEST_LIMIT, guestPool, emptyGuest, guestAnswer, guestRemaining, mergeGuestIntoBlob, loadGuest, saveGuest, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, guestFresh, guestSummary,
 } from "../src/guest.js";
 import { migrateBlob } from "../src/state.js";
 import { emptyAbility, updateAbility } from "../src/ability-engine.js";
@@ -133,6 +133,36 @@ describe("progress handoff into a new account", () => {
     expect(mergeGuestIntoBlob(migrateBlob({}, CATS), g, { today: TODAY, now: NOW }).summary).toBeNull();
   });
 
+  it("credits each answer to the local day it was taken, including across midnight", () => {
+    let g = emptyGuest(NOW, "2026-11-23");
+    g = guestAnswer(g, mk(1), true, { ms: 9000, today: "2026-11-23" }).guest;
+    g = guestAnswer(g, mk(2), false, { ms: 9000, today: "2026-11-24" }).guest;
+    const { blob, summary } = mergeGuestIntoBlob(migrateBlob({}, CATS), g, { today: "2026-11-24", now: new Date(2026, 10, 24, 18).getTime() });
+    expect(blob.rewards.days["2026-11-23"]).toMatchObject({ q: 1, ok: 1 });
+    expect(blob.rewards.days["2026-11-24"]).toMatchObject({ q: 1, ok: 0 });
+    expect(blob.streak).toMatchObject({ count: 2, lastDay: "2026-11-24" });
+    expect(blob.daily).toEqual({ day: "2026-11-24", answered: 1 });
+    expect(blob.missSchedule["guest-2"].due).toBe("2026-11-24");
+    expect(summary.streak).toBe(2);
+    expect(blob.log.every((row) => row.day == null && row.ms == null)).toBe(true);
+  });
+  it("a stale autosave does not finish after the merged save", async () => {
+    const queue = createSaveQueue();
+    const order = [];
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const older = queue.enqueue(queue.next(), async () => { order.push("a-start"); await gate; order.push("a-end"); });
+    const newer = queue.enqueue(queue.next(), async () => { order.push("b"); });
+    release();
+    expect(await older).toMatchObject({ stale: true });
+    expect(await newer).toEqual({ ok: true });
+    expect(order).toEqual(["b"]);
+  });
+  it("says saved only after the merged write succeeds", () => {
+    expect(handoffAfterSave({ ok: true, pending: true })).toBe("saved");
+    expect(handoffAfterSave({ ok: false, pending: true })).toBe("error");
+    expect(handoffAfterSave({ ok: true, pending: false })).toBe("none");
+  });
   it("summarises the trial for the save screen", () => {
     expect(guestSummary(played())).toMatchObject({ n: 3, ok: 2, acc: 67, xp: 50 });
   });

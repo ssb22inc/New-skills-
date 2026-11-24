@@ -54,6 +54,39 @@ export function guestClearOnSave(pendingAtStart) {
   return pendingAtStart === true;
 }
 
+/* Saved confirmation is shown only after the write that carries the trial
+   answers succeeds. A rejected write stays an error until a later try. */
+export function handoffAfterSave({ ok, pending }) {
+  if (!pending) return "none";
+  return ok ? "saved" : "error";
+}
+
+/* One account, one write at a time, newest payload wins. A save that was
+   scheduled earlier never runs once a later one exists, so it cannot land
+   after the merged trial and erase those answers. */
+export function createSaveQueue() {
+  let chain = Promise.resolve();
+  let latest = 0;
+  return {
+    next() { latest += 1; return latest; },
+    enqueue(seq, task) {
+      const run = chain.catch(() => {}).then(async () => {
+        if (seq !== latest) return { stale: true };
+        try {
+          await task();
+          if (seq !== latest) return { stale: true };
+          return { ok: true };
+        } catch (error) {
+          if (seq !== latest) return { stale: true };
+          return { ok: false, error };
+        }
+      });
+      chain = run;
+      return run;
+    },
+  };
+}
+
 /* Kept for GUEST_TTL_DAYS after the LAST answer (the save screen says so),
    so answers the student just gave are never the ones that expire. */
 export function guestFresh(guest, now = Date.now()) {
@@ -70,14 +103,17 @@ export function guestAnswer(guest, q, correct, { ms = Infinity, today } = {}) {
   const res = answerXp({ q, correct, ms, log: guest.log });
   const run = correct && res.reason !== "too-fast" ? guest.run + 1 : 0;
   const words = String(q?.stem ?? "").trim().split(/\s+/).filter(Boolean).length;
+  const studyDay = today ?? guest.day;
   const entry = {
     id: q.id, cat: q.cat, diff: q.diff, correct,
+    ...(studyDay ? { day: studyDay } : {}),
     ...(Number.isFinite(ms) ? { ms } : {}),
     ...(words ? { words } : {}),
     ...(q.population ? { pop: q.population } : {}),
   };
-  /* The trial clock and its study day start at the FIRST answer, not when
-     the page was opened (an idle trial tab must not age out the work). */
+  /* The trial clock starts at the FIRST answer, not when the page was
+     opened. Each answer keeps its own local day so a trial that crosses
+     midnight is credited to the days it was actually taken. */
   const first = guest.log.length === 0;
   return {
     guest: { ...guest, ...(first ? { startedAt: Date.now(), day: today ?? guest.day } : {}), lastAt: Date.now(), day: first ? (today ?? guest.day) : (guest.day ?? today), log: [...guest.log, entry], xp: guest.xp + res.xp, run, bestRun: Math.max(guest.bestRun, run) },
@@ -108,42 +144,61 @@ export function mergeGuestIntoBlob(s, guest, { today, now = Date.now(), updateAb
       ...(l.pop ? { pop: l.pop } : {}),
       ...(Number.isFinite(l.ms) ? { ms: l.ms } : {}),
       ...(Number.isFinite(l.words) && l.words > 0 ? { words: l.words } : {}),
+      ...(typeof l.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(l.day) ? { day: l.day } : {}),
     }));
   const entries = valid
     .map((l) => ({ ...l, id: `guest-${l.id}` }))
     .filter((l) => !have.has(String(l.id)));
   if (!entries.length) return { blob: s, summary: null };
+  const scored = [];
   let gxp = 0;
   {
     const seen = [];
     for (const e of entries) {
       const stem = e.words ? Array.from({ length: e.words }, () => "w").join(" ") : "";
-      gxp += answerXp({ q: { id: e.id, diff: e.diff, stem }, correct: e.correct, ms: Number.isFinite(e.ms) ? e.ms : Infinity, log: seen }).xp;
+      const earned = answerXp({ q: { id: e.id, diff: e.diff, stem }, correct: e.correct, ms: Number.isFinite(e.ms) ? e.ms : Infinity, log: seen }).xp;
+      gxp += earned;
+      scored.push({ ...e, earned });
       seen.push(e);
     }
   }
-  const logged = entries.map(({ ms, words, ...row }) => row);
+  const logged = scored.map(({ ms, words, earned, day, ...row }) => row);
   guest = { ...guest, xp: gxp, bestRun: Math.min(guest.bestRun ?? 0, entries.length) };
-  const ok = entries.filter((e) => e.correct).length;
   let ability = s.ability;
   if (typeof updateAbility === "function") {
     for (const e of entries) ability = updateAbility(ability, { id: e.id, cat: e.cat, diff: e.diff }, e.correct, calibration).ability;
   }
-  const day = guest.day ?? today;
+  const groups = new Map();
+  for (const e of scored) {
+    const day = e.day ?? guest.day ?? today;
+    if (!groups.has(day)) groups.set(day, []);
+    groups.get(day).push(e);
+  }
   let streak = s.streak;
   let rewards = s.rewards;
   let streakStarted = false;
-  if (!streak.lastDay || daysBetween(streak.lastDay, day) >= 1) {
-    const adv = advanceStreak(streak, rewards, day);
-    streak = adv.streak; rewards = adv.rewards; streakStarted = true;
+  for (const day of [...groups.keys()].sort()) {
+    const rows = groups.get(day);
+    if (!streak.lastDay || daysBetween(streak.lastDay, day) >= 1) {
+      const adv = advanceStreak(streak, rewards, day);
+      streak = adv.streak; rewards = adv.rewards; streakStarted = true;
+    }
+    rewards = bumpDay(rewards, day, { q: rows.length, ok: rows.filter((r) => r.correct).length, xp: rows.reduce((n, r) => n + r.earned, 0) });
   }
-  rewards = bumpDay(rewards, day, { q: entries.length, ok, xp: guest.xp });
   rewards = { ...rewards, best: { ...rewards.best, run: Math.max(rewards.best.run, guest.bestRun ?? 0) } };
-  const daily = day === today
-    ? (s.daily?.day === today ? { ...s.daily, answered: s.daily.answered + entries.length } : { day: today, answered: entries.length })
+  const todayRows = groups.get(today) ?? [];
+  const daily = todayRows.length
+    ? (s.daily?.day === today ? { ...s.daily, answered: s.daily.answered + todayRows.length } : { day: today, answered: todayRows.length })
     : s.daily;
+  const missSchedule = { ...(s.missSchedule ?? {}) };
+  for (const e of scored) {
+    if (e.correct) continue;
+    const src = String(e.id).replace(/^guest-/, "");
+    const prev = guest.missSchedule?.[src] ?? guest.missSchedule?.[Number(src)];
+    missSchedule[e.id] = prev && typeof prev.due === "string" ? prev : { interval: 1, due: e.day ?? today };
+  }
   return {
-    blob: { ...s, log: [...s.log, ...logged], xp: s.xp + (guest.xp ?? 0), bestRun: Math.max(s.bestRun ?? 0, guest.bestRun ?? 0), ability, streak, rewards, daily },
-    summary: { answers: entries.length, correct: ok, xp: guest.xp ?? 0, streak: streak.count, streakStarted },
+    blob: { ...s, log: [...s.log, ...logged], xp: s.xp + (guest.xp ?? 0), bestRun: Math.max(s.bestRun ?? 0, guest.bestRun ?? 0), ability, streak, rewards, daily, missSchedule },
+    summary: { answers: entries.length, correct: entries.filter((e) => e.correct).length, xp: guest.xp ?? 0, streak: streak.count, streakStarted },
   };
 }

@@ -49,6 +49,24 @@ export const isDue = (schedule, id, today = todayStr()) => {
    misses   — every current miss (latest answer wrong), due or not, for
               on-demand Review Misses;
    review   — due ∪ misses, due ones first: what Review Misses serves. */
+/* A merged trial answer is stored as guest-<built-in id> so it cannot
+   collide with a shared-bank item. Review still needs the original stem. */
+export function expandTrialQuestions(questions, log) {
+  const list = questions ?? [];
+  const have = new Set(list.map((q) => String(q.id)));
+  const bySource = new Map(list.map((q) => [String(q.id), q]));
+  const extra = [];
+  for (const row of log ?? []) {
+    const id = String(row?.id ?? "");
+    if (!id.startsWith("guest-") || have.has(id)) continue;
+    const src = bySource.get(id.slice("guest-".length));
+    if (!src) continue;
+    have.add(id);
+    extra.push({ ...src, id: row.id });
+  }
+  return extra.length ? [...list, ...extra] : list;
+}
+
 export function reviewPools(questions, log, schedule, today = todayStr()) {
   const latest = latestResults(log);
   const due = questions.filter((q) => isDue(schedule, q.id, today))

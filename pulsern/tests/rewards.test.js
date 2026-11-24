@@ -107,6 +107,12 @@ describe("career ladder", () => {
   it("never takes an earned rank away", () => {
     expect(careerStatus({ xp: 0, log: [], cats: CATS, rankHigh: 3 }).rank.name).toBe("Staff Nurse");
   });
+  it("keeps a new account on the mastery ladder when rankHigh is 0", () => {
+    const log = Array.from({ length: 5 }, (_, i) => ({ id: i, cat: "Pharmacology", diff: 2, correct: true }));
+    const status = careerStatus({ xp: 100, log, cats: CATS, rankHigh: 0 });
+    expect(status.rank.name).toBe("Student Nurse");
+    expect(legacyRankIndex(100)).toBe(2);
+  });
   it("maps old XP titles onto the ladder", () => {
     expect(CAREER[legacyRankIndex(80)].name).toBe("New Grad RN");
     expect(CAREER[legacyRankIndex(650)].name).toBe("Charge Nurse");

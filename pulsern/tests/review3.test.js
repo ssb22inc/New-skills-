@@ -22,8 +22,23 @@ describe("Codex P2 wiring", () => {
     expect(reset).toContain("touchedDay.current = null");
     const save = app.slice(app.indexOf("autosave on change"), app.indexOf("autosave on change") + 900);
     expect(save.indexOf("const pendingAtStart = pendingGuestClear.current === true")).toBeGreaterThan(-1);
-    expect(save.indexOf("const pendingAtStart")).toBeLessThan(save.indexOf("await store.set"));
+    expect(save.indexOf("const pendingAtStart")).toBeLessThan(save.indexOf("saveQueue.current.enqueue"));
+    expect(save).toContain("store.set(STORE_KEY, payload)");
     expect(save).toContain("guestClearOnSave(pendingAtStart)");
+    expect(save).toContain("handoffAfterSave");
+    expect(app).toContain("createSaveQueue");
+    expect(save).toContain("saveQueue.current.enqueue");
+    expect(app).toMatch(/useState\(\(\) => \(\{ \.\.\.emptyRewards\(\), rankHigh: 0 \}\)\)/);
+    expect(app).not.toMatch(/setGuestNote\(merged\.summary\)/);
+  });
+  it("the guest trial shows the educational and NCSBN footer on every stage", () => {
+    const guest = fs.readFileSync("src/guest.jsx", "utf8");
+    const footer = guest.slice(guest.indexOf("<footer"));
+    expect(footer).toContain("Educational exam preparation only");
+    expect(footer).toContain("National Council of State Boards of Nursing, Inc. (NCSBN)");
+    expect(footer).toContain("Terms, Privacy, and Disclaimer");
+    expect(guest.indexOf("<footer")).toBeGreaterThan(guest.indexOf("stage === \"quiz\""));
+    expect(guest.indexOf("<footer")).toBeLessThan(guest.indexOf("<LabFab"));
   });
 });
 

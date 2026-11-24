@@ -88,6 +88,10 @@ export default function GuestTrial({ onSignUp, onSignIn }) {
           <SaveProgress guest={guest} onSignUp={onSignUp} onSignIn={onSignIn} motion={motion} />
         )}
       </main>
+      <footer className="guest-legal">
+        <p className="small tip">NCLEX® is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse this product. Educational exam preparation only.</p>
+        <p className="small tip"><a href="/legal/">Terms, Privacy, and Disclaimer</a></p>
+      </footer>
       <LabFab hidden={labOpen} open={labOpen} settleKey={stage} onOpen={() => { setSection("labs"); setLabOpen(true); }} />
       <Toolkit open={labOpen} section={section} onSection={setSection} onClose={() => setLabOpen(false)} provider="deepseek" guest onGuestSignIn={onSignUp} />
     </div>

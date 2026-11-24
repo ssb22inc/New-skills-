@@ -267,7 +267,7 @@ import {
   sessionProgress as cardProgress, canUndoGrade, undoGrade,
 } from "./card-nav.js";
 import { pickCategory, seededRandom, seedFrom, STARVE_WINDOW } from "./weak-spots.js";
-import { updateMissSchedule, reviewPools, sessionPool } from "./question-review.js";
+import { updateMissSchedule, reviewPools, sessionPool, expandTrialQuestions } from "./question-review.js";
 import {
   emptyNav, appendQuestion, saveDraft, markAnswered, canGoBack, goBack, present,
   forward, fallbackSkip, jumpToSkipped, skippedCount, currentEntry, nextUnvisited,
@@ -315,7 +315,7 @@ import {
   RewardsStyle, StreakGlyph, EcgBeat, ComboChip, MomentSheet, streakMoment, ShiftCard, CareerCard,
   BadgeGrid, RoundsCard, BestsCard, SessionRecap, EffectsCard, comboSpeech, useAnnouncer,
 } from "./rewards-ui.jsx";
-import { loadGuest, mergeGuestIntoBlob, clearGuest, guestSummary, guestClearOnSave } from "./guest.js";
+import { loadGuest, mergeGuestIntoBlob, clearGuest, guestSummary, guestClearOnSave, handoffAfterSave, createSaveQueue } from "./guest.js";
 import { signOutAndForgetTrial as signOut } from "./sign-out.js";
 import { readProgress, parseProgress, clearLegacyProgressBackup, guestHandoff } from "./progress-load.js";
 
@@ -323,8 +323,6 @@ const STORE_KEY = "pulsern-v1";
 
 /* Signing out also forgets any try-before-sign-up answers on this device
    (src/sign-out.js). Every sign-out button uses this. */
-const signOutAndForgetTrial = () => signOut({ auth: supabase.auth, storage: window.localStorage });
-
 /* ---- STORAGE ADAPTER ---------------------------------------------------
    The app touches persistence ONLY through `store`. To migrate platforms,
    replace this one object — nothing else in the app changes:
@@ -491,13 +489,22 @@ export default function App() {
   const [scrolling, setScrolling] = useState(false); // floating UI hides while scrolling
   const [isOwner, setIsOwner] = useState(false);    // reviewers-table member = owner tools
   const [shield, setShield] = useState(false);      // blur content when app loses focus
-  const [rewards, setRewards] = useState(emptyRewards); // blob (additive): reward history + effect prefs
+  const [rewards, setRewards] = useState(() => ({ ...emptyRewards(), rankHigh: 0 })); // new accounts start on the ladder, not the legacy XP map
   const rewardsRef = useRef(rewards);
   rewardsRef.current = rewards;
   const [moments, setMoments] = useState([]);       // celebrations waiting for a natural break
   const [liveRegion, announce] = useAnnouncer();    // persistent screen-reader live region (combos)
-  const [guestNote, setGuestNote] = useState(null); // what a guest trial carried into this account
+  const [guestNote, setGuestNote] = useState(null); // shown only after the merged save succeeds
+  const [guestSaveError, setGuestSaveError] = useState(false);
+  const [saveAttempt, setSaveAttempt] = useState(0);
   const pendingGuestClear = useRef(false);
+  const pendingHandoff = useRef(null);
+  const saveQueue = useRef(null);
+  if (!saveQueue.current) saveQueue.current = createSaveQueue();
+  const signOutAndForgetTrial = () => {
+    if (pendingHandoff.current && typeof window.confirm === "function" && !window.confirm("Your trial answers are not in this account yet. Sign out anyway? They will be removed from this device.")) return;
+    signOut({ auth: supabase.auth, storage: window.localStorage });
+  };
 
   /* ---- load saved progress (retryable; never treats a failed read as new) ---- */
   const [loadState, setLoadState] = useState("loading"); // loading | ok | error | corrupt
@@ -558,7 +565,7 @@ export default function App() {
     const handoff = guestHandoff({ guest, accountCreatedAt: createdAt, hasSavedProgress: !!read.raw });
     if (handoff === "merge") {
       const merged = mergeGuestIntoBlob(s ?? migrateBlob({}, CATS), guest, { today: todayStr(), updateAbility });
-      if (merged.summary) { s = merged.blob; setGuestNote(merged.summary); }
+      if (merged.summary) { s = merged.blob; pendingHandoff.current = merged.summary; }
       pendingGuestClear.current = true;
     } else if (handoff === "ask") {
       setGuestOffer({ guest, summary: guestSummary(guest) });
@@ -583,8 +590,8 @@ export default function App() {
       const merged = mergeGuestIntoBlob({ log, xp, bestRun, ability, streak, rewards, daily }, offer.guest, { today: todayStr(), updateAbility, calibration });
       if (merged.summary) {
         const b = merged.blob;
-        setLog(b.log); setXp(b.xp); setBestRun(b.bestRun); setAbility(b.ability); setStreak(b.streak); setRewards(b.rewards); setDaily(b.daily);
-        setGuestNote(merged.summary);
+        setLog(b.log); setXp(b.xp); setBestRun(b.bestRun); setAbility(b.ability); setStreak(b.streak); setRewards(b.rewards); setDaily(b.daily); setMissSchedule(b.missSchedule ?? {});
+        pendingHandoff.current = merged.summary;
         pendingGuestClear.current = true; // removed after the merged copy is saved
         return;
       }
@@ -595,17 +602,26 @@ export default function App() {
   /* ---- autosave on change ---- */
   useEffect(() => {
     if (!loaded || saveBlocked) return;
+    const seq = saveQueue.current.next();
+    const payload = JSON.stringify({ theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips, missSchedule, fcNew, rewards });
     const pendingAtStart = pendingGuestClear.current === true;
-    (async () => {
-      try {
-        await store.set(STORE_KEY, JSON.stringify({ theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips, missSchedule, fcNew, rewards }));
-        /* Only the save that already held the merged answers may drop the device copy. */
-        if (guestClearOnSave(pendingAtStart)) { pendingGuestClear.current = false; clearGuest(window.localStorage); }
-      } catch (e) {
-        console.error("Save failed", e);
+    const note = pendingHandoff.current;
+    saveQueue.current.enqueue(seq, () => store.set(STORE_KEY, payload)).then((res) => {
+      if (!res || res.stale) return;
+      const outcome = handoffAfterSave({ ok: res.ok, pending: pendingAtStart });
+      if (!res.ok) {
+        console.error("Save failed", res.error);
+        if (outcome === "error") setGuestSaveError(true);
+        return;
       }
-    })();
-  }, [loaded, saveBlocked, theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips, missSchedule, fcNew, rewards]);
+      if (guestClearOnSave(pendingAtStart)) { pendingGuestClear.current = false; clearGuest(window.localStorage); }
+      if (outcome === "saved" && note) {
+        setGuestNote(note);
+        setGuestSaveError(false);
+        pendingHandoff.current = null;
+      }
+    });
+  }, [loaded, saveBlocked, saveAttempt, theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips, missSchedule, fcNew, rewards]);
 
   const downloadUnreadable = () => {
     const raw = unreadableRaw.current;
@@ -966,7 +982,7 @@ export default function App() {
   const today = todayStr();
   const board = useMemo(() => badgeBoard(log, CATS, rewards.badgesSeen), [log, rewards.badgesSeen]);
   const career = useMemo(() => careerStatus({ xp, log, cats: CATS, rankHigh: rewards.rankHigh }), [xp, log, rewards.rankHigh]);
-  const missesOpen = useMemo(() => reviewPools(allQuestions, log, missSchedule, today).review.length, [allQuestions, log, missSchedule, today]);
+  const missesOpen = useMemo(() => reviewPools(expandTrialQuestions(allQuestions, log), log, missSchedule, today).review.length, [allQuestions, log, missSchedule, today]);
   const shift = shiftStatus({ day: rewards.days[today], answeredToday: questionsOn(rewards, today), dueCount, missesOpen });
   const week = weekRounds(rewards, today);
   const nextDue = useMemo(() => {
@@ -1290,7 +1306,15 @@ export default function App() {
             </div>
           </section>
         )}
-        {guestNote && !locked && (
+        {guestSaveError && !locked && (
+          <section className="card rw-saved" role="alert">
+            <p className="eyebrow">Not saved yet</p>
+            <h2 className="h2">Your trial answers are still on this device</h2>
+            <p className="small">The account copy didn't save. Nothing was discarded. Try again, and stay signed in until it does.</p>
+            <button type="button" className="btn" onClick={() => setSaveAttempt((n) => n + 1)}>Try again</button>
+          </section>
+        )}
+        {guestNote && !guestSaveError && !locked && (
           <section className="card rw-saved" role="status">
             <p className="eyebrow">Progress saved</p>
             <h2 className="h2">Your trial answers are in your account</h2>
@@ -1822,16 +1846,17 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
   const toggleIn = (arr, set) => (v) => set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
 
   const freshPool = questions.filter((x) => !answeredIds.includes(x.id) && inFocus(x));
+  const reviewQuestions = expandTrialQuestions(questions, log);
   /* Missed questions run on a spaced-review schedule (question-review.js):
      duePool = scheduled reviews whose LOCAL date has arrived; reviewPool =
      those plus every current miss, so Review Misses still serves all misses
      on demand, due ones first. */
-  const focused = questions.filter(inFocus);
+  const focused = reviewQuestions.filter(inFocus);
   const { due: duePool, review: reviewPool } = reviewPools(focused, log, missSchedule, todayStr());
 
   const reveal = (navState, knownQ) => {
     const view = present(navState);
-    const question = knownQ ?? (view ? questions.find((x) => x.id === view.id) : null);
+    const question = knownQ ?? (view ? reviewQuestions.find((x) => x.id === view.id) : null);
     justScored.current = false;
     if (!view || !question) { setNav(navState); setQ(null); setPhase("done"); return; }
     setNav(navState);
