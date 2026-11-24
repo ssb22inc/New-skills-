@@ -51,10 +51,10 @@ export const isDue = (schedule, id, today = todayStr()) => {
    review   — due ∪ misses, due ones first: what Review Misses serves. */
 /* A merged trial answer is stored as guest-<built-in id> so it cannot
    collide with a shared-bank item. Review still needs the original stem. */
-export function expandTrialQuestions(questions, log) {
+export function expandTrialQuestions(questions, log, registry = null) {
   const list = questions ?? [];
   const have = new Set(list.map((q) => String(q.id)));
-  const bySource = new Map(list.map((q) => [String(q.id), q]));
+  const bySource = new Map((registry ?? list).map((q) => [String(q.id), q]));
   const extra = [];
   for (const row of log ?? []) {
     const id = String(row?.id ?? "");

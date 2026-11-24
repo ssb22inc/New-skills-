@@ -345,9 +345,14 @@ const store = {
     if (!data) return null;
     return JSON.stringify(data.blob);
   },
-  async set(key, value) {
+  async set(key, value, expectedUserId) {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
+    if (expectedUserId && session.user.id !== expectedUserId) {
+      const err = new Error("account-changed");
+      err.code = "account-changed";
+      throw err;
+    }
     const { error } = await supabase.from("progress").upsert({
       user_id: session.user.id, key, blob: JSON.parse(value),
       updated_at: new Date().toISOString(),
@@ -500,9 +505,12 @@ export default function App() {
   const pendingGuestClear = useRef(false);
   const pendingHandoff = useRef(null);
   const saveQueue = useRef(null);
+  const accountId = useRef(null);
   if (!saveQueue.current) saveQueue.current = createSaveQueue();
   const signOutAndForgetTrial = () => {
     if (pendingHandoff.current && typeof window.confirm === "function" && !window.confirm("Your trial answers are not in this account yet. Sign out anyway? They will be removed from this device.")) return;
+    saveQueue.current?.invalidate();
+    accountId.current = null;
     signOut({ auth: supabase.auth, storage: window.localStorage });
   };
 
@@ -561,7 +569,7 @@ export default function App() {
     let guest = null;
     try { guest = loadGuest(window.localStorage); } catch { /* storage blocked */ }
     let createdAt = null;
-    try { const { data } = await supabase.auth.getSession(); createdAt = data?.session?.user?.created_at ?? null; } catch { /* unknown = ask */ }
+    try { const { data } = await supabase.auth.getSession(); createdAt = data?.session?.user?.created_at ?? null; accountId.current = data?.session?.user?.id ?? null; } catch { /* unknown = ask */ }
     const handoff = guestHandoff({ guest, accountCreatedAt: createdAt, hasSavedProgress: !!read.raw });
     if (handoff === "merge") {
       const merged = mergeGuestIntoBlob(s ?? migrateBlob({}, CATS), guest, { today: todayStr(), updateAbility });
@@ -587,7 +595,7 @@ export default function App() {
     setGuestOffer(null);
     if (!offer) return;
     if (add && loaded) {
-      const merged = mergeGuestIntoBlob({ log, xp, bestRun, ability, streak, rewards, daily }, offer.guest, { today: todayStr(), updateAbility, calibration });
+      const merged = mergeGuestIntoBlob({ log, xp, bestRun, ability, streak, rewards, daily, missSchedule }, offer.guest, { today: todayStr(), updateAbility, calibration });
       if (merged.summary) {
         const b = merged.blob;
         setLog(b.log); setXp(b.xp); setBestRun(b.bestRun); setAbility(b.ability); setStreak(b.streak); setRewards(b.rewards); setDaily(b.daily); setMissSchedule(b.missSchedule ?? {});
@@ -606,8 +614,9 @@ export default function App() {
     const payload = JSON.stringify({ theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips, missSchedule, fcNew, rewards });
     const pendingAtStart = pendingGuestClear.current === true;
     const note = pendingHandoff.current;
-    saveQueue.current.enqueue(seq, () => store.set(STORE_KEY, payload)).then((res) => {
-      if (!res || res.stale) return;
+    const userId = accountId.current;
+    saveQueue.current.enqueue(seq, () => store.set(STORE_KEY, payload, userId)).then((res) => {
+      if (!res || res.stale || res.error?.code === "account-changed") return;
       const outcome = handoffAfterSave({ ok: res.ok, pending: pendingAtStart });
       if (!res.ok) {
         console.error("Save failed", res.error);
@@ -925,7 +934,8 @@ export default function App() {
     const newBest = nextRun >= 3 && nextRun > bestRun;
     setRun(nextRun);
     if (counts) setBestRun((b) => Math.max(b, nextRun));
-    setRewards((r) => bumpDay(r, todayStr(), { q: 1, ok: correct ? 1 : 0, xp: res.xp, fixes: res.fix ? 1 : 0 }));
+    const prior = [...log].reverse().find((row) => String(row.id) === String(q.id) || (q.aliases ?? []).map(String).includes(String(row.id)) && row.cat === q.cat);
+    setRewards((r) => bumpDay(r, todayStr(), { q: 1, ok: correct ? 1 : 0, xp: res.xp, fixes: correct && prior && prior.correct === false ? 1 : 0 }));
     const combo = counts ? comboFor(nextRun) : null;
     announce(comboSpeech(combo, newBest));
     if (res.xp > 0) rewardBeat(combo || newBest ? "combo" : "correct", rewardsRef.current.prefs);
@@ -982,7 +992,7 @@ export default function App() {
   const today = todayStr();
   const board = useMemo(() => badgeBoard(log, CATS, rewards.badgesSeen), [log, rewards.badgesSeen]);
   const career = useMemo(() => careerStatus({ xp, log, cats: CATS, rankHigh: rewards.rankHigh }), [xp, log, rewards.rankHigh]);
-  const missesOpen = useMemo(() => reviewPools(expandTrialQuestions(allQuestions, log), log, missSchedule, today).review.length, [allQuestions, log, missSchedule, today]);
+  const missesOpen = useMemo(() => reviewPools(expandTrialQuestions(allQuestions, log, QUESTIONS), log, missSchedule, today).review.length, [allQuestions, log, missSchedule, today]);
   const shift = shiftStatus({ day: rewards.days[today], answeredToday: questionsOn(rewards, today), dueCount, missesOpen });
   const week = weekRounds(rewards, today);
   const nextDue = useMemo(() => {
@@ -1345,7 +1355,7 @@ export default function App() {
           {tab === "cards" && <Flashcards key={sectionEpoch} onGrade={noteCard} onUngrade={unnoteCard} addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)} newAllowance={newAllowance} onNewCard={onNewCard} onRefundNewCard={onRefundNewCard} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
           {tab === "exams" && <ExamCenter record={record} examResults={examResults} setExamResults={setExamResults} cats={CATS} ent={ent} isOwner={isOwner} onRunning={setExamLock} onAttempt={(f) => setEnt((e) => (e ? { ...e, examsLeft: Math.max(0, e.examsLeft - 1), attempted: [...e.attempted, f] } : e))} onUpgrade={() => goSection("plans")} onSession={onSession} bindExit={examLeave.bindExit} onScored={examLeave.onScored} onLeaveSubmit={examLeave.onLeaveSubmit} />}
           {tab === "plans" && <Paywall ent={ent} onRefresh={refreshEnt} trialBanner={ent?.status === "trial"} />}
-          {tab === "stats" && <Stats setPref={setPref} rewards={rewards} career={career} board={board} week={week} xp={xp} streak={streak} bestRun={bestRun} readiness={readiness} readyLabel={readyLabel} log={log} catStats={catStats} popStats={popStats} acc={acc} resetAll={resetAll} saveBlocked={saveBlocked} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => goSection("plans")} profile={profile} setProfile={setProfile} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
+          {tab === "stats" && <Stats setPref={setPref} rewards={rewards} career={career} board={board} week={week} xp={xp} streak={streak} bestRun={bestRun} readiness={readiness} readyLabel={readyLabel} log={log} catStats={catStats} popStats={popStats} acc={acc} resetAll={resetAll} saveBlocked={saveBlocked} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => goSection("plans")} profile={profile} setProfile={setProfile} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} signOutAndForgetTrial={signOutAndForgetTrial} />}
           {tourStep != null && <div className="tour-scroll-room" aria-hidden="true" />}
         </>}
       </main>
@@ -1846,7 +1856,7 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
   const toggleIn = (arr, set) => (v) => set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
 
   const freshPool = questions.filter((x) => !answeredIds.includes(x.id) && inFocus(x));
-  const reviewQuestions = expandTrialQuestions(questions, log);
+  const reviewQuestions = expandTrialQuestions(questions, log, QUESTIONS);
   /* Missed questions run on a spaced-review schedule (question-review.js):
      duePool = scheduled reviews whose LOCAL date has arrived; reviewPool =
      those plus every current miss, so Review Misses still serves all misses
@@ -2368,6 +2378,7 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
   const [phase, setPhase] = useState("read");
   const [stepScores, setStepScores] = useState({}); // step index -> { points, max }; skips are absent
   const [stepRes, setStepRes] = useState(null); // XP result of the step just answered
+  const stepXp = useRef({}); // remembered per step so walking back shows the XP that was actually awarded
   const stepShownAt = useRef(Date.now()); // when the open step appeared (XP reading-time floor)
   const [credit, setCredit] = useState({ points: 0, max: 1 });
   const [ok, setOk] = useState(false);
@@ -2422,7 +2433,9 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
     setCredit(c);
     if (marked.recorded) {
       setStepScores((m) => ({ ...m, [step]: c }));
-      setStepRes(record({ id: stepId, aliases: stepIds.aliases, cat: cs.cat, diff: 3, stem: s?.stem }, correct, { schedule: false, ms: Date.now() - stepShownAt.current }) ?? null);
+      const scored = record({ id: stepId, aliases: stepIds.aliases, cat: cs.cat, diff: 3, stem: s?.stem }, correct, { schedule: false, ms: Date.now() - stepShownAt.current }) ?? null;
+      stepXp.current[stepId] = scored;
+      setStepRes(scored);
     }
     justScored.current = true;
     setNav(marked.nav);
@@ -2614,7 +2627,7 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
             <div className={ok ? "feedback ok" : "feedback no"}>
               <p className={ra(caseFbReader, "verdict", "fb-head mono")}>
                 <span className="fb-badge" aria-hidden="true">{ok ? "✓" : credit.points > 0 ? "½" : "✗"}</span>
-                {ok ? "CORRECT" : credit.points > 0 ? "PARTIAL CREDIT" : "INCORRECT"} · {credit.points}/{credit.max} POINT{credit.max === 1 ? "" : "S"}{ok ? (stepRes && justScored.current ? (xpNote(stepRes) ? ` · ${xpNote(stepRes).toUpperCase()}` : "") : " · +30 XP") : ""}
+                {ok ? "CORRECT" : credit.points > 0 ? "PARTIAL CREDIT" : "INCORRECT"} · {credit.points}/{credit.max} POINT{credit.max === 1 ? "" : "S"}{ok && stepXp.current[stepId] && xpNote(stepXp.current[stepId]) ? ` · ${xpNote(stepXp.current[stepId]).toUpperCase()}` : ""}
               </p>
               <p className="small mono">Case score so far: {total.points}/{total.max} points</p>
               <ReadAloudBar reader={caseFbReader} label="Listen to the explanation" />
@@ -2967,7 +2980,7 @@ export function Flashcards({ addXp, onGrade, onUngrade, cards, srsMap, setSrsMap
 
 /* ================= STATS ================= */
 
-function Stats({ setPref = null, rewards = null, career = null, board = null, week = null, xp = 0, streak = null, bestRun = 0, readiness = null, readyLabel = "", log, catStats, popStats = [], acc, resetAll, saveBlocked = false, provider, setProvider, customCount, examDate, setExamDate, isOwner = false, ent = null, onManagePlan, profile, setProfile, tourFocus = null }) {
+function Stats({ setPref = null, rewards = null, career = null, board = null, week = null, xp = 0, streak = null, bestRun = 0, readiness = null, readyLabel = "", log, catStats, popStats = [], acc, resetAll, saveBlocked = false, provider, setProvider, customCount, examDate, setExamDate, isOwner = false, ent = null, onManagePlan, profile, setProfile, tourFocus = null, signOutAndForgetTrial = () => {} }) {
 
   const [confirm, setConfirm] = useState(false);
   const p = AI_PROVIDERS.find((x) => x.id === provider) || AI_PROVIDERS[0];

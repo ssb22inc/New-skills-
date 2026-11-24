@@ -69,6 +69,7 @@ export function createSaveQueue() {
   let latest = 0;
   return {
     next() { latest += 1; return latest; },
+    invalidate() { latest += 1; },
     enqueue(seq, task) {
       const run = chain.catch(() => {}).then(async () => {
         if (seq !== latest) return { stale: true };

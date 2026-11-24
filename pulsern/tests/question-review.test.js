@@ -146,5 +146,9 @@ describe("Today round and Review Misses pools", () => {
     expect(review.map((item) => item.id)).toEqual(["guest-7"]);
     expect(review[0].stem).toBe("Which finding is priority?");
     expect(sessionPool(pool, { log: trialLog, schedule, fresh: [], mode: "review" }).map((item) => item.id)).toEqual(["guest-7"]);
+    const bankItem = { id: 7, cat: "Pharmacology", diff: 1, type: "mc", stem: "Unrelated bank item" };
+    const resolved = expandTrialQuestions([bankItem], trialLog, [builtIn]);
+    expect(resolved.find((item) => item.id === "guest-7").stem).toBe("Which finding is priority?");
+    expect(resolved.find((item) => item.id === 7).stem).toBe("Unrelated bank item");
   });
 });

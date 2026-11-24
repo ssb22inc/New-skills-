@@ -20,16 +20,18 @@ describe("Codex P2 wiring", () => {
   it("reset clears the same-day streak mark, and guest cleanup is tied to the save that started with it", () => {
     const reset = app.slice(app.indexOf("const resetAll"), app.indexOf("const resetAll") + 700);
     expect(reset).toContain("touchedDay.current = null");
-    const save = app.slice(app.indexOf("autosave on change"), app.indexOf("autosave on change") + 900);
+    const save = app.slice(app.indexOf("autosave on change"), app.indexOf("autosave on change") + 1600);
     expect(save.indexOf("const pendingAtStart = pendingGuestClear.current === true")).toBeGreaterThan(-1);
     expect(save.indexOf("const pendingAtStart")).toBeLessThan(save.indexOf("saveQueue.current.enqueue"));
-    expect(save).toContain("store.set(STORE_KEY, payload)");
+    expect(save).toContain("store.set(STORE_KEY, payload, userId)");
     expect(save).toContain("guestClearOnSave(pendingAtStart)");
     expect(save).toContain("handoffAfterSave");
     expect(app).toContain("createSaveQueue");
     expect(save).toContain("saveQueue.current.enqueue");
     expect(app).toMatch(/useState\(\(\) => \(\{ \.\.\.emptyRewards\(\), rankHigh: 0 \}\)\)/);
     expect(app).not.toMatch(/setGuestNote\(merged\.summary\)/);
+    expect(app).toContain("signOutAndForgetTrial={signOutAndForgetTrial}");
+    expect(app).not.toMatch(/\+30 XP/);
   });
   it("the guest trial shows the educational and NCSBN footer on every stage", () => {
     const guest = fs.readFileSync("src/guest.jsx", "utf8");

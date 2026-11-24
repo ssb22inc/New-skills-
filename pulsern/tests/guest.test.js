@@ -163,6 +163,14 @@ describe("progress handoff into a new account", () => {
     expect(handoffAfterSave({ ok: false, pending: true })).toBe("error");
     expect(handoffAfterSave({ ok: true, pending: false })).toBe("none");
   });
+  it("keeps the account's other review dates when a trial miss is added", () => {
+    let g = emptyGuest(NOW, TODAY);
+    g = guestAnswer(g, mk(2), false, { ms: 9000, today: TODAY }).guest;
+    const blob = { ...migrateBlob({}, CATS), missSchedule: { 9: { interval: 7, due: "2026-12-01" } } };
+    const { blob: out } = mergeGuestIntoBlob(blob, g, { today: TODAY, now: NOW });
+    expect(out.missSchedule[9]).toEqual({ interval: 7, due: "2026-12-01" });
+    expect(out.missSchedule["guest-2"].due).toBe(TODAY);
+  });
   it("summarises the trial for the save screen", () => {
     expect(guestSummary(played())).toMatchObject({ n: 3, ok: 2, acc: 67, xp: 50 });
   });
