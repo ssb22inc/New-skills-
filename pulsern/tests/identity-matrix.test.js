@@ -6,7 +6,7 @@ import { applyAnswer } from "../src/answer-apply.js";
 import { emptyGuest, guestAnswer, mergeGuestIntoBlob, holdGuestTrial, peekHeldGuest, releaseHeldGuest, GUEST_KEY, GUEST_HOLD_KEY } from "../src/guest.js";
 import { classifyLog, resolveLegacyRow, canonicalKey } from "../src/question-key.js";
 import { stampCatalogQuestion, questionIdentity } from "../src/question-identity.js";
-import { reviewPools, todayPool, sessionPool, unseenQuestions, questionByIdentity, latestResults, expandTrialQuestions } from "../src/question-review.js";
+import { reviewPools, todayPool, sessionPool, unseenQuestions, questionByIdentity, latestResults, expandTrialQuestions, settledResult } from "../src/question-review.js";
 import { emptyNav, appendQuestion, goBack, present } from "../src/question-nav.js";
 import { itemRating } from "../src/ability-engine.js";
 import { emptyRewards, REVIEW_FIX_BONUS, caseStepIds } from "../src/rewards.js";
@@ -198,10 +198,71 @@ describe("review, restore, and import use the canonical key", () => {
     expect(merged.daily).toEqual({ day: TODAY, answered: 8 });
     expect(merged.log.map((row) => row.correct)).toEqual([false, true]);
     expect(latestResults(merged.log)["builtin:7"]).toBe(true);
-    expect(merged.missSchedule["builtin:7"]).toBeUndefined();
+    expect(merged.missSchedule["builtin:7"].interval).toBe(3);
     expect(merged.rewards.days[TODAY]).toMatchObject({ q: 1, xp: account.xp });
     expect(merged.xp).toBe(account.xp);
     expect(merged.run).toBe(4);
+  });
+
+  it("replaying an earlier miss uses the same ability as answering it first", () => {
+    const filler = (id) => ({ id, source: "builtin", cat: "Pharmacology", diff: 2, stem: `${STEM} ${id}` });
+    const target = { id: 10, source: "builtin", cat: "Pharmacology", diff: 2, stem: `${STEM} target` };
+    const answered = (state, q, correct, at) => applyAnswer(state, {
+      q, correct, ms: 9000, today: TODAY, at, attempt: `${at}:${q.id}:${correct}`,
+    }).state;
+    let base = blank();
+    for (let i = 1; i <= 9; i++) base = answered(base, filler(100 + i), true, 1_000 + i);
+    const chronological = answered(answered(base, target, false, 2_000), target, true, 3_000);
+    const imported = applyAnswer(answered(base, target, true, 3_000), {
+      q: target, correct: false, ms: 9000, today: TODAY, at: 2_000, attempt: "earlier-miss",
+    }).state;
+    expect(imported.ability.Pharmacology.n).toBe(chronological.ability.Pharmacology.n);
+    expect(imported.ability.Pharmacology.theta).toBe(chronological.ability.Pharmacology.theta);
+    expect(imported.missSchedule["builtin:10"]).toEqual(chronological.missSchedule["builtin:10"]);
+    expect(latestResults(imported.log)["builtin:10"]).toBe(true);
+  });
+
+  it("a legacy numeric miss still reaches Review Misses when the catalog has one question with that number", () => {
+    const q = stampCatalogQuestion({ id: 42, cat: "Pharmacology", diff: 2, stem: "Loaded bank stem." }, []);
+    const log = [{ id: 42, cat: "Pharmacology", diff: 2, correct: false }];
+    const schedule = { 42: { interval: 1, due: "2026-01-16" } };
+    expect(settledResult(q, log, [q])).toEqual({ state: "known", correct: false });
+    expect(reviewPools([q], log, schedule, "2026-01-16").review.map(questionIdentity)).toEqual(["bank:42"]);
+    expect(todayPool([q], log, schedule, [], "2026-01-16").map(questionIdentity)).toEqual(["bank:42"]);
+    expect(unseenQuestions([q], log)).toEqual([]);
+    const bundled = stampCatalogQuestion({ id: 7, stem: "Bundled stem.", cat: "Pharmacology", diff: 2 }, [{ id: 7, stem: "Bundled stem." }]);
+    const bankQ = stampCatalogQuestion({ id: 7, stem: "Bank stem.", cat: "Pharmacology", diff: 2 }, [{ id: 7, stem: "Bundled stem." }]);
+    const ambiguous = [{ id: 7, correct: false }];
+    expect(settledResult(bankQ, ambiguous, [bankQ, bundled]).state).toBe("unresolved");
+    expect(reviewPools([bankQ, bundled], ambiguous, { 7: { interval: 1, due: "2026-01-16" } }, "2026-01-16").review).toEqual([]);
+    expect(unseenQuestions([bankQ, bundled], ambiguous)).toEqual([]);
+  });
+
+  it("a trial answer keeps its own clock, not the moment the trial was opened", () => {
+    const monday = new Date(2026, 10, 23, 8).getTime();
+    const tuesdayMorning = new Date(2026, 10, 24, 9).getTime();
+    const tuesdayEvening = new Date(2026, 10, 24, 20).getTime();
+    const account = applyAnswer(blank(), {
+      q: builtin, correct: true, ms: 9000, today: "2026-11-24", at: tuesdayMorning, attempt: "account-morning",
+    }).state;
+    const guest = {
+      ...emptyGuest(monday, "2026-11-23"),
+      lastAt: tuesdayEvening,
+      log: [{
+        id: 7, key: "builtin:7", source: "builtin", cat: "Pharmacology", diff: 2, correct: false,
+        day: "2026-11-24", attempt: `${monday}:0`, at: tuesdayEvening,
+      }],
+    };
+    const merged = mergeGuestIntoBlob(account, guest, { today: "2026-11-24", now: tuesdayEvening }).blob;
+    expect(merged.log.map((row) => row.correct)).toEqual([true, false]);
+    expect(latestResults(merged.log)["builtin:7"]).toBe(false);
+    expect(merged.missSchedule["builtin:7"].due).toBe("2026-11-25");
+    expect(reviewPools(
+      [stampCatalogQuestion(builtin, [builtin])],
+      merged.log,
+      merged.missSchedule,
+      "2026-11-25",
+    ).review.map(questionIdentity)).toEqual(["builtin:7"]);
   });
 });
 

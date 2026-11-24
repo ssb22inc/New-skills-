@@ -38,6 +38,42 @@ export function latestResults(log) {
   return latest;
 }
 
+function numericPeers(questions, id) {
+  return (questions ?? []).filter((q) => q && String(q.id) === String(id));
+}
+
+function unscopedRows(log, id) {
+  return (log ?? []).filter((row) => row && questionIdentity(row) == null && row.id != null && String(row.id) === String(id));
+}
+
+/* A canonical row wins. An old save that only has the number counts
+   when this catalog has exactly one question with that number. When
+   several share it, the old row stays unresolved: it is not treated
+   as a new question, and it is not pinned on any of them. */
+export function settledResult(question, log, questions = null) {
+  const pool = questions ?? [question];
+  const id = answerIdentity(question);
+  const latest = latestResults(log);
+  if (id != null && Object.prototype.hasOwnProperty.call(latest, id)) return { state: "known", correct: !!latest[id] };
+  const raw = unscopedRows(log, question?.id);
+  if (!raw.length) return { state: "none" };
+  if (numericPeers(pool, question.id).length === 1) return { state: "known", correct: !!raw[raw.length - 1].correct };
+  return { state: "unresolved" };
+}
+
+/* Review date for this question. A date stored under the old number
+   is used only when the number identifies one question in the catalog. */
+export function scheduleEntry(question, schedule, questions = null) {
+  if (!schedule || !question) return null;
+  const id = answerIdentity(question);
+  if (id != null && schedule[id]) return schedule[id];
+  const raw = schedule[question.id] ?? schedule[String(question.id)];
+  if (!raw) return null;
+  if (!questionIdentity(question)) return raw;
+  const pool = questions ?? [question];
+  return numericPeers(pool, question.id).length === 1 ? raw : null;
+}
+
 /* Legacy saves predate the schedule. Every question whose latest logged
    answer is wrong and has no entry yet is scheduled as due today — the log
    carries no dates, so "overdue now" is the honest starting point. Existing
@@ -70,15 +106,7 @@ export function questionByIdentity(questions, id) {
 /* Questions whose canonical key is not already in the log. A built-in
    answer does not hide the bank question that shares its number. */
 export function unseenQuestions(questions, log) {
-  const seen = new Set();
-  for (const row of log ?? []) {
-    const id = answerIdentity(row);
-    if (id != null) seen.add(String(id));
-  }
-  return (questions ?? []).filter((q) => {
-    const id = answerIdentity(q);
-    return q && id != null && !seen.has(String(id));
-  });
+  return (questions ?? []).filter((q) => q && settledResult(q, log, questions).state === "none");
 }
 
 /* A merged trial answer keeps the built-in stem. Its navigation id is
@@ -102,12 +130,17 @@ export function expandTrialQuestions(questions, log, registry = null) {
 }
 
 export function reviewPools(questions, log, schedule, today = todayStr()) {
-  const latest = latestResults(log);
   const idOf = (q) => answerIdentity(q) ?? String(q.id);
-  const due = questions.filter((q) => isDue(schedule, idOf(q), today))
-    .sort((a, b) => (schedule[idOf(a)].due < schedule[idOf(b)].due ? -1 : schedule[idOf(a)].due > schedule[idOf(b)].due ? 1 : 0));
+  const dueOf = (q) => scheduleEntry(q, schedule, questions);
+  const due = questions.filter((q) => {
+    const entry = dueOf(q);
+    return !!entry && typeof entry.due === "string" && entry.due <= today;
+  }).sort((a, b) => (dueOf(a).due < dueOf(b).due ? -1 : dueOf(a).due > dueOf(b).due ? 1 : 0));
   const dueIds = new Set(due.map(idOf));
-  const misses = questions.filter((q) => latest[idOf(q)] === false);
+  const misses = questions.filter((q) => {
+    const settled = settledResult(q, log, questions);
+    return settled.state === "known" && settled.correct === false;
+  });
   const review = [...due, ...misses.filter((q) => !dueIds.has(idOf(q)))];
   return { due, misses, review };
 }
@@ -120,8 +153,8 @@ export function todayPool(questions, log, schedule, freshPool, today = todayStr(
   const { due, misses } = reviewPools(questions, log, schedule, today);
   if (due.length) return due;
   const waiting = (q) => {
-    const id = answerIdentity(q) ?? String(q.id);
-    return !!schedule?.[id] && !isDue(schedule, id, today);
+    const entry = scheduleEntry(q, schedule, questions);
+    return !!entry && !(typeof entry.due === "string" && entry.due <= today);
   };
   return [...misses.filter((q) => !waiting(q)), ...freshPool];
 }

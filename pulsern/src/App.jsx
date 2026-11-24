@@ -1888,6 +1888,7 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
   const [lastCat, setLastCat] = useState(null);
   const [lastRes, setLastRes] = useState(null); // XP result of the answer on screen (src/rewards.js)
   const resById = useRef({});
+  const opened = useRef(new Map());
   const shownAt = useRef(0);
   const [sessionN, setSessionN] = useState(0);
   const [mode, setMode] = useState("new"); // new | review
@@ -1920,9 +1921,15 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
   const focused = reviewQuestions.filter(inFocus);
   const { due: duePool, review: reviewPool } = reviewPools(focused, log, missSchedule, todayStr());
 
+  const remember = (item) => {
+    const id = item ? answerIdentity(item) : null;
+    if (id != null) opened.current.set(String(id), item);
+  };
   const reveal = (navState, knownQ) => {
     const view = present(navState);
-    const question = knownQ ?? (view ? questionByIdentity(reviewQuestions, view.id) : null);
+    const question = knownQ
+      ?? (view ? (questionByIdentity(reviewQuestions, view.id) ?? opened.current.get(String(view.id)) ?? null) : null);
+    if (question) remember(question);
     justScored.current = false;
     if (!view || !question) { setNav(navState); setQ(null); setPhase("done"); return; }
     setNav(navState);

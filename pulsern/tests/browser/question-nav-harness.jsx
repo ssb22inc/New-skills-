@@ -95,6 +95,12 @@ function Practice({ auto = false }) {
   );
 }
 
+function SwapCatalog() {
+  const [list, setList] = useState(() => QS.slice(0, 3));
+  window.T.replaceWithBank = () => setList(QS.slice(3));
+  return <QBank record={() => {}} log={[]} questions={list} calibration={{}} ability={emptyAbility(["Pharmacology"])} />;
+}
+
 function CasePractice() {
   const [log, setLog] = useState([]);
   const record = (item, correct) => setLog((rows) => [...rows, { id: item.id, correct }]);
@@ -259,6 +265,12 @@ window.T = {
       sheetTop: sheet.getBoundingClientRect().top,
     };
   },
+  async mountSwap() {
+    localStorage.setItem("pulsern.readAloud.v1", JSON.stringify({ auto: false, rate: 1 }));
+    root.render(<div className="app"><Style /><SwapCatalog /></div>);
+    await settle();
+  },
+  replaceWithBank() {},
   async mountCase() {
     localStorage.setItem("pulsern.readAloud.v1", JSON.stringify({ auto: false, rate: 1 }));
     root.render(<div className="app"><Style /><CasePractice /></div>);

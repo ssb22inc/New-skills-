@@ -196,8 +196,9 @@ export function guestAnswer(guest, q, correct, { ms = Infinity, today } = {}) {
      startedAt, so the same question is a new attempt. A retried merge of
      this trial repeats these ids and adds nothing. */
   const attempt = `${guest.startedAt}:${guest.log.length}`;
+  const at = Date.now();
   const entry = {
-    id: q.id, key: item.key, source: "builtin", cat: q.cat, diff: q.diff, correct, attempt,
+    id: q.id, key: item.key, source: "builtin", cat: q.cat, diff: q.diff, correct, attempt, at,
     ...(studyDay ? { day: studyDay } : {}),
     ...(Number.isFinite(ms) ? { ms } : {}),
     ...(words ? { words } : {}),
@@ -232,18 +233,18 @@ export function guestImportIdentity(entry) {
   return stampedQuestion({ ...entry, id, source, key: entry?.key ?? canonicalKey(source, id) });
 }
 
-/* The attempt id starts with the trial clock. That instant, not the
-   moment of import, is when the answer happened. A row with no clock
-   falls back to noon on the local day it names. */
-export function guestEventAt(attempt, day) {
-  const [head, tail] = String(attempt ?? "").split(":");
-  const base = Number(head);
-  const index = Number(tail);
-  const extra = Number.isFinite(index) ? index : 0;
-  if (Number.isFinite(base) && base > 1e11) return base + extra;
-  if (typeof day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(day)) {
-    const [y, m, d] = day.split("-").map(Number);
-    return new Date(y, m - 1, d, 12, 0, 0).getTime() + extra;
+/* The attempt id is only for idempotency. The answer's own clock is
+   when it happened. A saved row from before that clock existed is
+   placed at the end of the local day it names, so it is not dated
+   back to the moment the trial was opened. */
+export function guestEventAt(entry, day) {
+  const row = entry && typeof entry === "object" ? entry : { attempt: entry, day };
+  if (Number.isFinite(row.at) && row.at > 1e11) return row.at;
+  const when = row.day ?? day;
+  if (typeof when === "string" && /^\d{4}-\d{2}-\d{2}$/.test(when)) {
+    const [y, m, d] = when.split("-").map(Number);
+    const index = Number(String(row.attempt ?? "").split(":")[1]);
+    return new Date(y, m - 1, d, 23, 59, 59, 0).getTime() + (Number.isFinite(index) ? index : 0);
   }
   return null;
 }
@@ -266,11 +267,12 @@ export function mergeGuestIntoBlob(s, guest, { today, now = Date.now(), calibrat
       ...(Number.isFinite(l.words) && l.words > 0 ? { words: l.words } : {}),
       ...(l.source ? { source: l.source } : {}),
       ...(l.key ? { key: l.key } : {}),
+      ...(Number.isFinite(l.at) ? { at: l.at } : {}),
       day: typeof l.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(l.day) ? l.day : (guest.day ?? today),
     }))
     .map((l) => ({ ...guestImportIdentity(l), ...l, key: guestImportIdentity(l).key, source: guestImportIdentity(l).source }))
     .filter((l) => !have.has(String(l.attempt)))
-    .sort((a, b) => (guestEventAt(a.attempt, a.day) ?? 0) - (guestEventAt(b.attempt, b.day) ?? 0));
+    .sort((a, b) => (guestEventAt(a) ?? 0) - (guestEventAt(b) ?? 0));
   if (!entries.length) return { blob: s, summary: null };
   let state = {
     log: s.log ?? [], xp: s.xp ?? 0, ability: s.ability, streak: s.streak, rewards: s.rewards,
@@ -286,7 +288,7 @@ export function mergeGuestIntoBlob(s, guest, { today, now = Date.now(), calibrat
       ms: Number.isFinite(e.ms) ? e.ms : Infinity,
       today: e.day,
       attempt: e.attempt,
-      at: guestEventAt(e.attempt, e.day) ?? undefined,
+      at: guestEventAt(e) ?? undefined,
       calibration,
     });
     if (applied.duplicate) continue;

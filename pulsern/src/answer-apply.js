@@ -2,33 +2,53 @@
    Ability, the day's XP ledger, the streak, and the review date all
    move here. Import does not keep a second copy of these rules. */
 import { answerXp, answerCountsForRun, bumpDay, advanceStreak, streakDayCounted, sameAnswer } from "./rewards.js";
-import { updateAbility } from "./ability-engine.js";
+import { emptyAbility, updateAbility } from "./ability-engine.js";
 import { updateMissSchedule } from "./question-review.js";
 import { canonicalKey, questionIdentity } from "./question-identity.js";
-
-/* A row with a timestamp sorts by that instant. A row that only has a
-   local day sits at the end of that day, so a morning import lands
-   before an account answer that was already on the book for the day. */
-export function answerTime(row) {
-  if (Number.isFinite(row?.at)) return row.at;
-  if (typeof row?.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(row.day)) {
-    const [y, m, d] = row.day.split("-").map(Number);
-    return new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
-  }
-  return Number.POSITIVE_INFINITY;
-}
-
-function laterResult(log, key, at) {
-  if (!key || !Number.isFinite(at)) return false;
-  return (log ?? []).some((row) => questionIdentity(row) === key && answerTime(row) > at);
-}
 
 function insertByTime(log, row) {
   if (!Number.isFinite(row?.at)) return [...log, row];
   const next = log.slice();
   let i = next.length;
-  while (i > 0 && answerTime(next[i - 1]) > row.at) i -= 1;
+  while (i > 0) {
+    const prev = next[i - 1];
+    if (Number.isFinite(prev?.at)) {
+      if (prev.at <= row.at) break;
+      i -= 1;
+      continue;
+    }
+    /* A saved row with a day but no clock sits at the end of that day.
+       A row with neither was already on the account and stays put. */
+    if (typeof prev?.day === "string" && typeof row.day === "string" && prev.day > row.day) {
+      i -= 1;
+      continue;
+    }
+    break;
+  }
   next.splice(i, 0, row);
+  return next;
+}
+
+/* Elo's K depends on how many answers came before this one. An import
+   that lands in the middle of the log has to be replayed from the start
+   of the category, or a later answer keeps the K it earned too early. */
+function replayAbility(log, ability, calibration) {
+  let next = emptyAbility(Object.keys(ability ?? {}));
+  for (const row of log) {
+    if (!questionIdentity(row) || row.unclassified) continue;
+    if (row.cat && !next[row.cat]) next = { ...next, [row.cat]: { theta: 1200, n: 0 } };
+    next = updateAbility(next, row, !!row.correct, calibration).ability;
+  }
+  return next;
+}
+
+function replayKeySchedule(log, key, schedule) {
+  let next = { ...(schedule ?? {}) };
+  delete next[key];
+  for (const row of log) {
+    if (questionIdentity(row) !== key || row.unclassified) continue;
+    next = updateMissSchedule(next, key, !!row.correct, row.day);
+  }
   return next;
 }
 
@@ -64,12 +84,10 @@ export function applyAnswer(state, input) {
   const correct = !!input.correct;
   const historical = Number.isFinite(input.at);
   const at = historical ? input.at : Date.now();
-  const newer = historical && laterResult(log, q.key, at);
   const res = q.unclassified
     ? { xp: 0, reason: "unclassified", base: 0, bonus: 0, fix: false }
     : answerXp({ q, correct, ms, log });
   const counts = !q.unclassified && answerCountsForRun({ correct, q, ms });
-  const run = newer ? (state.run ?? 0) : (counts ? (state.run ?? 0) + 1 : 0);
   const row = {
     id: q.id,
     key: q.key,
@@ -85,6 +103,8 @@ export function applyAnswer(state, input) {
     origin: "recorded",
   };
   const placed = historical ? insertByTime(log, row) : [...log, row];
+  const insertedBehind = placed[placed.length - 1] !== row;
+  const run = insertedBehind ? (state.run ?? 0) : (counts ? (state.run ?? 0) + 1 : 0);
   if (q.unclassified) {
     return {
       state: { ...state, log: placed },
@@ -94,7 +114,10 @@ export function applyAnswer(state, input) {
     };
   }
   const prior = [...log].reverse().find((r) => sameAnswer(q, r));
-  const ability = updateAbility(state.ability, q, correct, input.calibration ?? {}).ability;
+  const calibration = input.calibration ?? {};
+  const ability = insertedBehind
+    ? replayAbility(placed, state.ability, calibration)
+    : updateAbility(state.ability, q, correct, calibration).ability;
   let rewards = bumpDay(state.rewards, today, { q: 1, ok: correct ? 1 : 0, xp: res.xp, fixes: correct && prior && prior.correct === false ? 1 : 0 });
   let streak = state.streak;
   let streakNote = null;
@@ -107,7 +130,9 @@ export function applyAnswer(state, input) {
     rewards = { ...rewards, best: { ...rewards.best, run } };
   }
   const daily = dailyAfter(state.daily, today);
-  const missSchedule = input.schedule === false || newer ? state.missSchedule : updateMissSchedule(state.missSchedule, q.key, correct, today);
+  const missSchedule = input.schedule === false
+    ? state.missSchedule
+    : (insertedBehind ? replayKeySchedule(placed, q.key, state.missSchedule) : updateMissSchedule(state.missSchedule, q.key, correct, today));
   return {
     state: {
       ...state,
