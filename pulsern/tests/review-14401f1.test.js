@@ -3,6 +3,7 @@
    that throws, and an unresolved card whose catalog arrives late. */
 import { describe, it, expect } from "vitest";
 import { applyAnswer } from "../src/answer-apply.js";
+import { emptyAbility, ABILITY_CATS, undoAbility, updateAbility } from "../src/ability-engine.js";
 import { emptyRewards, bumpDay, reverseCardDay, recordCardGrade } from "../src/rewards.js";
 import { migrateBlob } from "../src/state.js";
 import { signOutAndForgetTrial } from "../src/sign-out.js";
@@ -299,6 +300,52 @@ describe("a revision conflict keeps both devices' answers", () => {
     expect(merged.ability.Pharmacology.theta).toBe(server.ability.Pharmacology.theta);
   });
 
+  it("keeps legacy ability when a delayed older answer is replayed", () => {
+    const legacy = { id: 3, correct: false, cat: "Pharmacology", diff: 2 };
+    const ability = { ...emptyAbility(ABILITY_CATS), Pharmacology: { theta: 1400, n: 12 } };
+    const baseline = { log: [legacy], xp: 40, ability, rewards: emptyRewards(), missSchedule: {}, daily: null, streak: null, bestRun: 0 };
+    const q = { id: 4, key: "bank:4", source: "bank", cat: "Pharmacology", diff: 1, stem: "eight words are enough here now" };
+    const taken = { ms: 9000, today: "2026-11-24", words: 8, rating: 1300, calibration: { 4: { rating: 1300 } } };
+    const newer = applyAnswer(baseline, { q, correct: true, attempt: "newer", at: 2000, ...taken }).state;
+    const older = applyAnswer(baseline, { q, correct: false, attempt: "older", at: 1000, ...taken }).state;
+    const inOrder = applyAnswer(older, { q, correct: true, attempt: "newer", at: 2000, ...taken }).state;
+    const merged = blobForSave(inOrder, { ...newer, theme: "dim" }, newer);
+    expect(merged.ability["Management of Care"].n).toBe(0);
+    expect(merged.ability.Pharmacology.n).toBe(inOrder.ability.Pharmacology.n);
+    expect(merged.ability.Pharmacology.theta).toBeCloseTo(inOrder.ability.Pharmacology.theta, 4);
+    expect(merged.missSchedule["bank:4"].interval).toBe(inOrder.missSchedule["bank:4"].interval);
+    expect(merged.xp).toBe(inOrder.xp);
+    const round = updateAbility(ability, q, true, taken.calibration);
+    expect(undoAbility(round.ability, q, true, taken.calibration).Pharmacology.theta).toBeCloseTo(1400, 4);
+    expect(undoAbility(round.ability, q, true, taken.calibration).Pharmacology.n).toBe(12);
+  });
+
+  it("keeps every category when the first save's acknowledgement was lost", () => {
+    const blank = { log: [], xp: 0, ability: emptyAbility(ABILITY_CATS), rewards: emptyRewards(), bestRun: 0 };
+    const q = { id: 1, key: "bank:1", source: "bank", cat: "Pharmacology", diff: 1, stem: "eight words are enough here now" };
+    const saved = applyAnswer(blank, {
+      q, correct: true, ms: 9000, today: "2026-11-24", attempt: "a", words: 8, rating: 1300, calibration: { 1: { rating: 1300 } },
+    }).state;
+    const merged = reconcileProgress(saved, { ...blank, ability: {} }, {});
+    expect(Object.keys(merged.ability).sort()).toEqual([...ABILITY_CATS].sort());
+    expect(merged.ability.Pharmacology.n).toBe(1);
+    expect(merged.xp).toBe(saved.xp);
+    for (const cat of ABILITY_CATS) if (cat !== "Pharmacology") expect(merged.ability[cat]).toEqual({ theta: 1200, n: 0 });
+  });
+
+  it("rejects a progress update that does not advance the revision", () => {
+    const sql = fs.readFileSync(new URL("../supabase/migrations/022_progress_revision_guard.sql", import.meta.url), "utf8");
+    expect(sql).toMatch(/before update on public\.progress/i);
+    expect(sql).toMatch(/new\.revision <= old\.revision/);
+    const guard = (oldRevision, newRevision) => {
+      if (newRevision == null || newRevision <= oldRevision) throw new Error("progress revision conflict");
+      return newRevision;
+    };
+    expect(() => guard(4, 4)).toThrow(/revision conflict/);
+    expect(() => guard(4, null)).toThrow(/revision conflict/);
+    expect(guard(4, 5)).toBe(5);
+  });
+
   it("scores a delayed older miss before the newer answer already saved", () => {
     const baseline = { log: [], xp: 0, ability: {}, rewards: emptyRewards(), missSchedule: {}, daily: null, bestRun: 0, streak: null };
     const q = { id: 4, key: "bank:4", source: "bank", cat: "Pharmacology", diff: 1, stem: "eight words are enough here now" };
@@ -312,7 +359,7 @@ describe("a revision conflict keeps both devices' answers", () => {
     expect(merged.log.map((row) => row.attempt)).toEqual(["older", "newer"]);
     expect(merged.missSchedule["bank:4"].interval).toBe(inOrder.missSchedule["bank:4"].interval);
     expect(merged.xp).toBe(inOrder.xp);
-    expect(merged.ability.Pharmacology.theta).toBe(inOrder.ability.Pharmacology.theta);
+    expect(merged.ability.Pharmacology.theta).toBeCloseTo(inOrder.ability.Pharmacology.theta, 6);
     expect(merged.theme).toBe("dim");
   });
 

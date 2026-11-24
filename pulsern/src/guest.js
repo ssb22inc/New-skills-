@@ -14,6 +14,7 @@
    with the same number is bank:<id> and is a different question. */
 import { answerXp, answerCountsForRun, emptyRewards, MAX_COVERS, advanceStreak, streakDayCounted } from "./rewards.js";
 import { applyAnswer, stampedQuestion } from "./answer-apply.js";
+import { emptyAbility, ABILITY_CATS, undoAbility } from "./ability-engine.js";
 import { canonicalKey } from "./question-key.js";
 
 export const GUEST_KEY = "pulsern-guest-v1";
@@ -412,7 +413,7 @@ function replayUnseen(base, rows) {
   let state = {
     log: Array.isArray(base.log) ? [...base.log] : [],
     xp: Number(base.xp) || 0,
-    ability: base.ability ?? {},
+    ability: { ...emptyAbility(ABILITY_CATS), ...(base.ability ?? {}) },
     streak: base.streak,
     rewards: base.rewards ?? emptyRewards(),
     daily: base.daily,
@@ -443,8 +444,31 @@ function replayUnseen(base, rows) {
   return state;
 }
 
+function questionXp(logBefore, row) {
+  const words = Number(row?.words);
+  const stem = Number.isFinite(words) && words > 0 ? Array.from({ length: words }, () => "w").join(" ") : (row?.stem || "");
+  const rating = Number(row?.rating);
+  return answerXp({
+    q: { id: row.id, key: row.key, source: row.source, cat: row.cat, diff: row.diff, stem },
+    correct: !!row.correct,
+    ms: Number.isFinite(row.ms) ? row.ms : Infinity,
+    log: logBefore,
+    calibration: Number.isFinite(rating) ? { [row.id]: { rating } } : {},
+  }).xp || 0;
+}
+
 function blankScore(base) {
-  return { log: [], xp: 0, ability: {}, rewards: emptyRewards(), daily: null, missSchedule: {}, streak: null, run: 0, bestRun: Number(base?.bestRun) || 0 };
+  return {
+    log: [],
+    xp: Number(base?.xp) || 0,
+    ability: { ...emptyAbility(ABILITY_CATS), ...(base?.ability ?? {}) },
+    rewards: base?.rewards ?? emptyRewards(),
+    daily: base?.daily ?? null,
+    missSchedule: { ...(base?.missSchedule ?? {}) },
+    streak: base?.streak ?? null,
+    run: base?.run ?? 0,
+    bestRun: Number(base?.bestRun) || 0,
+  };
 }
 
 /* An incoming answer can be older than one this device already saved.
@@ -455,21 +479,30 @@ function replayOrdered(base, mergedLog) {
   const baseAttempts = new Set((base.log ?? []).map(attemptId).filter(Boolean));
   const incoming = (mergedLog ?? []).filter((row) => attemptId(row) && !baseAttempts.has(attemptId(row)));
   const times = incoming.map((row) => Number(row.at)).filter(Number.isFinite);
-  if (!incoming.length || times.length !== incoming.length) return { state: replayUnseen(base, mergedLog), fromZero: false };
+  if (!incoming.length || times.length !== incoming.length) return { state: replayUnseen(base, mergedLog), fromZero: false, redo: false };
   const earliest = Math.min(...times);
   const redo = new Set();
   for (const row of base.log ?? []) {
     const at = Number(row?.at);
     if (attemptId(row) && Number.isFinite(at) && at >= earliest) redo.add(attemptId(row));
   }
-  if (!redo.size) return { state: replayUnseen(base, mergedLog), fromZero: false };
+  if (!redo.size) return { state: replayUnseen(base, mergedLog), fromZero: false, redo: false };
   const prefixRows = (base.log ?? []).filter((row) => !redo.has(attemptId(row)));
-  const prefix = replayUnseen(blankScore(base), prefixRows);
+  const start = { ...blankScore(base), log: prefixRows.map((row) => ({ ...row })) };
+  const redoRows = (base.log ?? []).filter((row) => redo.has(attemptId(row))).sort((a, b) => Number(b.at) - Number(a.at));
+  for (const row of redoRows) {
+    const before = prefixRows.concat(redoRows.filter((item) => Number(item.at) < Number(row.at)));
+    start.xp = Math.max(0, (Number(start.xp) || 0) - questionXp(before, row));
+    const rating = Number(row.rating);
+    start.ability = undoAbility(start.ability, {
+      id: row.id, key: row.key, source: row.source, cat: row.cat, diff: row.diff,
+    }, !!row.correct, Number.isFinite(rating) ? { [row.id]: { rating } } : {});
+  }
   const suffix = (mergedLog ?? []).filter((row) => {
     const id = attemptId(row);
     return id && (redo.has(id) || !baseAttempts.has(id));
   });
-  return { state: replayUnseen(prefix, suffix), fromZero: true };
+  return { state: replayUnseen(start, suffix), fromZero: false, redo: true };
 }
 
 function activityDays(base, log, blobs) {
@@ -507,10 +540,9 @@ export function reconcileProgress(serverBlob, localBlob, baselineBlob = null) {
   const log = mergeLogs(server.log, local.log, hasBaseline ? (base.log ?? []) : null);
   const ordered = replayOrdered(base, log);
   const replayed = ordered.state;
-  const scoreBase = ordered.fromZero ? blankScore(base) : base;
   const unseen = log.some((row) => row?.attempt && !(base.log ?? []).some((item) => item?.attempt === row.attempt));
-  const localReplay = hasBaseline ? replayUnseen(scoreBase, local.log) : null;
-  const serverReplay = hasBaseline ? replayUnseen(scoreBase, server.log) : null;
+  const localReplay = hasBaseline ? replayUnseen(base, local.log) : null;
+  const serverReplay = hasBaseline ? replayUnseen(base, server.log) : null;
   const merged = { ...local };
   put(merged, "log", log);
   let nextXp;
@@ -521,10 +553,11 @@ export function reconcileProgress(serverBlob, localBlob, baselineBlob = null) {
     const serverExtra = extra(server, serverReplay);
     const mergedOps = mergeCardOps(base, server, local);
     const sameCards = localExtra === serverExtra && sameJson(changedEntries(base.srsMap, local.srsMap), changedEntries(base.srsMap, server.srsMap));
-    if (mergedOps) {
-      const sum = (ops) => (ops ?? []).reduce((total, op) => total + (Number(op?.xp) || 0), 0);
-      nextXp = (Number(replayed.xp) || 0) + sum(mergedOps) - sum(base.rewards?.cardOps);
-    } else nextXp = (Number(replayed.xp) || 0) + localExtra + (sameCards ? 0 : serverExtra);
+    const sumOps = (ops) => (ops ?? []).reduce((total, op) => total + (Number(op?.xp) || 0), 0);
+    const cardXp = mergedOps ? sumOps(mergedOps) - sumOps(base.rewards?.cardOps) : 0;
+    if (ordered.redo) nextXp = (Number(replayed.xp) || 0) + cardXp;
+    else if (mergedOps) nextXp = (Number(replayed.xp) || 0) + cardXp;
+    else nextXp = (Number(replayed.xp) || 0) + localExtra + (sameCards ? 0 : serverExtra);
   }
   put(merged, "xp", nextXp);
   if (base.bestRun != null || server.bestRun != null || local.bestRun != null || unseen) {
