@@ -105,6 +105,53 @@ describe("a parked snapshot uses the device conflict merge", () => {
     expect(folded.srsMap.c2).toMatchObject({ interval: 7, due: "2026-12-01" });
   });
 
+  it("keeps the newer review when an older snapshot still has the previous schedule", () => {
+    const stored = {
+      log: [],
+      xp: 10,
+      ability: emptyAbility(ABILITY_CATS),
+      rewards: emptyRewards(),
+      streak: { count: 1, lastDay: "2026-11-25", shield: true },
+      srsMap: {
+        c1: { interval: 7, due: "2026-12-02", seen: "2026-11-25", reviewedAt: 3000 },
+        c2: { interval: 3, due: "2026-11-28", seen: "2026-11-25", reviewedAt: 3000 },
+      },
+    };
+    const pending = {
+      log: [],
+      xp: 12,
+      srsMap: {
+        c1: { interval: 1, due: "2026-11-25", seen: "2026-11-24", reviewedAt: 1000 },
+        c2: { interval: 3, due: "2026-11-28", seen: "2026-11-25", reviewedAt: 2000 },
+      },
+    };
+    const folded = foldPendingProgress(stored, [pending]);
+    expect(folded.srsMap.c1).toMatchObject({ interval: 7, seen: "2026-11-25", reviewedAt: 3000 });
+    expect(folded.srsMap.c2).toMatchObject({ interval: 3, due: "2026-11-28" });
+  });
+
+  it("does not restore xp from a snapshot saved before a reset", () => {
+    const current = {
+      log: [],
+      xp: 0,
+      resetGeneration: 1,
+      ability: emptyAbility(ABILITY_CATS),
+      rewards: emptyRewards(),
+      streak: { count: 0, lastDay: null, shield: true },
+      srsMap: {},
+    };
+    const pending = {
+      log: [],
+      xp: 80,
+      resetGeneration: 0,
+      srsMap: { c1: { interval: 7, due: "2026-12-01", seen: "2026-11-24" } },
+    };
+    const folded = foldPendingProgress(current, [pending]);
+    expect(folded.xp).toBe(0);
+    expect(folded.srsMap).toEqual({});
+    expect(folded.resetGeneration).toBe(1);
+  });
+
   it("does not treat a different category with the same number as the stored answer", () => {
     const stored = {
       log: [{ id: 7, key: "builtin:7", source: "builtin", cat: "Management of Care", diff: 1, correct: false }],
@@ -165,6 +212,7 @@ describe("a parked snapshot uses the device conflict merge", () => {
     const pending = { log: [{ id: 9, cat: "Pharmacology", diff: 1, correct: true }], xp: 10 };
     const ready = migrateBlob(foldPendingProgress(stored, [pending]), ABILITY_CATS);
     expect(ready.rewards.badgesSeen).toBeTruthy();
+    expect(migrateBlob({ log: [], xp: 0, resetGeneration: 1 }, ABILITY_CATS).resetGeneration).toBe(1);
     expect(ready.log.map((row) => row.id)).toEqual([1, 9]);
   });
 

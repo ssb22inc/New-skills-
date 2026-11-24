@@ -472,6 +472,15 @@ function savedItemRating(row) {
 
 /* An older snapshot lists the cards it knew. A card only the newer
    save has was not deleted. */
+function mergeSnapshotSchedules(currentMap, snapshotMap) {
+  if (!snapshotMap || typeof snapshotMap !== "object") return { ...(currentMap ?? {}) };
+  const out = { ...(currentMap ?? {}) };
+  for (const [id, entry] of Object.entries(snapshotMap)) {
+    out[id] = Object.prototype.hasOwnProperty.call(out, id) ? preferSchedule(out[id], entry) : entry;
+  }
+  return out;
+}
+
 function keepUnmentionedCards(currentMap, snapshotMap, reconciledMap) {
   if (!snapshotMap || typeof snapshotMap !== "object") return currentMap ?? reconciledMap ?? {};
   const out = { ...(reconciledMap ?? {}) };
@@ -522,6 +531,11 @@ export function foldPendingProgress(stored, snapshots) {
   let current = stored && typeof stored === "object" && !Array.isArray(stored) ? stored : {};
   for (const snapshot of snapshots ?? []) {
     if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) continue;
+    const generation = (blob) => {
+      const n = Number(blob?.resetGeneration);
+      return Number.isInteger(n) && n > 0 ? n : 0;
+    };
+    if (generation(snapshot) < generation(current)) continue;
     const reconciled = reconcileProgress(current, snapshot, current);
     const newRows = rowsNotYetStored(current.log, reconciled.log);
     let ability = current.ability ?? {};
@@ -581,7 +595,7 @@ export function foldPendingProgress(stored, snapshots) {
       rewards: snapshot.rewards == null ? current.rewards : (reconciled.rewards ?? current.rewards),
       streak: current.streak?.shield === false && streak ? { ...streak, shield: false } : streak,
       daily: snapshot.daily == null ? current.daily : (reconciled.daily ?? current.daily),
-      srsMap: keepUnmentionedCards(current.srsMap, snapshot.srsMap, reconciled.srsMap),
+      srsMap: mergeSnapshotSchedules(current.srsMap, snapshot.srsMap),
       examResults: reconciled.examResults ?? current.examResults,
       missSchedule: snapshot.missSchedule == null ? current.missSchedule : keepUnmentionedCards(current.missSchedule, snapshot.missSchedule, reconciled.missSchedule),
     };

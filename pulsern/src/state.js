@@ -57,6 +57,7 @@ export function migrateBlob(s, cats) {
     // recomputed from the log; only "already celebrated" markers are kept.
     // A save from before the career ladder keeps the title it had earned.
     rewards: withLegacyRank(migrateRewards(s.rewards), s.xp ?? 0),
+    ...(Number.isInteger(s.resetGeneration) && s.resetGeneration > 0 ? { resetGeneration: s.resetGeneration } : {}),
   };
 }
 
