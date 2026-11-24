@@ -341,7 +341,8 @@ const STORE_KEY = "pulsern-v1";
 const progressGate = createProgressEpoch();
 let acceptedBlob = null;
 let loadedBaseline = null;
-let accountRead = { user: null, blob: null, revision: 0 };
+let accountEpoch = 0;
+let accountRead = { user: null, blob: null, revision: 0, epoch: 0 };
 const store = {
   async get(key) {
     const result = await supabase.auth.getSession();
@@ -357,7 +358,8 @@ const store = {
     /* A read error must never look like "no saved progress": the caller
        would treat the account as new and autosave defaults over it. */
     if (error) throw new Error(error.message || "Could not read saved progress");
-    const next = noteAccountRead(accountRead, { user: session.user.id, blob: data?.blob ?? null, revision: data?.revision ?? 0 });
+    const epoch = accountEpoch;
+    const next = noteAccountRead(accountRead, { user: session.user.id, blob: data?.blob ?? null, revision: data?.revision ?? 0, epoch });
     if (next === accountRead && accountRead.user && accountRead.user !== session.user.id) {
       return data ? JSON.stringify(data.blob) : null;
     }
@@ -423,11 +425,13 @@ const store = {
         if (unchanged) {
           progressGate.note(Number(fresh.revision) || 0, epoch);
           acceptedBlob = fresh.blob;
+          loadedBaseline = fresh.blob;
           return JSON.stringify(merged) === JSON.stringify(raw) ? undefined : { reconciled: true, blob: merged };
         }
         revision = await finish(writeAt(Number(fresh.revision) || 0, merged));
         if (revision) {
           acceptedBlob = merged;
+          loadedBaseline = merged;
           return { reconciled: true, blob: merged };
         }
       }
@@ -438,13 +442,22 @@ const store = {
       throw err;
     }
     acceptedBlob = blob;
+    loadedBaseline = blob;
     return JSON.stringify(blob) === JSON.stringify(raw) ? undefined : { reconciled: true, blob };
   },
-  async delete(key) {
+  releaseAccount() {
+    accountEpoch += 1;
     progressGate.abandon();
     acceptedBlob = null;
     loadedBaseline = null;
-    accountRead = { user: null, blob: null, revision: 0 };
+    accountRead = { user: null, blob: null, revision: 0, epoch: accountEpoch };
+  },
+  async delete(key) {
+    accountEpoch += 1;
+    progressGate.abandon();
+    acceptedBlob = null;
+    loadedBaseline = null;
+    accountRead = { user: null, blob: null, revision: 0, epoch: accountEpoch };
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     await supabase.from("progress").delete().eq("user_id", session.user.id).eq("key", key);
@@ -616,6 +629,7 @@ export default function App() {
   }, []);
   const finishSignOut = () => {
     saveQueue.current.invalidate();
+    store.releaseAccount();
     accountId.current = null;
     setSaveStall(false);
     setMenuOpen(false);
@@ -724,8 +738,8 @@ export default function App() {
     const note = pendingHandoff.current;
     const userId = accountId.current;
     saveQueue.current.enqueue(seq, (ctx) => store.set(STORE_KEY, payload, userId, ctx)).then((res) => {
-      if (res?.reconciled && res.blob) applyBlob(res.blob);
       if (!res || res.stale || res.error?.code === "account-changed" || res.error?.code === "aborted") return;
+      if (res.reconciled && res.blob) applyBlob(res.blob);
       if (res.error?.code === "signed-out") {
         setSaveFailed(true);
         if (pendingAtStart) setGuestSaveError(true);

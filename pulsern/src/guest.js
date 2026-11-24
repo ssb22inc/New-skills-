@@ -138,33 +138,55 @@ export function applyProgressWrite(rows, { userId, key, blob, expectedRevision }
   return { revision: row.revision, rows: list };
 }
 
-function progressRowKey(row) {
-  if (!row || typeof row !== "object") return "";
-  if (row.attempt != null && row.attempt !== "") return `a:${row.attempt}`;
-  return `h:${row.id}:${row.correct}:${row.day ?? ""}:${row.at ?? ""}:${row.ms ?? ""}`;
+function sameLegacyOccurrence(serverRow, localRow) {
+  if (!serverRow || !localRow || serverRow.attempt || localRow.attempt) return false;
+  return serverRow.id === localRow.id
+    && serverRow.correct === localRow.correct
+    && (serverRow.day ?? "") === (localRow.day ?? "")
+    && (serverRow.at ?? "") === (localRow.at ?? "")
+    && (serverRow.ms ?? "") === (localRow.ms ?? "");
 }
 
 function mergeLogs(serverLog, localLog) {
-  const localBy = new Map();
-  for (const row of localLog ?? []) if (row) localBy.set(progressRowKey(row), row);
-  const seen = new Set();
+  const used = new Set();
   const out = [];
   for (const row of serverLog ?? []) {
     if (!row) continue;
-    const id = progressRowKey(row);
-    seen.add(id);
-    out.push(localBy.get(id) ?? row);
+    let match = -1;
+    if (row.attempt != null && row.attempt !== "") {
+      match = (localLog ?? []).findIndex((item, index) => !used.has(index) && item?.attempt === row.attempt);
+    } else {
+      match = (localLog ?? []).findIndex((item, index) => !used.has(index) && sameLegacyOccurrence(row, item));
+    }
+    if (match >= 0) {
+      used.add(match);
+      out.push(localLog[match]);
+    } else out.push(row);
   }
-  for (const row of localLog ?? []) {
-    if (!row || seen.has(progressRowKey(row))) continue;
-    out.push(row);
-  }
+  (localLog ?? []).forEach((row, index) => {
+    if (row && !used.has(index)) out.push(row);
+  });
   return out;
 }
 
 function addDelta(base, server, local, key) {
   const b = Number(base?.[key]) || 0;
   return b + ((Number(server?.[key]) || 0) - b) + ((Number(local?.[key]) || 0) - b);
+}
+
+function mergeMap(base, server, local) {
+  const out = { ...(base ?? {}) };
+  const keys = new Set([...Object.keys(base ?? {}), ...Object.keys(server ?? {}), ...Object.keys(local ?? {})]);
+  for (const key of keys) {
+    const b = base?.[key];
+    const s = server?.[key];
+    const l = local?.[key];
+    if (JSON.stringify(l) !== JSON.stringify(b)) out[key] = l;
+    else if (JSON.stringify(s) !== JSON.stringify(b)) out[key] = s;
+    else if (s !== undefined) out[key] = s;
+    else delete out[key];
+  }
+  return out;
 }
 
 /* Rows already stored stay rows. A legacy identity correction updates the
@@ -177,10 +199,12 @@ export function reconcileProgress(serverBlob, localBlob, baselineBlob = null) {
   const log = mergeLogs(server.log, local.log);
   const merged = { ...local, log };
   if (server.ability && JSON.stringify(local.ability) === JSON.stringify(base.ability)) merged.ability = server.ability;
-  for (const key of ["xp", "bestRun"]) {
-    const next = addDelta(base, server, local, key);
-    if (next !== (Number(local[key]) || 0)) merged[key] = next;
-  }
+  const nextXp = addDelta(base, server, local, "xp");
+  if (nextXp !== (Number(local.xp) || 0)) merged.xp = nextXp;
+  const nextBest = Math.max(Number(base.bestRun) || 0, Number(server.bestRun) || 0, Number(local.bestRun) || 0);
+  if (nextBest !== (Number(local.bestRun) || 0)) merged.bestRun = nextBest;
+  if (server.srsMap || local.srsMap || base.srsMap) merged.srsMap = mergeMap(base.srsMap, server.srsMap, local.srsMap);
+  if (server.missSchedule || local.missSchedule || base.missSchedule) merged.missSchedule = mergeMap(base.missSchedule, server.missSchedule, local.missSchedule);
   for (const key of new Set([...Object.keys(server), ...Object.keys(base)])) {
     if (key === "log" || key === "xp" || key === "bestRun" || key === "ability") continue;
     if (JSON.stringify(local[key]) === JSON.stringify(base[key]) && JSON.stringify(server[key]) !== JSON.stringify(base[key])) merged[key] = server[key];
@@ -197,8 +221,10 @@ export function blobForSave(accepted, local, baseline = null) {
 
 /* A late read for account A must not replace account B's loaded progress. */
 export function noteAccountRead(state, read) {
-  if (state?.user && read?.user && state.user !== read.user) return state;
-  return { user: read?.user ?? null, blob: read?.blob ?? null, revision: Number(read?.revision) || 0 };
+  const epoch = Number(read?.epoch) || 0;
+  if (Number(state?.epoch) > epoch) return state;
+  if (state?.user && read?.user && state.user !== read.user && Number(state?.epoch) === epoch) return state;
+  return { user: read?.user ?? null, blob: read?.blob ?? null, revision: Number(read?.revision) || 0, epoch };
 }
 
 /* knownRevision matches: this device still owns the row, so its blob lands.

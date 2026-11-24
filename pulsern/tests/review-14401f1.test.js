@@ -62,16 +62,40 @@ describe("a revision conflict keeps both devices' answers", () => {
   });
 
   it("does not let a late read from account A replace account B", () => {
-    const bound = noteAccountRead({ user: null, blob: null, revision: 0 }, { user: "B", blob: { log: ["B"] }, revision: 2 });
-    const late = noteAccountRead(bound, { user: "A", blob: { log: ["A"] }, revision: 4 });
+    const bound = noteAccountRead({ user: null, blob: null, revision: 0, epoch: 0 }, { user: "B", blob: { log: ["B"] }, revision: 2, epoch: 1 });
+    const late = noteAccountRead(bound, { user: "A", blob: { log: ["A"] }, revision: 4, epoch: 0 });
     expect(late.user).toBe("B");
     expect(late.blob.log).toEqual(["B"]);
-    expect(late.revision).toBe(2);
+    const signedIn = noteAccountRead(bound, { user: "B", blob: { log: [] }, revision: 0, epoch: 2 });
+    expect(signedIn.user).toBe("B");
+    expect(signedIn.blob.log).toEqual([]);
   });
 
   it("reports a missing storage adapter as a failed device save", () => {
     expect(saveGuest(null, { log: [] })).toBe(false);
     expect(holdGuestTrial({ log: [{ id: 1 }] }, null)).toBe(false);
+  });
+
+  it("does not add XP again on the save after the answer was acknowledged", () => {
+    const baseline = { log: [], xp: 0, bestRun: 0 };
+    const saved = { log: [answer("a")], xp: 10, bestRun: 1, theme: "light" };
+    const themed = blobForSave(saved, { ...saved, theme: "dim" }, saved);
+    expect(themed.xp).toBe(10);
+    expect(themed.bestRun).toBe(1);
+    const again = blobForSave(themed, { ...themed, theme: "light" }, themed);
+    expect(again.xp).toBe(10);
+    expect(again.bestRun).toBe(1);
+    expect(baseline.xp).toBe(0);
+  });
+
+  it("keeps two legacy answers that share a number", () => {
+    const bank = { id: 7, key: "bank:7", source: "bank", correct: false };
+    const builtin = { id: 7, key: "builtin:7", source: "builtin", correct: false };
+    const named = { ...builtin, key: "builtin:7", unclassified: false };
+    const merged = blobForSave({ log: [bank, builtin], xp: 0 }, { log: [bank, named], xp: 0 }, { log: [bank, builtin], xp: 0 });
+    expect(merged.log).toHaveLength(2);
+    expect(merged.log[0].key).toBe("bank:7");
+    expect(merged.log[1].key).toBe("builtin:7");
   });
 
   it("leaves an unchanged snapshot untouched so an idle save does not rewrite it", () => {
