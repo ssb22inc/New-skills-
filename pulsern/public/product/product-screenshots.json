@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "capturedAt": "2026-11-24T01:14:56.998Z",
-  "sourceCommitSha": "1f571355af7fef3e6e4687e5caaedf2a49222230",
+  "sourceCommitSha": "58bfee57888d6251d6a776c6f4d0ab5896a859c2",
   "renderer": "PulseRN App.jsx deterministic built-in-content harness",
   "browser": "151.0.7922.34",
   "containsLearnerData": false,
