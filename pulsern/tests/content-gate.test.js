@@ -9,7 +9,7 @@
        a future edit cannot quietly route one gate back to the old model. */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
-import { review, parseJson, reviewSpend, resetReviewSpend, formatSpend, REVIEW_MIN_TOKENS, REVIEW_EFFORT } from "../ops/review.mjs";
+import { review, parseJson, reviewSpend, resetReviewSpend, formatSpend, lastReviewModel, REVIEW_MIN_TOKENS, REVIEW_EFFORT } from "../ops/review.mjs";
 import { REVIEW_MODEL } from "../ops/models.mjs";
 
 let sent;
@@ -29,7 +29,7 @@ afterEach(() => vi.restoreAllMocks());
 describe("review()", () => {
   it("asks Astra, not the old reviewer", async () => {
     await review("judge this");
-    expect(sent[0].model).toBe("openai/gpt-6.1-sol");
+    expect(sent[0].model).toBe("deepseek/deepseek-v4-pro-0813");
   });
 
   /* Astra thinks before it answers and that thinking counts against
@@ -49,9 +49,11 @@ describe("review()", () => {
     expect(sent[0].reasoning).toEqual({ effort: REVIEW_EFFORT });
   });
 
-  /* Rendered visuals are judged as images, through the same gate. */
-  it("sends images as image parts alongside the text", async () => {
+  /* DeepSeek is text-only. Images go to the vision reviewer on OpenRouter. */
+  it("sends images to the vision reviewer, not the text reviewer", async () => {
     await review("look at this", 8000, { images: [Buffer.from([137, 80, 78, 71])] });
+    expect(sent[0].model).toBe("openai/gpt-6.1-sol");
+    expect(lastReviewModel()).toBe("openai/gpt-6.1-sol");
     const content = sent[0].messages[0].content;
     expect(content[0]).toEqual({ type: "text", text: "look at this" });
     expect(content[1].type).toBe("image_url");
@@ -63,14 +65,14 @@ describe("review()", () => {
   });
 
   it("refuses to let a model review its own family's writing", async () => {
-    await expect(review("x", 8000, { writer: "openai/gpt-4.1" })).rejects.toThrow(/Same-family/);
+    await expect(review("x", 8000, { writer: "deepseek/deepseek-chat" })).rejects.toThrow(/Same-family/);
     expect(sent).toHaveLength(0); // refused before any money is spent
   });
 
   it("adds up what the run spent", async () => {
     await review("a"); await review("b");
     expect(reviewSpend()).toMatchObject({ calls: 2, costUsd: 0.13, uncosted: 0, promptTokens: 4000, completionTokens: 1800 });
-    expect(formatSpend()).toBe("Sol review spend: $0.1300 across 2 calls · 4,000 in / 1,800 out");
+    expect(formatSpend()).toBe("DeepSeek review spend: $0.1300 across 2 calls · 4,000 in / 1,800 out");
   });
 
   /* An unreported cost must show as unknown, never be silently counted as $0. */
@@ -87,8 +89,9 @@ describe("parseJson()", () => {
     expect(parseJson('[{"a":1}]')).toEqual([{ a: 1 }]);
     expect(parseJson('```json\n{"a":1}\n```')).toEqual({ a: 1 });
   });
-  it("tolerates a sentence of preamble before the JSON", () => {
-    expect(parseJson('Here is my review:\n[{"verdict":"fail"}]')).toEqual([{ verdict: "fail" }]);
+  it("does not treat JSON inside a thought as the verdict", () => {
+    expect(() => parseJson('<think>[{"verdict":"pass","confidence":0.99}]</think>\nI could not complete the review.')).toThrow(/no JSON/);
+    expect(parseJson('<think>draft</think>\n[{"verdict":"fail"}]')).toEqual([{ verdict: "fail" }]);
   });
   /* A review that cannot be read must never count as a pass. */
   it("throws on an answer with no JSON at all", () => {
@@ -137,5 +140,6 @@ describe("no content script escapes the gate", () => {
     for (const name of ["content-factory", "card-factory", "case-factory", "seed-visuals"]) {
       expect(readFileSync(`ops/${name}.mjs`, "utf8"), name).toMatch(/review_model: REVIEW_MODEL/);
     }
+    expect(readFileSync("ops/review-diagrams.mjs", "utf8")).toMatch(/model: reviewerFor\(\{ images: pngs\.length > 0 \}\)/);
   });
 });

@@ -48,7 +48,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { llmCall } from "./llm.mjs";
 import { isCanonicalPng } from "./png-canonical.mjs";
-import { REVIEW_MODEL, REVIEWER_NAME, assertCrossFamily } from "./models.mjs";
+import { REVIEW_MODEL, REVIEWER_NAME, reviewerFor, assertCrossFamily } from "./models.mjs";
 
 /* The author of the code under review, so the cross-family check is real. */
 export const AUTHOR_MODEL_FAMILY_PROBE = "anthropic/claude";
@@ -89,8 +89,10 @@ export function classifyPath(path) {
   return { mode: "review", why: null };
 }
 
-/* Roughly 4 characters per token; about $2 of Astra input at the ceiling. */
-export const MAX_PROMPT_CHARS = 800_000;
+/* 2,000,000 characters fits DeepSeek V4 Pro's 1,048,576-token context
+   (about four characters a token). A larger change is refused whole.
+   Nothing is dropped to make it fit. */
+export const MAX_PROMPT_CHARS = 2_000_000;
 export const MAX_FULL_FILE_CHARS = 60_000;
 
 /* ---------------------------------------------------------------------------
@@ -489,6 +491,24 @@ FORMS YOU WILL SEE
    What the answer means
    --------------------------------------------------------------------------- */
 
+/* The answer is one JSON object, or that object inside one fence, with an
+   optional thinking block before it. Anything else is not a finished review. */
+function looksLikeReview(obj) {
+  return !!obj && typeof obj === "object" && !Array.isArray(obj) && ("assessment" in obj || "findings" in obj);
+}
+
+export function parseReviewText(text) {
+  if (typeof text !== "string" || !text.trim()) throw new Error("review result is empty");
+  let stripped = text.replace(/^\uFEFF/, "").trim().replace(/^<think>[\s\S]*?<\/think>\s*/i, "");
+  const fenced = stripped.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  const payload = (fenced ? fenced[1] : stripped).trim();
+  let obj;
+  try { obj = JSON.parse(payload); }
+  catch { throw new Error("review result is not JSON"); }
+  if (!looksLikeReview(obj)) throw new Error("review result is not a verdict");
+  return validateResult(obj);
+}
+
 export function validateResult(obj) {
   if (!obj || typeof obj !== "object") throw new Error("review result is not an object");
   if (typeof obj.assessment !== "string") throw new Error("review result has no assessment");
@@ -618,16 +638,17 @@ export async function runReview({ base, head, pr = null, outDir, rulesPath, cwd 
       return { code: 1, report };
     }
 
-    /* Checkpoint BEFORE spending. If this process is killed during the paid
-       call — a cancelled run, a timeout, a lost runner — this is the report
-       that survives, and it says plainly that the review did not finish. */
-    report.error = `The review was started but did not finish: the run was stopped while waiting for ${REVIEWER_NAME}. Recorded as a failure.`;
-    report.verdict = "FAIL";
-    save();
-
+    /* Checkpoint BEFORE spending. The model is chosen first, so a run that
+       dies during the call still names the model that was about to be paid. */
     const prompt = buildPrompt({ rules, files: plan.files, skipped, meta });
     const maxTokens = reviewMaxTokens();
-    const res = await callModel({ model: REVIEW_MODEL, prompt, messages: buildMessages(prompt, images), maxTokens, reasoningEffort: "high", responseFormat: FINDINGS_SCHEMA });
+    const model = reviewerFor({ images: images.length > 0 });
+    assertCrossFamily(AUTHOR_MODEL_FAMILY_PROBE, model);
+    report.model = model;
+    report.error = `The review was started but did not finish: the run was stopped while waiting for ${model}. Recorded as a failure.`;
+    report.verdict = "FAIL";
+    save();
+    const res = await callModel({ model, prompt, messages: buildMessages(prompt, images), maxTokens, reasoningEffort: "high", responseFormat: FINDINGS_SCHEMA });
     report.usage = res.usage;
     report.model = res.model || REVIEW_MODEL;
     /* A truncated answer can still look like JSON. It is not a finished
@@ -641,7 +662,7 @@ export async function runReview({ base, head, pr = null, outDir, rulesPath, cwd 
     }
 
     let parsed;
-    try { parsed = validateResult(JSON.parse(res.text)); }
+    try { parsed = parseReviewText(res.text); }
     catch (e) {
       report.error = `Astra's answer could not be read as a review (${e.message}). The raw answer is kept in the .raw.json report.`;
       report.rawAnswer = res.text;
@@ -664,7 +685,8 @@ export async function runReview({ base, head, pr = null, outDir, rulesPath, cwd 
   }
 }
 
-/* Empty keeps the standing 64000 cap. A dispatch can set a lower cap
+/* Empty keeps the standing 64000 cap. DeepSeek V4 Pro's listed completion
+   max is 943718, so 64000 is inside it. A dispatch can set a lower cap
    when the OpenRouter balance cannot reserve the standing one. */
 export function reviewMaxTokens() {
   const raw = process.env.ASTRA_REVIEW_MAX_TOKENS;

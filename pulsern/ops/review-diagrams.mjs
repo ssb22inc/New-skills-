@@ -22,7 +22,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { review, parseJson, lastReviewCost } from "./review.mjs";
-import { REVIEW_MODEL } from "./models.mjs";
+import { reviewerFor } from "./models.mjs";
 import { sourceKey, signApproval } from "./diagram-attest.mjs";
 import { signerFrom } from "./attest.mjs";
 import { DIAGRAM_REVIEW_SCHEMA, canReuse, reviewAndRecord, diagramRequest, diagramSources } from "./review-diagrams-lib.mjs";
@@ -118,7 +118,7 @@ try {
     if (prev && prev.key === key && !prev.completed) console.log(`${d.id}: the last attempt did not complete (${prev.verdict}) — retrying`);
     if (Date.now() > RUN_DEADLINE) { console.log(`${d.id}: not started — the run is near its time limit; re-run to review it`); failed++; continue; }
     const r = await reviewAndRecord({
-      d, key, images: pngs.length, model: REVIEW_MODEL, cost: lastReviewCost, dir: DIR, index, sourceKey: SOURCE_KEY, write, signer: SIGNER,
+      d, key, images: pngs.length, model: reviewerFor({ images: pngs.length > 0 }), cost: lastReviewCost, dir: DIR, index, sourceKey: SOURCE_KEY, write, signer: SIGNER,
       ask: async () => parseJson(await review(prompt, 32000, { images: pngs, responseFormat: DIAGRAM_REVIEW_SCHEMA, effort: "high" })),
     });
     console.log(`${d.id}: ${r.verdict}${r.counts ? ` (${r.counts.blocker}B ${r.counts.major}M ${r.counts.minor}m)` : ""}${r.error ? ` — ${r.error}` : ""}`);

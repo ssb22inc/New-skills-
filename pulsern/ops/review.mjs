@@ -29,7 +29,7 @@
      invoice. */
 
 import { llmCall } from "./llm.mjs";
-import { GEN_MODEL, REVIEW_MODEL, REVIEWER_NAME, assertCrossFamily } from "./models.mjs";
+import { GEN_MODEL, REVIEW_MODEL, REVIEWER_NAME, reviewerFor, assertCrossFamily } from "./models.mjs";
 
 export const REVIEW_MIN_TOKENS = 24000;
 export const REVIEW_EFFORT = "medium";
@@ -37,8 +37,10 @@ export const REVIEW_EFFORT = "medium";
 const spend = { calls: 0, costUsd: 0, uncosted: 0, promptTokens: 0, completionTokens: 0 };
 let exitHookArmed = false;
 let lastCost = null;
+let lastModel = REVIEW_MODEL;
 /* Cost of the most recent call, or null if it was not reported. */
 export const lastReviewCost = () => lastCost;
+export const lastReviewModel = () => lastModel;
 
 export function reviewSpend() {
   return { ...spend, costUsd: Math.round(spend.costUsd * 1e6) / 1e6 };
@@ -61,7 +63,9 @@ export function resetReviewSpend() {
    judging rendered visuals as a student sees them. effort: "high" for
    reviews where one miss reaches every student at once. */
 export async function review(prompt, maxTokens = 8000, { writer = GEN_MODEL, responseFormat = null, images = null, effort = REVIEW_EFFORT } = {}) {
-  assertCrossFamily(writer, REVIEW_MODEL);
+  const model = reviewerFor({ images: !!images?.length });
+  lastModel = model;
+  assertCrossFamily(writer, model);
   const messages = images?.length
     ? [{ role: "user", content: [
         { type: "text", text: prompt },
@@ -69,7 +73,7 @@ export async function review(prompt, maxTokens = 8000, { writer = GEN_MODEL, res
       ] }]
     : undefined;
   const res = await llmCall({
-    model: REVIEW_MODEL,
+    model,
     prompt,
     messages,
     maxTokens: Math.max(maxTokens, REVIEW_MIN_TOKENS),
@@ -92,17 +96,13 @@ export async function review(prompt, maxTokens = 8000, { writer = GEN_MODEL, res
   return res.text;
 }
 
-/* Reviewers are told to answer with raw JSON, and mostly do. Fences and a
-   stray sentence of preamble are stripped; anything still unreadable throws,
-   because a review that cannot be read must never count as a pass. */
+/* The answer is one JSON value, or that value inside one fence, with an
+   optional thinking block before it. JSON inside the thought is not the
+   verdict. Anything else throws, so it cannot count as a pass. */
 export function parseJson(raw) {
-  const text = String(raw ?? "").replace(/```(?:json)?/gi, "").trim();
-  try { return JSON.parse(text); } catch { /* fall through to extraction */ }
-  const start = text.search(/[[{]/);
-  if (start < 0) throw new Error("no JSON in reviewer answer");
-  const open = text[start];
-  const close = open === "[" ? "]" : "}";
-  const end = text.lastIndexOf(close);
-  if (end <= start) throw new Error("unterminated JSON in reviewer answer");
-  return JSON.parse(text.slice(start, end + 1));
+  let text = String(raw ?? "").trim().replace(/^<think>[\s\S]*?<\/think>\s*/i, "");
+  const fenced = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  const payload = (fenced ? fenced[1] : text).trim();
+  try { return JSON.parse(payload); }
+  catch { throw new Error("no JSON in reviewer answer"); }
 }

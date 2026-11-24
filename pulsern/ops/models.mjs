@@ -15,17 +15,23 @@
    has to remember. */
 
 export const GEN_MODEL = "anthropic/claude-sonnet-4.6";
-/* Owner decisions: GPT Astra until 2026-10-09, then GPT Luna, and from
-   2026-10-28 GPT 6.1 Sol. Earlier reviews stand as recorded; every review,
-   gate and audit from now on reads the reviewer from here. */
-export const REVIEW_MODEL = "openai/gpt-6.1-sol";
-export const REVIEWER_NAME = "Sol";
+/* Owner decisions: GPT Astra until 2026-10-09, then GPT Luna, GPT 6.1 Sol
+   from 2026-10-28, GPT 6.2 Sol briefly on 2026-11-24, then DeepSeek V4 Pro
+   (OpenRouter id deepseek/deepseek-v4-pro-0813) the same day for cost.
+   Earlier reviews stand as recorded; every review, gate and audit from now
+   on reads the reviewer from here. OpenRouter only. */
+export const REVIEW_MODEL = "deepseek/deepseek-v4-pro-0813";
+export const REVIEWER_NAME = "DeepSeek";
+/* OpenRouter models list, 2026-11-24: deepseek-v4-pro-0813 is text only.
+   gpt-6.1-sol accepts images. Image reviews use that id, still on OpenRouter. */
+export const IMAGE_REVIEW_MODEL = "openai/gpt-6.1-sol";
+export const reviewerFor = ({ images = false } = {}) => (images ? IMAGE_REVIEW_MODEL : REVIEW_MODEL);
 
 /* Reasoning models reject or silently ignore sampling temperature. Sending
    0.7 to one is at best a no-op and at worst a 400 that would take a factory
    down the moment the reviewer switched — so the client asks this before
    sending it, rather than every caller having to know. */
-const NO_TEMPERATURE = new Set(["openai/gpt-6-astra", "openai/gpt-6-luna", "openai/gpt-6.1-sol"]);
+const NO_TEMPERATURE = new Set(["openai/gpt-6-astra", "openai/gpt-6-luna", "openai/gpt-6.1-sol", "openai/gpt-6.2-sol"]);
 export const acceptsTemperature = (model) => !NO_TEMPERATURE.has(model);
 
 /* The vendor prefix is the family. Good enough here because the question is
