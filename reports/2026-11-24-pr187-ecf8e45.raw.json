@@ -1,0 +1,47 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "9f43c95a300abc5b2bb99c03161eaf16e0145674",
+    "head": "ecf8e45aa4021dc6476f469d91b71fe4fba74a20",
+    "pr": "187"
+  },
+  "reviewedAt": "2026-11-24T22:53:34.334Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-astra-review.yml",
+    "pulsern/ops/astra-review.mjs",
+    "pulsern/ops/llm.mjs",
+    "pulsern/ops/models.mjs",
+    "pulsern/ops/review.mjs",
+    "pulsern/tests/astra-review.test.js",
+    "pulsern/tests/content-gate.test.js",
+    "pulsern/tests/llm-client.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/ops/models.mjs",
+      "line": 23,
+      "title": "Preserve a working reviewer for image-based reviews",
+      "problem": "The sole reviewer is now text-only, with no vision-capable alternative. Consequently, review() always throws for nonempty images, and runReview() unconditionally fails any change containing an attached PNG. This disables the previously supported rendered-visual review path rather than migrating it to another reviewer.",
+      "failure_scenario": "An existing diagram or visual-exhibit review calls review(prompt, tokens, { images: [png] }) and fails before making a request, regardless of the visual's correctness. A PR updating a canonical PNG likewise cannot pass the trusted review gate. The replacement tests confirm refusal but no longer exercise any successful image-review route.",
+      "fix": "Keep the text-only default if desired, but select a registered, cross-family vision-capable reviewer whenever images are present in either review path. Record the selected model and retain an integration test proving that both image versions reach that reviewer. Alternatively, retain a vision-capable global reviewer.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 44504,
+    "completionTokens": 2676,
+    "reasoningTokens": 2377,
+    "costUsd": 0.1380185
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "The image guards correctly fail closed, but the global model switch leaves the existing visual-review functionality without a working reviewer.",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0
+  }
+}
