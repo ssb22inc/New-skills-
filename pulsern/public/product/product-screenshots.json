@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-11-24T01:30:54.201Z",
+  "capturedAt": "2026-11-24T01:42:30.823Z",
   "sourceCommitSha": "04d639e4e41236349819ffef04b81abd63cf07bd",
   "renderer": "PulseRN App.jsx deterministic built-in-content harness",
   "browser": "151.0.7922.34",
@@ -90,8 +90,8 @@
     },
     {
       "file": "pulsern-today-dashboard.png",
-      "sha256": "28604692d937dcba0fe37357305946819d735566beba3439c181cf794efa1d55",
-      "bytes": 85466,
+      "sha256": "fbfe9e2f5e7564b7c3be90b6e74f38c60ee6810f24da73c90eff354f8511b4ce",
+      "bytes": 85493,
       "width": 720,
       "height": 1000,
       "alt": "PulseRN Today dashboard showing the daily round, candidate monitor, study goal, and progress cards",
@@ -99,8 +99,8 @@
     },
     {
       "file": "pulsern-lab-reference.png",
-      "sha256": "5da3120dbab75faccb56808120969c8b2425bbf11a6cb6429e4c2f11730e6974",
-      "bytes": 73753,
+      "sha256": "df1316f4ff33ab6ea01079fa156542536b3435ee39c5d88386ad1fc2067f4d7d",
+      "bytes": 73863,
       "width": 430,
       "height": 932,
       "alt": "PulseRN mobile lab-reference drawer open over an adaptive practice question",

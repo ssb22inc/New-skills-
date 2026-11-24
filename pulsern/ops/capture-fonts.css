@@ -1,19 +1,18 @@
-/* Glyphs the product screenshots use that are outside the Archivo and
-   IBM Plex latin files. Without these, each machine picks its own fallback
-   (a CJK face for ⓘ, a different superscript for ⁺) and the line boxes move.
-   Noto is SIL Open Font License; the rewind arrow is one DejaVu glyph
-   (Bitstream Vera license). */
+/* Glyphs outside the Archivo and IBM Plex latin files. Each machine was
+   picking its own fallback, so the line boxes moved. These faces are the
+   pinned @fontsource packages, read from node_modules when the capture
+   server runs. Nothing here is a committed font file. */
 @font-face {
   font-family: "PulseRN Capture Symbols";
-  src: url("./fonts/capture-noto-sans.woff2") format("woff2");
-  unicode-range: U+00B2, U+00B7, U+2013-2014, U+207A-207B;
+  src: url("../node_modules/@fontsource/dejavu-sans/files/dejavu-sans-latin-400-normal.woff2") format("woff2");
+  unicode-range: U+207A, U+207B, U+21BA;
   font-weight: 100 900;
   font-style: normal;
   font-display: block;
 }
 @font-face {
   font-family: "PulseRN Capture Symbols";
-  src: url("./fonts/capture-noto-symbols.woff2") format("woff2");
+  src: url("../node_modules/@fontsource/noto-sans-symbols/files/noto-sans-symbols-symbols-400-normal.woff2") format("woff2");
   unicode-range: U+2315, U+24D8;
   font-weight: 100 900;
   font-style: normal;
@@ -21,16 +20,8 @@
 }
 @font-face {
   font-family: "PulseRN Capture Symbols";
-  src: url("./fonts/capture-noto-symbols2.woff2") format("woff2");
+  src: url("../node_modules/@fontsource/noto-sans-symbols-2/files/noto-sans-symbols-2-symbols-400-normal.woff2") format("woff2");
   unicode-range: U+25B4, U+25B6, U+25BE, U+25C6, U+25CF, U+2715, U+1F6E1;
-  font-weight: 100 900;
-  font-style: normal;
-  font-display: block;
-}
-@font-face {
-  font-family: "PulseRN Capture Symbols";
-  src: url("./fonts/capture-dejavu-rewind.woff2") format("woff2");
-  unicode-range: U+21BA;
   font-weight: 100 900;
   font-style: normal;
   font-display: block;
