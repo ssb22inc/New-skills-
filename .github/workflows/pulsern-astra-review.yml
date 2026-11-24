@@ -42,6 +42,7 @@ on:
       base: { description: "Base commit SHA (report-only runs; ignored when pr is given)", required: false }
       head: { description: "Head commit SHA to review", required: true }
       pr:   { description: "PR number — its range is read from GitHub and its status posted", required: false }
+      max_tokens: { description: "Completion token cap for this run (256-64000). Empty keeps 64000.", required: false }
 
 # The workflow token can NOT post statuses. The required check is posted
 # only by the PulseRN Astra GitHub App, whose key lives in the `astra-review`
@@ -220,6 +221,7 @@ jobs:
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           ASTRA_REVIEW_MODE: trusted
+          ASTRA_REVIEW_MAX_TOKENS: ${{ inputs.max_tokens }}
         run: |
           set +e
           node "$GITHUB_WORKSPACE/trusted/pulsern/ops/astra-review.mjs" \

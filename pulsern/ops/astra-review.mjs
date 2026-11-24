@@ -626,9 +626,19 @@ export async function runReview({ base, head, pr = null, outDir, rulesPath, cwd 
     save();
 
     const prompt = buildPrompt({ rules, files: plan.files, skipped, meta });
-    const res = await callModel({ model: REVIEW_MODEL, prompt, messages: buildMessages(prompt, images), maxTokens: 64000, reasoningEffort: "high", responseFormat: FINDINGS_SCHEMA });
+    const maxTokens = reviewMaxTokens();
+    const res = await callModel({ model: REVIEW_MODEL, prompt, messages: buildMessages(prompt, images), maxTokens, reasoningEffort: "high", responseFormat: FINDINGS_SCHEMA });
     report.usage = res.usage;
     report.model = res.model || REVIEW_MODEL;
+    /* A truncated answer can still look like JSON. It is not a finished
+       review, so it cannot pass. */
+    if (res.finishReason === "length") {
+      report.error = `The review output was truncated at the ${maxTokens}-token cap (finish_reason: length). Recorded as a failure, not a pass.`;
+      report.rawAnswer = res.text;
+      report.verdict = "FAIL";
+      save();
+      return { code: 2, report };
+    }
 
     let parsed;
     try { parsed = validateResult(JSON.parse(res.text)); }
@@ -652,6 +662,18 @@ export async function runReview({ base, head, pr = null, outDir, rulesPath, cwd 
     try { save(); } catch (se) { console.error(`Could not save the report either: ${se.message}`); }
     return { code: 2, report };
   }
+}
+
+/* Empty keeps the standing 64000 cap. A dispatch can set a lower cap
+   when the OpenRouter balance cannot reserve the standing one. */
+export function reviewMaxTokens() {
+  const raw = process.env.ASTRA_REVIEW_MAX_TOKENS;
+  if (raw == null || String(raw).trim() === "") return 64000;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 256 || n > 64000) {
+    throw new Error(`ASTRA_REVIEW_MAX_TOKENS must be an integer from 256 to 64000, got ${raw}`);
+  }
+  return n;
 }
 
 function arg(name, fallback = null) {
