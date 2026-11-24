@@ -1,0 +1,33 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "b7349d9b90de5d67f751981cc07136f5323f9182",
+    "head": "58381044e57df32ac32aefd6276ac70f206b019a",
+    "pr": "186"
+  },
+  "reviewedAt": "2026-11-24T11:08:11.353Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-astra-review.yml",
+    "pulsern/ops/astra-review.mjs",
+    "pulsern/ops/llm.mjs",
+    "pulsern/tests/astra-review.test.js",
+    "pulsern/tests/llm-client.test.js"
+  ],
+  "skipped": [],
+  "findings": [],
+  "usage": {
+    "promptTokens": 43148,
+    "completionTokens": 1560,
+    "reasoningTokens": 1474,
+    "costUsd": 0.1234685
+  },
+  "error": null,
+  "verdict": "PASS",
+  "assessment": "No actionable defects found in the supplied changes. The optional token cap is validated before the model call, and length-truncated responses fail closed even when they contain valid review JSON. The added tests meaningfully exercise truncation rejection and finish-reason forwarding. Review was static; the test suite was not executed.",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}
