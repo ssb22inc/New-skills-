@@ -225,9 +225,9 @@ export function sessionProgress(nav) {
   if (!nav) return { position: 0, total: 0, done: 0 };
   const ids = new Set([...(nav.entries ?? []).map((e) => e.id), ...(nav.queue ?? [])]);
   const latest = new Map();
-  for (const e of nav.entries ?? []) if (e.grade) latest.set(e.id, e.grade);
+  for (const e of nav.entries ?? []) latest.set(e.id, e.grade || null);
   let done = 0;
-  for (const g of latest.values()) if (g !== "again") done += 1;
+  for (const g of latest.values()) if (g && g !== "again") done += 1;
   const upto = new Set((nav.entries ?? []).slice(0, Math.max(0, Math.min(nav.index, nav.entries.length - 1)) + 1).map((e) => e.id));
   const total = ids.size;
   const position = nav.index >= (nav.entries?.length ?? 0) ? total : Math.min(upto.size, total);
@@ -242,14 +242,17 @@ export function canUndoGrade(nav) {
   return !nav.entries.slice(nav.index + 1).some((later) => later.id === e.id);
 }
 
-/* Clear this visit's grade and show the answer again so it can be
-   re-graded. An "again" re-queue for this card is withdrawn. The caller
-   restores the card's previous schedule. */
+/* Clear the grade on every visit of this card and show the answer again
+   so it can be re-graded. A copied grade on an earlier visit would still
+   count as reviewed. An "again" re-queue for this card is withdrawn. The
+   caller restores the card's previous schedule. */
 export function undoGrade(nav) {
   if (!canUndoGrade(nav)) return nav;
   const e = currentCard(nav);
-  const entries = nav.entries.slice();
-  entries[nav.index] = { ...e, grade: null, show: true };
+  const entries = nav.entries.map((entry, i) => {
+    if (entry.id !== e.id) return entry;
+    return i === nav.index ? { ...entry, grade: null, show: true } : { ...entry, grade: null };
+  });
   /* The grade is gone, so the card is unfinished again. Next from this
      history entry only restores the next opened card; without a queue
      entry the undone card would vanish from the sitting. */

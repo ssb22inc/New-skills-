@@ -7,7 +7,7 @@ import React from "react";
 import {
   AGAIN_GAP, REQUEUE_GAP, startSession, currentCard, atFrontier, canGoBack, canGoForward,
   canSkip, cardsLeft, skippedCount, sessionOutcome, saveCardView, goBack, goForward,
-  skipCurrent, gradeCurrent, jumpToSkipped, cardNavAction, undoGrade,
+  skipCurrent, gradeCurrent, jumpToSkipped, cardNavAction, undoGrade, sessionProgress,
 } from "../src/card-nav.js";
 import { nextSchedule } from "../src/srs.js";
 import { Flashcards, ThemeToggle } from "../src/App.jsx";
@@ -126,6 +126,21 @@ describe("one grade per undone card", () => {
     expect(grade("good")).toBe(false);
     expect(srs.a.interval).toBe(3);
     expect(xp).toBe(awarded);
+  });
+});
+
+describe("undo clears every copied grade", () => {
+  it("does not count an undone card as reviewed", () => {
+    let nav = startSession(["a", "b"]);
+    nav = skipCurrent(nav).nav;
+    nav = gradeCurrent(nav, "good").nav;
+    expect(currentCard(nav).id).toBe("a");
+    nav = gradeCurrent(nav, "good").nav;
+    expect(sessionProgress(nav).done).toBe(2);
+    nav = goBack(nav);
+    nav = undoGrade(nav);
+    expect(nav.entries.filter((e) => e.id === "a").every((e) => e.grade == null)).toBe(true);
+    expect(sessionProgress(nav).done).toBe(1);
   });
 });
 

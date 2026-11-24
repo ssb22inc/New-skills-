@@ -129,6 +129,16 @@ describe("practice questions", () => {
 });
 
 describe("case-study steps", () => {
+  it("shows the AI label and the verify note after Begin case", async () => {
+    await page.evaluate(() => window.T.mountCase());
+    await page.getByRole("button", { name: /Pharmacology/ }).click();
+    await page.getByRole("button", { name: "Open case →" }).click();
+    await page.getByRole("button", { name: "Begin case →" }).click();
+    await visible(page.getByText("CASESTEP0"));
+    await visible(page.getByText(/AI-assisted case that passed automated quality checks/));
+    await visible(page.getByText(/Verify it against your course materials/));
+  }, 60_000);
+
   it("skips a step without scoring it, and Back shows an answer read-only", async () => {
     await page.evaluate(() => window.T.mountCase());
     await page.getByRole("button", { name: /Pharmacology/ }).click();

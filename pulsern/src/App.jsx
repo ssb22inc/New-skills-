@@ -2159,6 +2159,9 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
     };
   }
   const chartSummary = cs.vitals.slice(0, 3).map(([k, v]) => `${k} ${v}`).join(" · ");
+  const aiCaseNote = cs.ai ? (
+    <p className="small case-ai-note">✨ AI-assisted case that passed automated quality checks. Verify it against your course materials.</p>
+  ) : null;
   const chartBody = (
     <>
       <div className="q-meta mono">
@@ -2179,6 +2182,7 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
     <div className={step >= 0 ? "stack case-layout" : "stack study-col"}>
       {step >= 0 ? (
         <div className={chartOpen ? "case-chart-bar open" : "case-chart-bar"}>
+          {aiCaseNote}
           <button type="button" className="case-chart-toggle" aria-expanded={chartOpen} onClick={() => setChartOpen((o) => !o)}>
             <span aria-hidden="true">📋</span> Chart <span className="case-chart-sum">{chartSummary}</span>
             <span aria-hidden="true">{chartOpen ? "▴" : "▾"}</span>
@@ -2200,7 +2204,7 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
           {cs.labs.map(([k, v]) => <span key={k} className="chip lab">{k} {v}</span>)}
         </div>
         <p className={ra(introReader, "case-note", "small note")}>Nurse's note: {cs.note}</p>
-        {cs.ai && <p className="small">✨ AI-assisted case that passed automated quality checks.</p>}
+        {aiCaseNote}
         <ReportIssue key={`rc${caseKey}`} caseId={cs.dbId ?? null} label="case study" />
         {step === -1 && <button className="btn" onClick={start}>Begin case →</button>}
       </section>
