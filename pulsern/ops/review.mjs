@@ -37,8 +37,10 @@ export const REVIEW_EFFORT = "medium";
 const spend = { calls: 0, costUsd: 0, uncosted: 0, promptTokens: 0, completionTokens: 0 };
 let exitHookArmed = false;
 let lastCost = null;
+let lastModel = REVIEW_MODEL;
 /* Cost of the most recent call, or null if it was not reported. */
 export const lastReviewCost = () => lastCost;
+export const lastReviewModel = () => lastModel;
 
 export function reviewSpend() {
   return { ...spend, costUsd: Math.round(spend.costUsd * 1e6) / 1e6 };
@@ -62,6 +64,7 @@ export function resetReviewSpend() {
    reviews where one miss reaches every student at once. */
 export async function review(prompt, maxTokens = 8000, { writer = GEN_MODEL, responseFormat = null, images = null, effort = REVIEW_EFFORT } = {}) {
   const model = reviewerFor({ images: !!images?.length });
+  lastModel = model;
   assertCrossFamily(writer, model);
   const messages = images?.length
     ? [{ role: "user", content: [

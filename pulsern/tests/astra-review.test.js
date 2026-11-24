@@ -393,6 +393,21 @@ describe("digests", () => {
       expect(urls).toEqual([`data:image/png;base64,${PNG(10).toString("base64")}`, `data:image/png;base64,${PNG(200).toString("base64")}`]);
     });
 
+    it("names Sol in the checkpoint while an image review is still unpaid", async () => {
+      const path = "pulsern/public/diagram.png";
+      const dir = repoWith([[path, PNG(10), PNG(200)]]);
+      const outDir = mkdtempSync(join(tmpdir(), "astra-out-"));
+      let release;
+      const pending = runReview({ base: "b", head: "HEAD", outDir, rulesPath: "CLAUDE.md", cwd: dir, now: () => new Date("2026-10-08T21:00:00Z") }, { callModel: () => new Promise((r) => { release = r; }) });
+      await new Promise((r) => setTimeout(r, 30));
+      const md = readdirSync(outDir).filter((f) => f.endsWith(".md")).map((f) => readFileSync(join(outDir, f), "utf8")).join("\n");
+      expect(md).toContain("openai/gpt-6.1-sol");
+      expect(md).toContain("did not finish");
+      release({ text: JSON.stringify({ assessment: "ok", findings: [] }), finishReason: "stop", usage: {}, model: "openai/gpt-6.1-sol" });
+      await pending;
+      rmSync(dir, { recursive: true, force: true });
+    });
+
     it("diffs text stored under an image name", () => {
       const path = "pulsern/public/notes.png";
       const dir = repoWith([[path, "dose: 1 mg\n", "dose: 10 mg\n"]]);
@@ -776,6 +791,7 @@ describe("running a review end to end (Astra finding #5)", () => {
     const md = readFileSync(join(dir, "2026-10-08-pr7-" + g("rev-parse", "HEAD").trim().slice(0, 7) + ".md"), "utf8");
     expect(md).toContain("# DeepSeek review — FAIL");
     expect(md).toContain("did not finish");
+    expect(md).toContain("deepseek/deepseek-v4-pro-0813");
     release({ text: JSON.stringify({ assessment: "ok", findings: [] }), usage: { costUsd: 0.1 }, model: "openai/gpt-6.1-sol" });
     await pending;
   });

@@ -9,7 +9,7 @@
        a future edit cannot quietly route one gate back to the old model. */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
-import { review, parseJson, reviewSpend, resetReviewSpend, formatSpend, REVIEW_MIN_TOKENS, REVIEW_EFFORT } from "../ops/review.mjs";
+import { review, parseJson, reviewSpend, resetReviewSpend, formatSpend, lastReviewModel, REVIEW_MIN_TOKENS, REVIEW_EFFORT } from "../ops/review.mjs";
 import { REVIEW_MODEL } from "../ops/models.mjs";
 
 let sent;
@@ -53,6 +53,7 @@ describe("review()", () => {
   it("sends images to the vision reviewer, not the text reviewer", async () => {
     await review("look at this", 8000, { images: [Buffer.from([137, 80, 78, 71])] });
     expect(sent[0].model).toBe("openai/gpt-6.1-sol");
+    expect(lastReviewModel()).toBe("openai/gpt-6.1-sol");
     const content = sent[0].messages[0].content;
     expect(content[0]).toEqual({ type: "text", text: "look at this" });
     expect(content[1].type).toBe("image_url");
@@ -139,5 +140,6 @@ describe("no content script escapes the gate", () => {
     for (const name of ["content-factory", "card-factory", "case-factory", "seed-visuals"]) {
       expect(readFileSync(`ops/${name}.mjs`, "utf8"), name).toMatch(/review_model: REVIEW_MODEL/);
     }
+    expect(readFileSync("ops/review-diagrams.mjs", "utf8")).toMatch(/model: reviewerFor\(\{ images: pngs\.length > 0 \}\)/);
   });
 });

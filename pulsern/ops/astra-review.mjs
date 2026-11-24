@@ -638,18 +638,16 @@ export async function runReview({ base, head, pr = null, outDir, rulesPath, cwd 
       return { code: 1, report };
     }
 
-    /* Checkpoint BEFORE spending. If this process is killed during the paid
-       call — a cancelled run, a timeout, a lost runner — this is the report
-       that survives, and it says plainly that the review did not finish. */
-    report.error = `The review was started but did not finish: the run was stopped while waiting for ${REVIEWER_NAME}. Recorded as a failure.`;
-    report.verdict = "FAIL";
-    save();
-
+    /* Checkpoint BEFORE spending. The model is chosen first, so a run that
+       dies during the call still names the model that was about to be paid. */
     const prompt = buildPrompt({ rules, files: plan.files, skipped, meta });
     const maxTokens = reviewMaxTokens();
     const model = reviewerFor({ images: images.length > 0 });
     assertCrossFamily(AUTHOR_MODEL_FAMILY_PROBE, model);
     report.model = model;
+    report.error = `The review was started but did not finish: the run was stopped while waiting for ${model}. Recorded as a failure.`;
+    report.verdict = "FAIL";
+    save();
     const res = await callModel({ model, prompt, messages: buildMessages(prompt, images), maxTokens, reasoningEffort: "high", responseFormat: FINDINGS_SCHEMA });
     report.usage = res.usage;
     report.model = res.model || REVIEW_MODEL;
