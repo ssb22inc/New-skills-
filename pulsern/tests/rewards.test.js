@@ -197,6 +197,11 @@ describe("Today's shift and weekly rounds", () => {
     expect(g.granted).toBe(true);
     expect(g.rewards.covers).toBe(1);
     expect(maybeGrantCover(g.rewards, "2026-11-28").rewards).toBe(g.rewards); // once per week
+    const marked = markMomentsSeen(r, [{ kind: "rank", index: 2 }]);
+    const both = maybeGrantCover(marked, "2026-11-27").rewards;
+    expect(both.rankHigh).toBe(2);
+    expect(both.covers).toBe(1);
+    expect(both.coverWeeks).toContain("2026-11-23");
     const capped = maybeGrantCover({ ...r, covers: MAX_COVERS }, "2026-11-27");
     expect(capped.rewards.covers).toBe(MAX_COVERS);
     const wk = weekRounds(g.rewards, "2026-11-27");

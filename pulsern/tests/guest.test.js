@@ -3,10 +3,11 @@
    collision-free handoff into the account blob. */
 import { describe, it, expect } from "vitest";
 import {
-  GUEST_KEY, GUEST_LIMIT, guestPool, emptyGuest, guestAnswer, guestRemaining, mergeGuestIntoBlob, loadGuest, saveGuest, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, guestFresh, guestSummary,
+  GUEST_KEY, GUEST_LIMIT, guestPool, emptyGuest, guestAnswer, guestRemaining, mergeGuestIntoBlob, loadGuest, saveGuest, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, linkBuiltInGuest, guestFresh, guestSummary,
 } from "../src/guest.js";
 import { QUESTIONS } from "../src/App.jsx";
 import { migrateBlob } from "../src/state.js";
+import { answerXp } from "../src/rewards.js";
 import { emptyAbility, updateAbility } from "../src/ability-engine.js";
 import { authModeFromUrl } from "../src/app-routing.js";
 
@@ -69,6 +70,34 @@ describe("guest XP uses the same rules as an account", () => {
     expect(again.res).toMatchObject({ xp: 0, reason: "repeat", run: 0 });
     expect(again.guest.bestRun).toBe(1);
     expect(again.guest.run).toBe(0);
+  });
+  it("flush finishes the newest queued save before sign-out can drop it", async () => {
+    const queue = createSaveQueue();
+    let release;
+    let started;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const startedGate = new Promise((resolve) => { started = resolve; });
+    const writes = [];
+    queue.enqueue(queue.next(), async () => { started(); await gate; writes.push("first"); });
+    await startedGate;
+    queue.enqueue(queue.next(), async () => { writes.push("second"); });
+    const pending = queue.flush();
+    release();
+    await expect(pending).resolves.toEqual({ ok: true });
+    expect(writes).toEqual(["first", "second"]);
+    const dropped = queue.enqueue(queue.next(), async () => { writes.push("third"); });
+    queue.invalidate();
+    await expect(dropped).resolves.toMatchObject({ stale: true });
+    expect(writes).toEqual(["first", "second"]);
+  });
+  it("a merged built-in is not a new question, and a different bank item with the same number still is", () => {
+    const bundled = { id: 7, cat: "Pharmacology", diff: 2, stem: "Which action should the nurse take first for this client?" };
+    const bank = { id: 7, cat: "Pharmacology", diff: 2, stem: "A different shared-bank stem." };
+    const log = [{ id: "guest-7", cat: "Pharmacology", diff: 2, correct: true }];
+    const linked = linkBuiltInGuest(bundled, [bundled]);
+    expect(answerXp({ q: linked, correct: true, ms: 9000, log }).reason).toBe("repeat");
+    expect(linkBuiltInGuest(bank, [bundled])).toBe(bank);
+    expect(answerXp({ q: bank, correct: true, ms: 9000, log }).reason).toBe("correct");
   });
   it("a missing session is not a successful save", () => {
     expect(persistDecision(null, "user-1")).toBe("signed-out");

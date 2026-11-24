@@ -315,7 +315,7 @@ import {
   RewardsStyle, StreakGlyph, EcgBeat, ComboChip, MomentSheet, streakMoment, ShiftCard, CareerCard,
   BadgeGrid, RoundsCard, BestsCard, SessionRecap, EffectsCard, comboSpeech, useAnnouncer,
 } from "./rewards-ui.jsx";
-import { loadGuest, mergeGuestIntoBlob, clearGuest, guestSummary, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision } from "./guest.js";
+import { loadGuest, mergeGuestIntoBlob, clearGuest, guestSummary, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, linkBuiltInGuest } from "./guest.js";
 import { signOutAndForgetTrial as signOut } from "./sign-out.js";
 import { readProgress, parseProgress, clearLegacyProgressBackup, guestHandoff } from "./progress-load.js";
 
@@ -508,9 +508,15 @@ export default function App() {
   const accountId = useRef(null);
   if (!saveQueue.current) saveQueue.current = createSaveQueue();
   useEffect(() => () => { saveQueue.current?.invalidate(); }, []);
-  const signOutAndForgetTrial = () => {
-    if (pendingHandoff.current && typeof window.confirm === "function" && !window.confirm("Your trial answers are not in this account yet. Sign out anyway? They will be removed from this device.")) return;
-    saveQueue.current?.invalidate();
+  const signOutAndForgetTrial = async () => {
+    const saved = await saveQueue.current.flush();
+    if (!saved.ok || pendingHandoff.current) {
+      const message = !saved.ok
+        ? "The latest answers have not saved. Sign out anyway? They will be lost."
+        : "Your trial answers are not in this account yet. Sign out anyway? They will be removed from this device.";
+      if (typeof window.confirm === "function" && !window.confirm(message)) return;
+    }
+    saveQueue.current.invalidate();
     accountId.current = null;
     signOut({ auth: supabase.auth, storage: window.localStorage });
   };
@@ -916,7 +922,8 @@ export default function App() {
      retrievals earn it; repeats, skips, and too-fast taps earn none.
      Returns the XP result so the feedback line shows exactly what was earned. */
   const record = (q, correct, opts = {}) => {
-    const res = answerXp({ q, correct, ms: opts.ms ?? Infinity, log });
+    const item = linkBuiltInGuest(q, QUESTIONS);
+    const res = answerXp({ q: item, correct, ms: opts.ms ?? Infinity, log });
     // population is additive on the log entry — old entries simply lack it
     setLog((l) => [...l, { id: q.id, cat: q.cat, diff: q.diff, correct, ...(q.population ? { pop: q.population } : {}) }]);
     if (opts.schedule !== false) setMissSchedule((m) => updateMissSchedule(m, q.id, correct));
@@ -934,12 +941,12 @@ export default function App() {
     }
     if (res.xp) setXp((x) => x + res.xp);
     /* A too-fast tap never builds a run, even when the XP reason is "repeat". */
-    const counts = answerCountsForRun({ correct, q, ms: opts.ms ?? Infinity });
+    const counts = answerCountsForRun({ correct, q: item, ms: opts.ms ?? Infinity });
     const nextRun = counts ? run + 1 : 0;
     const newBest = nextRun >= 3 && nextRun > bestRun;
     setRun(nextRun);
     if (counts) setBestRun((b) => Math.max(b, nextRun));
-    const prior = [...log].reverse().find((row) => String(row.id) === String(q.id) || (q.aliases ?? []).map(String).includes(String(row.id)) && row.cat === q.cat);
+    const prior = [...log].reverse().find((row) => String(row.id) === String(item.id) || (item.aliases ?? []).map(String).includes(String(row.id)) && row.cat === item.cat);
     setRewards((r) => bumpDay(r, todayStr(), { q: 1, ok: correct ? 1 : 0, xp: res.xp, fixes: correct && prior && prior.correct === false ? 1 : 0 }));
     const combo = counts ? comboFor(nextRun) : null;
     announce(comboSpeech(combo, newBest));
@@ -1022,7 +1029,7 @@ export default function App() {
     if (!loaded) return;
     const g = maybeGrantCover(rewardsRef.current, today);
     if (g.rewards === rewardsRef.current) return;
-    setRewards(g.rewards);
+    setRewards((r) => maybeGrantCover(r, today).rewards);
     if (g.granted) setMoments((m) => [...m, { kind: "cover", title: "Shift cover earned", line: "Five shifts this week. A cover protects your streak on a day you can't study, like a clinical day.", next: `${g.rewards.covers} of ${MAX_COVERS} banked` }]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, rewards.days, today]);
@@ -1856,7 +1863,11 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
     (!popFilter.length || popFilter.includes(x.population));
   const toggleIn = (arr, set) => (v) => set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
 
-  const freshPool = questions.filter((x) => !answeredIds.includes(x.id) && inFocus(x));
+  const freshPool = questions.filter((x) => {
+    if (!inFocus(x)) return false;
+    const linked = linkBuiltInGuest(x, QUESTIONS);
+    return !answeredIds.some((id) => String(id) === String(x.id) || (linked.aliases ?? []).map(String).includes(String(id)));
+  });
   const reviewQuestions = expandTrialQuestions(questions, log, QUESTIONS);
   /* Missed questions run on a spaced-review schedule (question-review.js):
      duePool = scheduled reviews whose LOCAL date has arrived; reviewPool =

@@ -93,7 +93,31 @@ export function createSaveQueue() {
       chain = run;
       return run;
     },
+    /* Wait until the newest payload has finished. Sign-out uses this so a
+       save that is only queued cannot be dropped on the floor. */
+    async flush() {
+      let result = { ok: true };
+      let seen = null;
+      while (chain !== seen) {
+        seen = chain;
+        result = await seen;
+      }
+      if (!result || result.ok) return { ok: true };
+      return { ok: false, ...result };
+    },
   };
+}
+
+/* A merged trial stores guest-<built-in id>. That alias belongs only to the
+   bundled question with the same stem, never to a shared-bank item that
+   happens to use the same number. */
+export function linkBuiltInGuest(q, registry = []) {
+  if (!q) return q;
+  const bundled = registry.find((item) => item && item.id === q.id && item.stem === q.stem);
+  if (!bundled) return q;
+  const alias = `guest-${bundled.id}`;
+  if ((q.aliases ?? []).map(String).includes(alias)) return q;
+  return { ...q, aliases: [...(q.aliases ?? []), alias] };
 }
 
 /* Kept for GUEST_TTL_DAYS after the LAST answer (the save screen says so),
