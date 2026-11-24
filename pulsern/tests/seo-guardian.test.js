@@ -9,8 +9,6 @@ import { PNG } from "pngjs";
 import { auditCommercialGovernance, auditGovernance, auditHtml } from "../ops/seo-guardian.mjs";
 import { candidateCommercialPagesFromDist, candidateGuidePagesFromDist, extractOutputText, guideCoverageFromEvidence, parseReview, runAdversary } from "../ops/seo-adversary-ai.mjs";
 import { adviseAdversary, enforceAdversary } from "../ops/seo-enforce-adversary.mjs";
-import { execFileSync } from "node:child_process";
-import { collectSources, isMarketingPagePath, marketingPagesChanged, parseNulNames, skippedReview } from "../ops/seo-page-change.mjs";
 import { articleJsonLd, related } from "../ops/build-learn.mjs";
 import { ARTICLES } from "../ops/learn-content.mjs";
 import { CLINICAL_ARTICLES } from "../ops/learn-clinical.mjs";
@@ -839,83 +837,16 @@ describe("SEO guardian", () => {
     await expect(adviseAdversary(badJson)).rejects.toThrow(/release blocker/i);
   });
 
-  /* Owner decision 2026-11-24: the model review is advisory and runs only
-     when a public marketing page changed. A missing report still fails when
-     the review was required. Every other check stays required. */
-  it("runs the advisory model review only for a public marketing page change", async () => {
+  /* Owner decision 2026-10-29: the model review is advisory. It must still
+     run on every change and its verdict must still be reported, while every
+     other check stays an explicit, required outcome. */
+  it("runs the advisory model review and keeps explicit outcome enforcement in workflow", async () => {
     const workflow = await fs.readFile(new URL("../../.github/workflows/pulsern-seo-guardian.yml", import.meta.url), "utf8");
     expect(workflow).toContain("Adversarial model review (advisory");
     expect(workflow).toContain("npm run seo:adversary");
-    expect(workflow).toContain("steps.pages.outputs.changed");
-    expect(workflow).toContain("--skip-report");
     expect(workflow).not.toContain("env.OPENROUTER_API_KEY != ''");
     expect(workflow).toContain("npm run seo:enforce -- --advisory");
-    expect(workflow).toContain("npm run seo:adversary");
     expect(workflow).not.toMatch(/seo:enforce[^\n]*\|\|/);
-    expect(workflow).toContain("git diff --no-renames --name-only -z");
-    expect(workflow).toContain("seo-page-change.mjs --nul");
-    expect(workflow).not.toMatch(/names=\$\(git diff/);
-    expect(isMarketingPagePath("pulsern/public/learn/nclex-fees-and-payment/index.html")).toBe(true);
-    expect(workflow).toContain("--assume-changed");
-    expect(isMarketingPagePath("pulsern/index.html")).toBe(true);
-    expect(isMarketingPagePath("pulsern/src/landing.jsx")).toBe(true);
-    expect(isMarketingPagePath("pulsern/ops/learn-content.mjs")).toBe(true);
-    expect(isMarketingPagePath("pulsern/ops/learn-clinical.mjs")).toBe(true);
-    expect(isMarketingPagePath("pulsern/ops/learn-exam.mjs")).toBe(true);
-    expect(isMarketingPagePath("pulsern/src/App.jsx")).toBe(false);
-    expect(isMarketingPagePath("pulsern/public/product/pulsern-today-dashboard.png")).toBe(false);
-    expect(marketingPagesChanged(["pulsern/src/App.jsx", "pulsern/ops/models.mjs"])).toBe(false);
-    expect(marketingPagesChanged(["pulsern/src/landing.jsx"])).toBe(true);
-    expect(marketingPagesChanged(["pulsern/ops/learn-clinical.mjs"])).toBe(true);
-    const sources = collectSources(["pulsern/src/landing.jsx"], (file) => {
-      if (file === "pulsern/src/landing.jsx") return 'import "./landing.css";\nimport { x } from "./grading-note.js";\n';
-      if (file === "pulsern/src/landing.css" || file === "pulsern/src/grading-note.js") return "";
-      throw new Error("missing");
-    });
-    expect(sources.has("pulsern/src/landing.css")).toBe(true);
-    const indexed = collectSources(["pulsern/src/landing.jsx"], (file) => {
-      if (file === "pulsern/src/landing.jsx") return 'import Banner from "./marketing-banner";\n';
-      if (file === "pulsern/src/marketing-banner/index.jsx") return "export default function Banner(){return null}\n";
-      throw new Error("missing");
-    });
-    expect(indexed.has("pulsern/src/marketing-banner/index.jsx")).toBe(true);
-    const queried = collectSources(["pulsern/src/landing.jsx"], (file) => {
-      if (file === "pulsern/src/landing.jsx") return 'import copy from"./marketing-copy.html?raw";\n';
-      if (file === "pulsern/src/marketing-copy.html") return "<p>copy</p>";
-      throw new Error("missing");
-    });
-    expect(queried.has("pulsern/src/marketing-copy.html")).toBe(true);
-    expect(sources.has("pulsern/src/grading-note.js")).toBe(true);
-    expect(parseReview(JSON.stringify(skippedReview())).verdict).toBe("PASS");
-    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-page-names-"));
-    const git = (...args) => execFileSync("git", args, { cwd: dir });
-    git("init", "-q"); git("config", "user.email", "t@t"); git("config", "user.name", "t");
-    await fs.mkdir(path.join(dir, "pulsern/public"), { recursive: true });
-    await fs.writeFile(path.join(dir, "pulsern/public/révision.html"), "old\n");
-    git("add", "-A"); git("commit", "-qm", "b");
-    await fs.writeFile(path.join(dir, "pulsern/public/révision.html"), "new\n");
-    await fs.mkdir(path.join(dir, "pulsern/public/odd"), { recursive: true });
-    await fs.writeFile(path.join(dir, "pulsern/public/odd", "a\nb.html"), "x\n");
-    git("add", "-A"); git("commit", "-qm", "h");
-    const raw = execFileSync("git", ["diff", "--no-renames", "--name-only", "-z", "HEAD~1", "HEAD"], { cwd: dir });
-    const names = parseNulNames(raw);
-    expect(names).toContain("pulsern/public/révision.html");
-    expect(names).toContain("pulsern/public/odd/a\nb.html");
-    expect(marketingPagesChanged(names)).toBe(true);
-    const moved = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-page-move-"));
-    const mgit = (...args) => execFileSync("git", args, { cwd: moved });
-    mgit("init", "-q"); mgit("config", "user.email", "t@t"); mgit("config", "user.name", "t");
-    await fs.mkdir(path.join(moved, "pulsern/public/campaign"), { recursive: true });
-    await fs.writeFile(path.join(moved, "pulsern/public/campaign/index.html"), "<p>page</p>\n");
-    mgit("add", "-A"); mgit("commit", "-qm", "b");
-    await fs.mkdir(path.join(moved, "pulsern/archive"), { recursive: true });
-    mgit("mv", "pulsern/public/campaign/index.html", "pulsern/archive/retired-campaign.html");
-    mgit("commit", "-qm", "h");
-    const movedNames = parseNulNames(execFileSync("git", ["diff", "--no-renames", "--name-only", "-z", "HEAD~1", "HEAD"], { cwd: moved }));
-    expect(movedNames).toContain("pulsern/public/campaign/index.html");
-    expect(marketingPagesChanged(movedNames)).toBe(true);
-    await fs.rm(dir, { recursive: true, force: true });
-    await fs.rm(moved, { recursive: true, force: true });
     for (const id of ["tests", "build", "deterministic", "product_images", "app_boundary", "crawl", "crawl_live", "live_release", "indexnow", "sources", "commercial", "exam_rules", "accessibility"]) {
       expect(workflow).toContain(`test "\${{ steps.${id}.outcome }}" = "success"`);
     }

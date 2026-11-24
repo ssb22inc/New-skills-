@@ -110,39 +110,15 @@ jobs:
         if: always()
         continue-on-error: true
         run: npm run seo:accessibility
-      - name: See whether a public marketing page changed
-        id: pages
-        if: always()
-        run: |
-          set -euo pipefail
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git fetch -q --depth=1 origin "${{ github.event.pull_request.base.sha }}"
-            git diff --no-renames --name-only -z FETCH_HEAD HEAD | node ops/seo-page-change.mjs --nul
-          elif [ "${{ github.event_name }}" = "push" ]; then
-            before="${{ github.event.before }}"
-            if [ -n "$before" ] && [ "$before" != "0000000000000000000000000000000000000000" ]; then
-              git fetch -q --depth=1 origin "$before"
-              git diff --no-renames --name-only -z FETCH_HEAD HEAD | node ops/seo-page-change.mjs --nul
-            else
-              node ops/seo-page-change.mjs --nul </dev/null
-            fi
-          else
-            node ops/seo-page-change.mjs --assume-changed
-          fi
       - name: Adversarial model review (advisory, owner decision 2026-10-29)
         id: adversary
         if: always()
         continue-on-error: true
-        # The model is called only when a public marketing page changed
-        # (owner order 2026-11-24). Every run still leaves a complete report.
+        # The review's findings go into the log too, so a FAIL can be read
+        # without downloading the evidence artifact.
         run: |
           set +e
-          if [ "${{ steps.pages.outputs.changed }}" = "true" ] || [ "${{ steps.pages.outcome }}" != "success" ]; then
-            npm run seo:adversary; rc=$?
-          else
-            node ops/seo-page-change.mjs --skip-report reports/seo/adversary.json reports/seo/adversary.md
-            rc=$?
-          fi
+          npm run seo:adversary; rc=$?
           [ -f reports/seo/adversary.md ] && cat reports/seo/adversary.md
           exit $rc
       - name: Bind evidence to commit
@@ -173,8 +149,9 @@ jobs:
           test "${{ steps.commercial.outcome }}" = "success"
           test "${{ steps.exam_rules.outcome }}" = "success"
           test "${{ steps.accessibility.outcome }}" = "success"
-          # The model review is advisory (pulsern/CLAUDE.md). The model is
-          # called only when a public marketing page changed. A report is
-          # still required: a missing or malformed report fails this gate,
-          # and a completed FAIL is a warning. Every check above stays required.
+          # The model review is advisory by the owner's decision of
+          # 2026-10-29 (pulsern/CLAUDE.md): it must still run and leave a
+          # complete, valid report, or this gate fails. A completed FAIL
+          # verdict is reported as a warning instead of failing the gate.
+          # Every check above stays required.
           npm run seo:enforce -- --advisory
