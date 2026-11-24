@@ -216,6 +216,8 @@ export function CareerCard({ career, full = false, tourClass = "" }) {
         </>
       ) : <p className="small tip">Top of the ladder. Keep every category sharp.</p>}
       {full && (
+        <details className="rw-ladder-wrap">
+        <summary>All {CAREER.length} ranks and what each one takes</summary>
         <ol className="rw-ladder" aria-label="Career ladder">
           {CAREER.map((c, i) => (
             <li key={c.name} className={i < index ? "held" : i === index ? "now" : ""}>
@@ -225,8 +227,9 @@ export function CareerCard({ career, full = false, tourClass = "" }) {
             </li>
           ))}
         </ol>
+        <p className="small tip">Ranks need recent accuracy and category mastery, not just volume. A rank, once earned, is never taken away.</p>
+        </details>
       )}
-      {full && <p className="small tip">Ranks need recent accuracy and category mastery, not just volume. A rank, once earned, is never taken away.</p>}
     </section>
   );
 }
@@ -443,6 +446,11 @@ export function RewardsStyle() {
       .rw-req-mark{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;flex:0 0 auto;color:var(--btn-ink)}
       .rw-reqs li.met .rw-req-mark{background:var(--teal);border-color:var(--teal)}
       .rw-req-have{margin-left:auto;font-size:12px;color:var(--accent-ink)}
+      .rw-ladder-wrap{margin:10px 0 0;border-top:1px solid var(--line)}
+      .rw-ladder-wrap summary{min-height:44px;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;font-weight:600;color:var(--accent-ink);list-style:none}
+      .rw-ladder-wrap summary::-webkit-details-marker{display:none}
+      .rw-ladder-wrap summary::after{content:"";width:8px;height:8px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);margin:-4px 0 0 4px}
+      .rw-ladder-wrap[open] summary::after{transform:rotate(-135deg);margin-top:4px}
       .rw-ladder{list-style:none;padding:0;margin:14px 0 4px;border-left:2px solid var(--line);margin-left:9px}
       .rw-ladder li{position:relative;display:flex;flex-wrap:wrap;align-items:baseline;column-gap:8px;row-gap:0;padding:6px 0 6px 18px;font-size:13.5px;color:var(--muted)}
       .rw-ladder li.held,.rw-ladder li.now{color:var(--ink)}
