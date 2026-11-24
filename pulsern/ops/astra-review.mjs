@@ -48,7 +48,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { llmCall } from "./llm.mjs";
 import { isCanonicalPng } from "./png-canonical.mjs";
-import { REVIEW_MODEL, REVIEWER_NAME, assertCrossFamily } from "./models.mjs";
+import { REVIEW_MODEL, REVIEWER_NAME, REVIEW_SEES_IMAGES, assertCrossFamily } from "./models.mjs";
 
 /* The author of the code under review, so the cross-family check is real. */
 export const AUTHOR_MODEL_FAMILY_PROBE = "anthropic/claude";
@@ -644,6 +644,21 @@ export async function runReview({ base, head, pr = null, outDir, rulesPath, cwd 
     report.error = `The review was started but did not finish: the run was stopped while waiting for ${REVIEWER_NAME}. Recorded as a failure.`;
     report.verdict = "FAIL";
     save();
+
+    if (images.length && !REVIEW_SEES_IMAGES) {
+      report.findings = [{
+        severity: "blocker", file: images[0].path, line: null, title: "This reviewer cannot see images",
+        problem: `${REVIEW_MODEL} accepts text only. ${images.map((img) => img.path).join(", ")} changed, so the review stopped before any call.`,
+        failure_scenario: "A text model is treated as though it had inspected the pixels.",
+        fix: "Review the image change with a model whose input modalities include images.",
+        confidence: "high",
+      }];
+      report.error = null;
+      report.assessment = "Refused to review images with a text-only model.";
+      Object.assign(report, verdictFor(report.findings));
+      save();
+      return { code: 1, report };
+    }
 
     const prompt = buildPrompt({ rules, files: plan.files, skipped, meta });
     const maxTokens = reviewMaxTokens();
