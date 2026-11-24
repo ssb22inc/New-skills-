@@ -38,46 +38,65 @@ export function latestResults(log) {
   return latest;
 }
 
-function numericPeers(questions, id) {
-  return (questions ?? []).filter((q) => q && String(q.id) === String(id));
-}
-
-function unscopedRows(log, id) {
-  return (log ?? []).filter((row) => row && !row.unclassified && questionIdentity(row) == null && row.id != null && String(row.id) === String(id));
-}
-
 /* A canonical row wins. An old save that only has the number counts
    when this catalog has exactly one question with that number. When
    several share it, the old row stays unresolved: it is not treated
    as a new question, and it is not pinned on any of them. */
-export function settledResult(question, log, questions = null) {
-  const pool = questions ?? [question];
-  const id = answerIdentity(question);
-  const latest = latestResults(log);
-  if (id != null && Object.prototype.hasOwnProperty.call(latest, id)) return { state: "known", correct: !!latest[id] };
-  const raw = unscopedRows(log, question?.id);
-  if (raw.length) {
-    if (numericPeers(pool, question.id).length === 1) return { state: "known", correct: !!raw[raw.length - 1].correct };
-    return { state: "unresolved", correct: !!raw[raw.length - 1].correct };
+export function historyIndex(log) {
+  const latest = Object.create(null);
+  const unscoped = new Map();
+  const unresolved = new Map();
+  for (const row of log ?? []) {
+    if (!row) continue;
+    if (row.unclassified && row.id != null) {
+      unresolved.set(String(row.id), !!row.correct);
+      continue;
+    }
+    const id = questionIdentity(row);
+    if (id != null) latest[id] = !!row.correct;
+    else if (row.id != null) unscoped.set(String(row.id), !!row.correct);
   }
-  const unresolved = (log ?? []).filter((row) => row?.unclassified && question?.id != null && String(row.id) === String(question.id));
-  if (unresolved.length) return { state: "unresolved", correct: !!unresolved[unresolved.length - 1].correct };
+  return { latest, unscoped, unresolved };
+}
+
+function peerCounts(questions) {
+  const counts = new Map();
+  for (const q of questions ?? []) {
+    if (q?.id == null) continue;
+    const id = String(q.id);
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return counts;
+}
+
+export function settledResult(question, log, questions = null, index = null, peers = null) {
+  const idx = index ?? historyIndex(log);
+  const counts = peers ?? peerCounts(questions ?? [question]);
+  const id = answerIdentity(question);
+  if (id != null && Object.prototype.hasOwnProperty.call(idx.latest, id)) return { state: "known", correct: !!idx.latest[id] };
+  const num = question?.id != null ? String(question.id) : null;
+  if (num && idx.unscoped.has(num)) {
+    const correct = idx.unscoped.get(num);
+    return (counts.get(num) ?? 0) === 1 ? { state: "known", correct } : { state: "unresolved", correct };
+  }
+  if (num && idx.unresolved.has(num)) return { state: "unresolved", correct: idx.unresolved.get(num) };
   return { state: "none" };
 }
 
 /* Review date for this question. A date stored under the old number
    is used only when the number identifies one question in the catalog. */
-export function scheduleEntry(question, schedule, questions = null, log = null) {
+export function scheduleEntry(question, schedule, questions = null, log = null, index = null, peers = null) {
   if (!schedule || !question) return null;
   const id = answerIdentity(question);
   if (id != null && schedule[id]) return schedule[id];
   const raw = schedule[question.id] ?? schedule[String(question.id)];
   if (!raw) return null;
   if (!questionIdentity(question)) return raw;
-  const pool = questions ?? [question];
-  const namedUnresolved = (log ?? []).some((row) => row?.unclassified && String(row.id) === String(question.id));
-  if (namedUnresolved) return raw;
-  if (numericPeers(pool, question.id).length !== 1) return null;
+  const idx = index ?? historyIndex(log);
+  const num = String(question.id);
+  if (idx.unresolved.has(num)) return raw;
+  const counts = peers ?? peerCounts(questions ?? [question]);
+  if ((counts.get(num) ?? 0) !== 1) return null;
   return raw;
 }
 
@@ -113,7 +132,9 @@ export function questionByIdentity(questions, id) {
 /* Questions whose canonical key is not already in the log. A built-in
    answer does not hide the bank question that shares its number. */
 export function unseenQuestions(questions, log) {
-  return (questions ?? []).filter((q) => q && settledResult(q, log, questions).state === "none");
+  const index = historyIndex(log);
+  const peers = peerCounts(questions);
+  return (questions ?? []).filter((q) => q && settledResult(q, log, questions, index, peers).state === "none");
 }
 
 /* A merged trial answer keeps the built-in stem. Its navigation id is
@@ -137,15 +158,17 @@ export function expandTrialQuestions(questions, log, registry = null) {
 }
 
 export function reviewPools(questions, log, schedule, today = todayStr()) {
+  const index = historyIndex(log);
+  const peers = peerCounts(questions);
   const idOf = (q) => answerIdentity(q) ?? String(q.id);
-  const dueOf = (q) => scheduleEntry(q, schedule, questions, log);
+  const dueOf = (q) => scheduleEntry(q, schedule, questions, log, index, peers);
   const due = questions.filter((q) => {
     const entry = dueOf(q);
     return !!entry && typeof entry.due === "string" && entry.due <= today;
   }).sort((a, b) => (dueOf(a).due < dueOf(b).due ? -1 : dueOf(a).due > dueOf(b).due ? 1 : 0));
   const dueIds = new Set(due.map(idOf));
   const misses = questions.filter((q) => {
-    const settled = settledResult(q, log, questions);
+    const settled = settledResult(q, log, questions, index, peers);
     return (settled.state === "known" || settled.state === "unresolved") && settled.correct === false;
   });
   const review = [...due, ...misses.filter((q) => !dueIds.has(idOf(q)))];
@@ -157,10 +180,12 @@ export function reviewPools(questions, log, schedule, today = todayStr()) {
    scheduled for a later day wait for that day (they stay available on demand
    in Review Misses). */
 export function todayPool(questions, log, schedule, freshPool, today = todayStr()) {
+  const index = historyIndex(log);
+  const peers = peerCounts(questions);
   const { due, misses } = reviewPools(questions, log, schedule, today);
   if (due.length) return due;
   const waiting = (q) => {
-    const entry = scheduleEntry(q, schedule, questions, log);
+    const entry = scheduleEntry(q, schedule, questions, log, index, peers);
     return !!entry && !(typeof entry.due === "string" && entry.due <= today);
   };
   return [...misses.filter((q) => !waiting(q)), ...freshPool];

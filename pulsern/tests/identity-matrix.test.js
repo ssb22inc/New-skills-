@@ -199,8 +199,8 @@ describe("review, restore, and import use the canonical key", () => {
     expect(merged.log.map((row) => row.correct)).toEqual([false, true]);
     expect(latestResults(merged.log)["builtin:7"]).toBe(true);
     expect(merged.missSchedule["builtin:7"].interval).toBe(3);
-    expect(merged.rewards.days[TODAY]).toMatchObject({ q: 1, xp: account.xp });
-    expect(merged.xp).toBe(account.xp);
+    expect(merged.rewards.days[TODAY]).toMatchObject({ q: 1, xp: REVIEW_FIX_BONUS, fixes: 1 });
+    expect(merged.xp).toBe(REVIEW_FIX_BONUS);
     expect(merged.run).toBe(4);
   });
 
@@ -287,6 +287,49 @@ describe("review, restore, and import use the canonical key", () => {
     const bundled = stampCatalogQuestion({ id: 101, stem: "Bundled 101.", cat: "Pharmacology", diff: 2 }, [{ id: 101, stem: "Bundled 101." }]);
     expect(reviewPools([bankQ, bundled], log, { 101: { interval: 1, due: "2026-01-16" } }, "2026-01-16").review.map(questionIdentity)).toEqual(["bank:101", "builtin:101"]);
     expect(unseenQuestions([bankQ, bundled], log)).toEqual([]);
+  });
+
+  it("a correct review of an ambiguous miss advances that question's schedule", () => {
+    const q = stampCatalogQuestion({ id: 7, stem: "Bank stem.", cat: "Pharmacology", diff: 2 }, []);
+    const state = {
+      ...blank(),
+      log: [{ id: 7, unclassified: true, key: null, cat: "Pharmacology", diff: 2, correct: false }],
+      missSchedule: { 7: { interval: 1, due: TODAY } },
+    };
+    const next = applyAnswer(state, { q, correct: true, ms: 9000, today: TODAY, attempt: "review-bank" }).state;
+    expect(next.missSchedule[7]).toBeUndefined();
+    expect(next.missSchedule["bank:7"].interval).toBe(3);
+    expect(next.missSchedule["bank:7"].due > TODAY).toBe(true);
+    expect(reviewPools([q], next.log, next.missSchedule, TODAY).due).toEqual([]);
+  });
+
+  it("an earlier correct trial is not scored as a fix for a later miss", () => {
+    const missed = applyAnswer(blank(), {
+      q: builtin, correct: false, ms: 9000, today: "2026-11-24", at: 5_000, attempt: "tue-miss",
+    }).state;
+    const imported = applyAnswer(missed, {
+      q: builtin, correct: true, ms: 9000, today: "2026-11-23", at: 1_000, attempt: "mon-correct",
+    }).state;
+    const chronological = applyAnswer(applyAnswer(blank(), {
+      q: builtin, correct: true, ms: 9000, today: "2026-11-23", at: 1_000, attempt: "chrono-mon",
+    }).state, {
+      q: builtin, correct: false, ms: 9000, today: "2026-11-24", at: 5_000, attempt: "chrono-tue",
+    }).state;
+    expect(imported.xp).toBe(20);
+    expect(imported.xp).toBe(chronological.xp);
+    expect(imported.rewards.days["2026-11-23"]).toMatchObject({ xp: 20, fixes: 0 });
+    expect(imported.rewards.days["2026-11-24"]).toMatchObject({ xp: 0, fixes: 0 });
+  });
+
+  it("builds review pools from one pass over a large bank and history", () => {
+    const questions = Array.from({ length: 3000 }, (_, i) => ({ id: i + 1, source: "bank", key: `bank:${i + 1}`, cat: "Pharmacology", diff: 1, stem: `stem ${i}` }));
+    const log = questions.map((q, i) => ({ id: q.id, key: q.key, source: "bank", cat: q.cat, correct: i !== 10, day: TODAY }));
+    const started = performance.now();
+    const pools = reviewPools(questions, log, {}, TODAY);
+    unseenQuestions(questions, log);
+    todayPool(questions, log, {}, [], TODAY);
+    expect(performance.now() - started).toBeLessThan(250);
+    expect(pools.misses.map(questionIdentity)).toEqual(["bank:11"]);
   });
 
   it("a correct review moves a legacy numeric schedule onto the canonical key", () => {

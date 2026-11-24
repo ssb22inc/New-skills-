@@ -72,6 +72,33 @@ function reconcileStreak(streak, log) {
   return { ...streak, count, shield };
 }
 
+/* XP for one question, in log order. Later answers are not visible to
+   earlier ones, so an import cannot treat a future miss as a prior miss. */
+function creditForQuestion(rows, q) {
+  let xp = 0;
+  const days = {};
+  const prefix = [];
+  for (const row of rows ?? []) {
+    if (row && questionIdentity(row) === q.key && !row.unclassified) {
+      const scored = answerXp({
+        q: { id: row.id, key: row.key, source: row.source, cat: row.cat, diff: row.diff ?? q.diff, stem: q.stem, population: row.pop },
+        correct: !!row.correct,
+        ms: Number.isFinite(row.ms) ? row.ms : Infinity,
+        log: prefix,
+      });
+      xp += scored.xp || 0;
+      if (typeof row.day === "string") {
+        const day = days[row.day] ?? { xp: 0, fixes: 0 };
+        day.xp += scored.xp || 0;
+        if (scored.fix) day.fixes += 1;
+        days[row.day] = day;
+      }
+    }
+    prefix.push(row);
+  }
+  return { xp, days };
+}
+
 function crossedMilestones(rewards, count) {
   const had = new Set(rewards?.milestones ?? []);
   return STREAK_MILESTONES.filter((m) => m <= count && !had.has(m));
@@ -85,7 +112,7 @@ function adoptRawSchedule(schedule, q, log) {
   if (!raw) return map;
   const id = String(q.id);
   const claimed = Object.keys(map).some((key) => key !== q.key && key.endsWith(`:${id}`));
-  const otherSource = (log ?? []).some((row) => String(row?.id) === id && ((row.source && row.source !== q.source) || row.unclassified));
+  const otherSource = (log ?? []).some((row) => String(row?.id) === id && row.source && row.source !== q.source && !row.unclassified);
   if (claimed || otherSource) return map;
   map[q.key] = raw;
   delete map[q.id];
@@ -141,7 +168,7 @@ export function applyAnswer(state, input) {
   const at = historical ? input.at : Date.now();
   const calibration = input.calibration ?? {};
   const rating = q.unclassified ? null : itemRating(q, calibration);
-  const res = q.unclassified
+  let res = q.unclassified
     ? { xp: 0, reason: "unclassified", base: 0, bonus: 0, fix: false }
     : answerXp({ q, correct, ms, log });
   const counts = !q.unclassified && answerCountsForRun({ correct, q, ms });
@@ -157,6 +184,7 @@ export function applyAnswer(state, input) {
     ...(today ? { day: today } : {}),
     ...(q.population ? { pop: q.population } : {}),
     ...(Number.isFinite(rating) ? { rating } : {}),
+    ...(Number.isFinite(ms) ? { ms } : {}),
     at,
     origin: "recorded",
   };
@@ -171,12 +199,26 @@ export function applyAnswer(state, input) {
       streakNote: null,
     };
   }
-  const prior = [...log].reverse().find((r) => sameAnswer(q, r));
+  const prior = [...(insertedBehind ? placed.slice(0, placed.indexOf(row)) : log)].reverse().find((r) => sameAnswer(q, r));
   const replayed = insertedBehind ? replayCategory(placed, q.cat) : null;
   const ability = replayed
     ? { ...(state.ability ?? {}), [q.cat]: replayed }
     : updateAbility(state.ability, { ...q, rating }, correct, calibration).ability;
-  let rewards = bumpDay(state.rewards, today, { q: 1, ok: correct ? 1 : 0, xp: res.xp, fixes: correct && prior && prior.correct === false ? 1 : 0 });
+  let rewards;
+  if (insertedBehind && q.key) {
+    const before = creditForQuestion(log, q);
+    const after = creditForQuestion(placed, q);
+    res = { xp: after.xp - before.xp, reason: "reconcile", base: after.xp - before.xp, bonus: 0, fix: false };
+    rewards = bumpDay(state.rewards, today, { q: 1, ok: correct ? 1 : 0, xp: 0, fixes: 0 });
+    const days = new Set([...Object.keys(before.days), ...Object.keys(after.days)]);
+    for (const day of days) {
+      const was = before.days[day] ?? { xp: 0, fixes: 0 };
+      const now = after.days[day] ?? { xp: 0, fixes: 0 };
+      if (now.xp !== was.xp || now.fixes !== was.fixes) rewards = bumpDay(rewards, day, { xp: now.xp - was.xp, fixes: now.fixes - was.fixes });
+    }
+  } else {
+    rewards = bumpDay(state.rewards, today, { q: 1, ok: correct ? 1 : 0, xp: res.xp, fixes: correct && prior && prior.correct === false ? 1 : 0 });
+  }
   let streak = state.streak;
   let streakNote = null;
   if (!streakDayCounted(streak, null, today)) {
