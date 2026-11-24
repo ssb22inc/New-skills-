@@ -41,7 +41,7 @@ const questions = new Proxy({}, { get(_t, p) {
   return () => questions;
 } });
 const progress = new Proxy({}, { get(_t, p) {
-  if (p === "then") return (res) => Promise.resolve(window.__readError ? { data: null, error: { message: "network" } } : window.__nullBlob ? { data: { blob: null }, error: null } : window.__row ? { data: { blob: window.__row }, error: null } : { data: null, error: null }).then(res);
+  if (p === "then") return (res) => Promise.resolve(window.__readError ? { data: null, error: { message: "network" } } : window.__nullBlob ? { data: { blob: null, revision: window.__revision || 0 }, error: null } : window.__row ? { data: { blob: window.__row, revision: window.__revision || 0 }, error: null } : { data: null, error: null }).then(res);
   if (p === "delete") { window.__deletes = (window.__deletes || 0) + 1; window.__row = null; window.__hasRow = false; window.__revision = 0; return () => progress; }
   if (p === "update" || p === "insert" || p === "upsert") return (row) => {
     const kind = p;
@@ -109,13 +109,18 @@ const progress = new Proxy({}, { get(_t, p) {
   };
   return () => progress;
 } });
+const parked = new Proxy({}, { get(_t, p) {
+  if (p === "then") return (res) => Promise.resolve({ data: window.__pendingRows || [], error: null }).then(res);
+  if (p === "delete") { window.__pendingDeletes = (window.__pendingDeletes || 0) + 1; window.__pendingRows = []; return () => parked; }
+  return () => parked;
+} });
 export const supabase = {
   auth: {
     getSession: async () => ({ data: { session: window.__session || null } }),
     onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
     signOut: async () => { window.__signOuts = (window.__signOuts || 0) + 1; return { error: null }; },
   },
-  from: (t) => (t === "progress" ? progress : t === "questions" ? questions : t === "case_studies" ? cases : q),
+  from: (t) => (t === "progress" ? progress : t === "progress_pending_merge" ? parked : t === "questions" ? questions : t === "case_studies" ? cases : q),
   rpc: () => q,
 };`;
 const supabaseStub = {

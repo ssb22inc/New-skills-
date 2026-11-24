@@ -801,7 +801,7 @@ export default function App() {
       try {
         const absorbed = await store.absorbPending(STORE_KEY);
         if (!stillCurrent()) return;
-        if (absorbed) s = absorbed;
+        if (absorbed) s = migrateBlob(absorbed, CATS);
       } catch {
         setLoaded(false);
         setSaveBlocked(true);

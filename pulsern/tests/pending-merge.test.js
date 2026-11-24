@@ -2,6 +2,7 @@
    devices already use. Doing it twice does not score the answer again. */
 import { describe, it, expect } from "vitest";
 import { reconcileProgress, foldPendingProgress } from "../src/guest.js";
+import { migrateBlob } from "../src/state.js";
 import { emptyAbility, ABILITY_CATS, updateAbility } from "../src/ability-engine.js";
 import { emptyRewards } from "../src/rewards.js";
 
@@ -80,6 +81,14 @@ describe("a parked snapshot uses the device conflict merge", () => {
     expect(folded.rewards.badgesSeen).toEqual(emptyRewards().badgesSeen);
     expect(folded.streak.shield).toBe(false);
     expect(foldPendingProgress(folded, [pending]).srsMap.c1.due).toBe("2026-12-01");
+  });
+
+  it("migrates a parked snapshot that has no rewards object", () => {
+    const stored = { log: [answer("a", 1, "Pharmacology", "2026-11-24")], xp: 10 };
+    const pending = { log: [{ id: 9, cat: "Pharmacology", diff: 1, correct: true }], xp: 10 };
+    const ready = migrateBlob(foldPendingProgress(stored, [pending]), ABILITY_CATS);
+    expect(ready.rewards.badgesSeen).toBeTruthy();
+    expect(ready.log.map((row) => row.id)).toEqual([1, 9]);
   });
 
   it("does not score the parked snapshot again the second time", () => {

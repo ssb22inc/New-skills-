@@ -581,7 +581,7 @@ function mergeMap(base, server, local) {
 }
 
 function legacySignature(row) {
-  return JSON.stringify([row?.id ?? "", row?.correct ?? "", row?.day ?? "", row?.at ?? "", row?.ms ?? "", row?.key ?? "", row?.cat ?? ""]);
+  return JSON.stringify([row?.id ?? "", row?.correct ?? "", row?.day ?? "", row?.at ?? "", row?.ms ?? "", row?.cat ?? ""]);
 }
 
 function replayUnseen(base, rows) {

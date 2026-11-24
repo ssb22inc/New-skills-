@@ -477,6 +477,17 @@ describe("a revision conflict keeps both devices' answers", () => {
     expect(merged.ability.Pharmacology.n).toBe(inOrder.ability.Pharmacology.n);
   });
 
+  it("does not score a named legacy miss as a second answer", () => {
+    const legacy = { id: 4, cat: "Pharmacology", diff: 1, correct: false };
+    const named = { ...legacy, source: "bank", key: "bank:4" };
+    const ability = updateAbility(emptyAbility(ABILITY_CATS), { id: 4, cat: "Pharmacology", diff: 1 }, false).ability;
+    const baseline = { log: [legacy], xp: 0, ability, rewards: emptyRewards(), missSchedule: {}, daily: null, streak: null, bestRun: 0 };
+    const fresh = { id: 5, key: "bank:5", source: "bank", cat: "Pharmacology", diff: 1, correct: true, attempt: "live", at: 2, seq: 1, day: "2026-11-24", ms: 9000, words: 8, rating: 1300 };
+    const merged = blobForSave(baseline, { ...baseline, log: [named, fresh] }, baseline);
+    expect(merged.log).toHaveLength(2);
+    expect(merged.ability.Pharmacology.n).toBe(ability.Pharmacology.n + 1);
+  });
+
   it("keeps two identical legacy misses when a new answer is merged", () => {
     const miss = { id: 4, cat: "Pharmacology", diff: 1, correct: false };
     const blank = { log: [], xp: 0, ability: emptyAbility(ABILITY_CATS), rewards: emptyRewards(), missSchedule: {}, daily: null, streak: null, bestRun: 0 };
