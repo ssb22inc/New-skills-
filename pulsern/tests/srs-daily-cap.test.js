@@ -70,6 +70,19 @@ describe("daily new-card limit", () => {
     expect(migrateBlob({ fcNew: "junk" }, []).fcNew).toEqual({ day: null, count: 0 });
   });
 
+  it("does not charge the same new card again after its schedule is rolled back", () => {
+    let fcNew = noteNewCard({ day: null, count: 0 }, "2026-07-13", "c1");
+    expect(fcNew).toEqual({ day: "2026-07-13", count: 1, ids: ["c1"] });
+    fcNew = noteNewCard(fcNew, "2026-07-13", "c1");
+    expect(fcNew.count).toBe(1);
+    expect(newCardAllowance(fcNew)).toBe(NEW_PER_DAY - 1);
+    fcNew = noteNewCard(fcNew, "2026-07-13", "c2");
+    expect(fcNew).toMatchObject({ count: 2, ids: ["c1", "c2"] });
+    const saved = migrateBlob(JSON.parse(JSON.stringify({ fcNew })), []);
+    expect(noteNewCard(saved.fcNew, "2026-07-13", "c1").count).toBe(2);
+    expect(saved.fcNew.ids).toEqual(["c1", "c2"]);
+  });
+
   it("the default limit keeps the single-build behaviour, and never exceeds NEW_PER_DAY", () => {
     expect(dueQueue(deck, {}).length).toBe(NEW_PER_DAY);
     expect(dueQueue(deck, {}, 0).length).toBe(0);

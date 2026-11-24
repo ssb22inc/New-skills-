@@ -43,7 +43,11 @@ export function migrateBlob(s, cats) {
     // Optional, additive: new flashcards introduced on `day` (LOCAL), so the
     // daily new-card cap survives queue rebuilds and reloads.
     fcNew: s.fcNew && typeof s.fcNew.day === "string" && Number.isFinite(s.fcNew.count)
-      ? { day: s.fcNew.day, count: s.fcNew.count }
+      ? {
+          day: s.fcNew.day,
+          count: s.fcNew.count,
+          ...(Array.isArray(s.fcNew.ids) ? { ids: s.fcNew.ids.filter((id) => id != null) } : {}),
+        }
       : { day: null, count: 0 },
   };
 }

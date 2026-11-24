@@ -7,10 +7,10 @@ import React from "react";
 import {
   AGAIN_GAP, REQUEUE_GAP, startSession, currentCard, atFrontier, canGoBack, canGoForward,
   canSkip, cardsLeft, skippedCount, sessionOutcome, saveCardView, goBack, goForward,
-  skipCurrent, gradeCurrent, jumpToSkipped, cardNavAction,
+  skipCurrent, gradeCurrent, jumpToSkipped, cardNavAction, undoGrade,
 } from "../src/card-nav.js";
 import { nextSchedule } from "../src/srs.js";
-import { Flashcards } from "../src/App.jsx";
+import { Flashcards, ThemeToggle } from "../src/App.jsx";
 
 const deck = ["a", "b", "c", "d", "e", "f"];
 
@@ -91,6 +91,23 @@ describe("card history", () => {
     nav = goBack(nav);
     expect(currentCard(nav).id).toBe("a");
     expect(canGoBack(nav)).toBe(false);
+  });
+});
+
+describe("undo stays unfinished", () => {
+  it("keeps an undone card in the queue when Next moves on", () => {
+    let nav = startSession(["a", "b", "c"]);
+    nav = gradeCurrent(nav, "good").nav;
+    nav = goBack(nav);
+    nav = undoGrade(nav);
+    expect(currentCard(nav)).toMatchObject({ id: "a", grade: null });
+    nav = goForward(nav).nav;
+    expect(currentCard(nav).id).toBe("b");
+    expect(nav.queue).toContain("a");
+    nav = gradeCurrent(nav, "good").nav;
+    nav = gradeCurrent(nav, "good").nav;
+    expect(currentCard(nav)).toMatchObject({ id: "a", grade: null });
+    expect(sessionOutcome(nav)).toBe("studying");
   });
 });
 
@@ -213,6 +230,18 @@ describe("keyboard", () => {
     for (const key of ["Enter", "1", "2", "3", "4", "a", "h", "g", "e", " ", "Escape"]) {
       expect(cardNavAction({ key, target: div })).toBeNull();
     }
+  });
+});
+
+describe("theme toggle while locked", () => {
+  it("is a 44px header control for exams and locked access", () => {
+    const src = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+    expect(src).toMatch(/\(examLock \|\| locked\) && \(\s*<ThemeToggle/);
+    expect(src).toMatch(/\.theme-compact\{[^}]*min-width:44px;min-height:44px/);
+    const html = renderToStaticMarkup(React.createElement(ThemeToggle, { theme: "light", onToggle() {} }));
+    expect(html).toContain('aria-label="Night mode"');
+    expect(html).toContain("theme-compact");
+    expect(renderToStaticMarkup(React.createElement(ThemeToggle, { theme: "dim", onToggle() {} }))).toContain('aria-label="Light mode"');
   });
 });
 

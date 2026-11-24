@@ -1030,5 +1030,7 @@ describe("product screenshot capture", () => {
     expect(src).toMatch(/timezoneId:\s*"UTC"/);
     expect(src).toMatch(/page\.clock\.setFixedTime\(new Date\(CAPTURE_TIME\)\)/);
     expect(src).toMatch(/export const CAPTURE_TIME = "\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"/);
+    expect(src).toMatch(/Study toolkit/);
+    expect(src).not.toMatch(/Open quick actions: lab values and help/);
   });
 });

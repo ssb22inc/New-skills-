@@ -67,7 +67,7 @@ describe("Cards progress and undo", () => {
     nav = gradeCurrent(nav, "good").nav;
     expect(sessionProgress(nav)).toMatchObject({ position: 2, total: 3, done: 1 });
   });
-  it("undoes a grade after Back and withdraws an 'again' re-queue", () => {
+  it("undoes a grade after Back and keeps that card unfinished", () => {
     let nav = startSession(["a", "b", "c"]);
     expect(canUndoGrade(nav)).toBe(false);
     nav = gradeCurrent(nav, "again").nav;
@@ -77,7 +77,7 @@ describe("Cards progress and undo", () => {
     const undone = undoGrade(nav);
     expect(currentCard(undone).grade).toBe(null);
     expect(currentCard(undone).show).toBe(true);
-    expect(undone.queue).not.toContain("a");
+    expect(undone.queue).toContain("a");
     expect(undoGrade(startSession(["a"]))).toEqual(startSession(["a"]));
   });
 });

@@ -275,6 +275,7 @@ import {
 } from "./question-nav.js";
 import { QuestionNav, OPEN_LABS_EVENT } from "./question-nav.jsx";
 import { LabFab, resetLabFab } from "./lab-fab.jsx";
+import { cycleTab, tabbables } from "./focus-trap.js";
 import { LabPanel } from "./lab-panel.jsx";
 import { FocusBar } from "./focus-sheet.jsx";
 import { TabIcon } from "./tab-icons.jsx";
@@ -829,7 +830,7 @@ export default function App() {
   ], [bankCases]);
   const newAllowance = newCardAllowance(fcNew, todayStr());
   const dueCount = useMemo(() => dueQueue(allCards, srsMap, newAllowance).length, [allCards, srsMap, newAllowance]);
-  const onNewCard = () => setFcNew((f) => noteNewCard(f, todayStr()));
+  const onNewCard = (id) => setFcNew((f) => noteNewCard(f, todayStr(), id));
   const allQuestions = useMemo(
     () => [...(bankQs ?? [...QUESTIONS, ...NGN_SAMPLES, ...CALC_SAMPLES, ...COVERAGE_SAMPLES]), ...customQs],
     [bankQs, customQs]
@@ -984,6 +985,9 @@ export default function App() {
               <span aria-hidden="true">🔥 {streak.count}</span><span className="stat-sep" aria-hidden="true" /><span aria-hidden="true">◆ {xp} XP</span>
             </span>
           )}
+          {(examLock || locked) && (
+            <ThemeToggle theme={theme} onToggle={() => setTheme(theme === "light" ? "dim" : "light")} />
+          )}
           {!examLock && (
             <button ref={menuBtnRef} type="button" className="theme-btn menu-btn" onClick={() => setMenuOpen((m) => !m)}
               aria-label={menuOpen ? "Close menu" : "Menu"} aria-expanded={menuOpen}>
@@ -1102,6 +1106,21 @@ export default function App() {
   );
 }
 
+/* Compact theme control for the two states where the menu cannot offer
+   Night mode: a readiness exam (the menu is locked away) and a locked
+   account (the menu is up, but study actions including the theme item
+   are not). 44px, same colours as the menu item. */
+export function ThemeToggle({ theme, onToggle }) {
+  const night = theme === "light";
+  return (
+    <button type="button" className="theme-btn theme-compact" onClick={onToggle}
+      aria-label={night ? "Night mode" : "Light mode"}
+      title={night ? "Night mode cuts glare for late review" : "Light mode reads best for long study sessions"}>
+      <span aria-hidden="true">{night ? "🌙" : "☀"}</span>
+    </button>
+  );
+}
+
 /* ================= HELP & CONTACT =================
    AI support chat for how-do-I and study questions, plus direct contact.
    The chat never gives medical advice and points account/billing issues
@@ -1194,27 +1213,26 @@ export function Toolkit({ open, section = "labs", onSection, onClose, provider, 
     const el = asideRef.current;
     if (el) el.inert = !open;
   }, [open]);
-  /* Escape closes from anywhere, even after focus fell to the page (the
-     Ask AI button disappears once its answer arrives). */
+  /* Escape closes from anywhere. Tab and Shift+Tab stay inside the
+     dialog, including when focus is still on the heading. */
   useEffect(() => {
     if (!open) return undefined;
-    const onEsc = (e) => { if (e.key === "Escape") { e.preventDefault(); onClose(); } };
-    window.addEventListener("keydown", onEsc);
-    return () => window.removeEventListener("keydown", onEsc);
+    const onKey = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); onClose(); return; }
+      if (e.key !== "Tab") return;
+      const next = cycleTab(tabbables(asideRef.current), document.activeElement, e.shiftKey);
+      if (!next) return;
+      e.preventDefault();
+      next.focus();
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
   }, [open, onClose]);
-  const onKeyDown = (e) => {
-    if (e.key !== "Tab") return;
-    const f = [...asideRef.current.querySelectorAll("button:not([disabled]), input, a[href], [tabindex='0']")].filter((n) => n.offsetParent !== null);
-    if (!f.length) return;
-    const first = f[0]; const last = f[f.length - 1];
-    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-  };
   return (
     <>
       {open && <div className="lab-overlay tk-overlay" onClick={onClose} />}
       <aside ref={asideRef} className={open ? "lab-drawer toolkit open" : "lab-drawer toolkit"} role="dialog" aria-modal={open ? "true" : undefined}
-        aria-hidden={!open} aria-labelledby="tk-title" onKeyDown={onKeyDown}>
+        aria-hidden={!open} aria-labelledby="tk-title">
         <div className="tk-grab" aria-hidden="true" />
         <div className="tk-head">
           <div>
@@ -2365,7 +2383,7 @@ export function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = 
     const id = currentCard(session).id;
     touchDay();
     // first grade of a never-seen card counts against today's new-card cap (once, even after an undo)
-    if (!srsMap[id] && !countedNew.current.has(id)) { countedNew.current.add(id); onNewCard?.(); }
+    if (!srsMap[id] && !countedNew.current.has(id)) { countedNew.current.add(id); onNewCard?.(id); }
     const xpGain = g === "good" ? 5 : g === "easy" ? 8 : 0;
     undoLog.current[id] = { prev: srsMap[id], xp: xpGain };
     setSrsMap((m) => ({ ...m, [id]: nextSchedule(m[id], g) }));
@@ -3144,6 +3162,7 @@ export function Style() {
       .stat-chip.pulse{animation:statPulse .6s ease-out}
       @keyframes statPulse{0%{transform:scale(1)}35%{transform:scale(1.12);box-shadow:0 0 0 4px var(--pick-bg)}100%{transform:scale(1)}}
       .menu-btn{position:relative;z-index:43;min-width:44px;min-height:44px;padding:0;display:inline-flex;align-items:center;justify-content:center;font-size:18px;border-radius:12px}
+      .theme-compact{min-width:44px;min-height:44px;padding:0;display:inline-flex;align-items:center;justify-content:center;font-size:18px;border-radius:12px}
       .menu-btn:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
       .menu-item{min-height:48px}
       /* tab bar: icon + label */

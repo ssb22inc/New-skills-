@@ -174,6 +174,33 @@ describe("floating 🧪 study toolkit", () => {
     await ctx.close();
   }, 120_000);
 
+  it("keeps Tab and Shift+Tab inside the Focus sheet and the study toolkit", async () => {
+    const { ctx, page } = await open({ width: 390, height: 844 });
+    const inside = (sel) => page.evaluate((s) => document.querySelector(s)?.contains(document.activeElement) ?? false, sel);
+    await page.getByRole("button", { name: /Focus:/ }).click();
+    const sheet = page.getByRole("dialog", { name: "Focus filters" });
+    await sheet.waitFor();
+    await page.keyboard.press("Shift+Tab");
+    expect(await inside(".sheet")).toBe(true);
+    await page.keyboard.press("Tab");
+    expect(await inside(".sheet")).toBe(true);
+    await page.getByRole("button", { name: "Close filters" }).click();
+    await page.waitForTimeout(200);
+    expect(await page.evaluate(() => document.activeElement?.classList.contains("focus-trigger"))).toBe(true);
+
+    await fab(page).click();
+    const dialog = page.getByRole("dialog", { name: "Study toolkit" });
+    await dialog.waitFor();
+    await page.keyboard.press("Shift+Tab");
+    expect(await inside(".toolkit")).toBe(true);
+    await page.keyboard.press("Tab");
+    expect(await inside(".toolkit")).toBe(true);
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(200);
+    expect(await page.evaluate(() => document.activeElement?.classList.contains("lab-fab"))).toBe(true);
+    await ctx.close();
+  }, 120_000);
+
   it("arrow keys move it, so dragging is never the only way", async () => {
     const { ctx, page } = await open({ width: 390, height: 844 });
     await fab(page).focus();

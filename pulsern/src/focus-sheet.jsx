@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { cycleTab, tabbables } from "./focus-trap.js";
 
 /* One compact "Focus" control instead of a wall of filter pills.
    Every filter stays available; they live in a bottom sheet that opens on
@@ -23,9 +24,15 @@ export function FocusBar({ groups, open, setOpen, onClear, allLabel = "All topic
   useEffect(() => {
     if (!open) return undefined;
     const sheet = sheetRef.current;
-    sheet?.querySelector("button")?.focus();
+    tabbables(sheet)[0]?.focus();
     const onKey = (e) => {
-      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setOpen(false); }
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setOpen(false); return; }
+      if (e.key !== "Tab") return;
+      const next = cycleTab(tabbables(sheetRef.current), document.activeElement, e.shiftKey);
+      if (!next) return;
+      e.preventDefault();
+      e.stopPropagation();
+      next.focus();
     };
     document.addEventListener("keydown", onKey, true);
     return () => {

@@ -5,6 +5,7 @@ import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Style, Toolkit } from "../../src/App.jsx";
 import { LabFab } from "../../src/lab-fab.jsx";
+import { FocusBar } from "../../src/focus-sheet.jsx";
 import { QuestionNav } from "../../src/question-nav.jsx";
 
 const OPTIONS = ["Alpha choice", "Beta choice", "Gamma choice", "Delta choice"];
@@ -13,11 +14,13 @@ function Screen() {
   const [pick, setPick] = useState(null);
   const [open, setOpen] = useState(false);
   const [section, setSection] = useState("labs");
+  const [focusOpen, setFocusOpen] = useState(false);
   return (
     <div className="app tab-qbank in-session" data-theme={window.__theme || "light"}>
       <Style />
       <header className="top"><span className="brand-name">PULSERN</span></header>
       <main className="body">
+        <FocusBar open={focusOpen} setOpen={setFocusOpen} groups={[{ label: "Category", options: [["pharm", "Pharmacology"]], selected: [], onToggle() {} }]} />
         <section className="card stack study-col">
           <p className="stem">Which client should the nurse see first? STEM-ONE</p>
           {OPTIONS.map((o, i) => (

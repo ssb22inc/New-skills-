@@ -41,10 +41,17 @@ export function newCardAllowance(fcNew, today = todayStr()) {
   return Math.max(0, NEW_PER_DAY - used);
 }
 
-/* Record one new card introduced today. Returns a NEW ledger. */
-export function noteNewCard(fcNew, today = todayStr()) {
-  const used = fcNew && fcNew.day === today ? Math.max(0, fcNew.count ?? 0) : 0;
-  return { day: today, count: used + 1 };
+/* Record one new card introduced today. Returns a NEW ledger.
+   Passing a card id makes the charge idempotent for that card on this
+   LOCAL day: undo deletes the schedule, but grading the same card again
+   after the deck is reopened does not spend another unit of the allowance. */
+export function noteNewCard(fcNew, today = todayStr(), id) {
+  const sameDay = !!(fcNew && fcNew.day === today);
+  const used = sameDay ? Math.max(0, fcNew.count ?? 0) : 0;
+  if (id == null) return { day: today, count: used + 1 };
+  const ids = sameDay && Array.isArray(fcNew.ids) ? fcNew.ids.slice() : [];
+  if (ids.includes(id)) return { day: today, count: used, ids };
+  return { day: today, count: used + 1, ids: [...ids, id] };
 }
 
 /* Grade → next {interval, due}. Same ladder the app has always used:

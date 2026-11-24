@@ -2,7 +2,7 @@
    that it always settles off buttons, the nav row, and the tab bar. */
 import { describe, it, expect } from "vitest";
 import {
-  FAB_SIZE, FAB_MARGIN, DEFAULT_ANCHOR, FAB_STORE_KEY, clampPos, rectsOverlap, hitsAny, findClearSpot,
+  FAB_SIZE, FAB_MARGIN, PARK_W, PARK_H, DEFAULT_ANCHOR, FAB_STORE_KEY, clampPos, rectsOverlap, hitsAny, findClearSpot,
   anchorToPx, pxToAnchor, normalizeAnchor, loadAnchor, saveAnchor, clearAnchor, isDrag, band,
 } from "../src/float-pos.js";
 
@@ -85,9 +85,29 @@ describe("settling clear of every target", () => {
     expect(spot.side).toBe("left");
     expect(spot.clear).toBe(true);
   });
-  it("reports when no clear spot exists instead of pretending", () => {
-    const spot = findClearSpot(DEFAULT_ANCHOR, phone, [{ x: 0, y: 0, w: 390, h: 844 }]);
-    expect(spot.clear).toBe(false);
+  it("parks a half-size tab off every control when no full spot is clear", () => {
+    const wall = { x: 16, y: phone.top, w: 358, h: phone.bottom - phone.top };
+    const tabBar = { x: 0, y: phone.bottom, w: 390, h: phone.vh - phone.bottom, primary: true };
+    const next = { x: 250, y: 700, w: 120, h: 52, primary: true };
+    const blocks = [wall, tabBar, next];
+    const spot = findClearSpot(DEFAULT_ANCHOR, phone, blocks);
+    const rect = { x: spot.x, y: spot.y, w: spot.w ?? FAB_SIZE, h: spot.h ?? FAB_SIZE };
+    expect(spot.parked).toBe(true);
+    expect(spot.clear).toBe(true);
+    expect(hitsAny(rect, blocks)).toBe(false);
+    expect(rectsOverlap(rect, tabBar)).toBe(false);
+    expect(rectsOverlap(rect, next)).toBe(false);
+    expect(rect.w).toBe(PARK_W);
+    expect(rect.h).toBe(PARK_H);
+    const onScreen = Math.max(0, Math.min(rect.x + rect.w, phone.vw) - Math.max(rect.x, 0));
+    expect(onScreen).toBeGreaterThan(0);
+  });
+  it("does not sit on a control even when the whole screen is blocked", () => {
+    const wall = { x: 0, y: 0, w: 390, h: 844 };
+    const spot = findClearSpot(DEFAULT_ANCHOR, phone, [wall]);
+    const rect = { x: spot.x, y: spot.y, w: spot.w ?? FAB_SIZE, h: spot.h ?? FAB_SIZE };
+    expect(spot.parked).toBe(true);
+    expect(hitsAny(rect, [wall])).toBe(false);
   });
   it("on a desktop the default sits in the free right margin", () => {
     const column = { x: 80, y: 71, w: 1120, h: 650 };

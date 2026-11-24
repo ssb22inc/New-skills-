@@ -248,5 +248,9 @@ export function undoGrade(nav) {
   const e = currentCard(nav);
   const entries = nav.entries.slice();
   entries[nav.index] = { ...e, grade: null, show: true };
-  return { ...nav, entries, queue: nav.queue.filter((id) => id !== e.id) };
+  /* The grade is gone, so the card is unfinished again. Next from this
+     history entry only restores the next opened card; without a queue
+     entry the undone card would vanish from the sitting. */
+  const queue = nav.queue.includes(e.id) ? nav.queue : [...nav.queue, e.id];
+  return { ...nav, entries, queue };
 }

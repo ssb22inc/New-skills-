@@ -108,11 +108,12 @@ export async function captureProductScreenshots() {
     images.push(await screenshot(page, "pulsern-adaptive-practice.png", ["Practice", "Check answer"]));
 
     await page.setViewportSize({ width: 430, height: 932 });
-    await page.getByRole("button", { name: "Open quick actions: lab values and help", exact: true }).click();
-    await page.getByRole("button", { name: /Lab values/, exact: false }).click();
-    await page.getByRole("complementary", { name: "Normal lab and vital-sign reference ranges" }).waitFor();
+    await page.getByRole("button", { name: /Study toolkit/ }).click();
+    await page.getByRole("tab", { name: /Labs/ }).click();
+    await page.getByRole("button", { name: "Electrolytes" }).click();
+    await page.getByRole("tabpanel", { name: "Normal lab and vital-sign reference ranges" }).waitFor();
     await page.waitForTimeout(500);
-    images.push(await screenshot(page, "pulsern-lab-reference.png", ["Normal reference ranges", "Sodium", "Potassium"]));
+    images.push(await screenshot(page, "pulsern-lab-reference.png", ["Sodium", "Potassium"]));
 
     const sources = await sourceHashes();
     const report = {

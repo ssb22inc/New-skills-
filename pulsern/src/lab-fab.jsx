@@ -46,11 +46,13 @@ function collectBlocks(self) {
   for (const el of document.querySelectorAll(TARGETS)) {
     if (self && (el === self || self.contains(el))) continue;
     if (el.closest(".lab-drawer, header.top, nav.tabs, .lab-overlay, [aria-hidden='true'], [inert]")) continue;
+    const label = `${el.getAttribute("aria-label") || ""} ${el.textContent || ""}`;
+    const primary = !!el.closest(".grades, .q-nav-wrap, .bigbtn") || /\b(Next|Check answer|Again|Hard|Good|Easy)\b/.test(label);
     const r = el.getBoundingClientRect();
     if (r.width < 1 || r.height < 1 || r.bottom < 0 || r.top > vh) continue;
     const cs = getComputedStyle(el);
     if (cs.visibility === "hidden" || cs.display === "none" || cs.pointerEvents === "none") continue;
-    out.push({ x: r.left, y: r.top, w: r.width, h: r.height });
+    out.push({ x: r.left, y: r.top, w: r.width, h: r.height, primary });
   }
   return out;
 }
@@ -69,7 +71,8 @@ export function LabFab({ onOpen, hidden = false, open = false, settleKey = "", b
     if (drag.current?.active || typeof window === "undefined") return;
     const view = measureView();
     const spot = findClearSpot(anchorToPx(anchor.current, view), view, collectBlocks(btnRef.current));
-    setPos((p) => (p && p.x === spot.x && p.y === spot.y ? p : { x: spot.x, y: spot.y }));
+    const next = { x: spot.x, y: spot.y, w: spot.w ?? FAB_SIZE, h: spot.h ?? FAB_SIZE, parked: !!spot.parked };
+    setPos((p) => (p && p.x === next.x && p.y === next.y && p.w === next.w && p.h === next.h && p.parked === next.parked ? p : next));
   }, [btnRef]);
 
   useLayoutEffect(() => {
@@ -153,7 +156,7 @@ export function LabFab({ onOpen, hidden = false, open = false, settleKey = "", b
     saveAnchor(storage(), anchor.current);
     setMoved(true);
     const spot = findClearSpot({ ...dropped, side: anchor.current.side }, view, collectBlocks(btnRef.current));
-    setPos({ x: spot.x, y: spot.y });
+    setPos({ x: spot.x, y: spot.y, w: spot.w ?? FAB_SIZE, h: spot.h ?? FAB_SIZE, parked: !!spot.parked });
   };
   const onClick = (e) => {
     if (suppressClick.current) { e.preventDefault(); suppressClick.current = false; return; }
@@ -175,18 +178,20 @@ export function LabFab({ onOpen, hidden = false, open = false, settleKey = "", b
     saveAnchor(storage(), anchor.current);
     setMoved(true);
     const spot = findClearSpot({ ...c, side: anchor.current.side }, view, collectBlocks(btnRef.current));
-    setPos({ x: spot.x, y: spot.y });
+    setPos({ x: spot.x, y: spot.y, w: spot.w ?? FAB_SIZE, h: spot.h ?? FAB_SIZE, parked: !!spot.parked });
   };
 
   if (hidden) return null;
+  const w = pos?.w ?? FAB_SIZE;
+  const h = pos?.h ?? FAB_SIZE;
   const style = pos
-    ? { transform: `translate3d(${pos.x}px, ${pos.y}px, 0)`, width: FAB_SIZE, height: FAB_SIZE }
+    ? { transform: `translate3d(${pos.x}px, ${pos.y}px, 0)`, width: w, height: h }
     : { visibility: "hidden", width: FAB_SIZE, height: FAB_SIZE };
   return (
     <button
       ref={btnRef}
       type="button"
-      className={"fab lab-fab" + (dragging ? " dragging" : "") + (moved ? " moved" : "")}
+      className={"fab lab-fab" + (dragging ? " dragging" : "") + (moved ? " moved" : "") + (pos?.parked ? " parked" : "")}
       style={style}
       aria-label="Study toolkit: lab ranges, quick lookup, and help. Drag to move, or use arrow keys"
       aria-haspopup="dialog"

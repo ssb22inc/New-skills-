@@ -10,6 +10,10 @@
 
 export const FAB_SIZE = 52;
 export const FAB_MARGIN = 10;
+/* When a full-size button has no clear edge, a short tab still has to
+   stay off every control. It can hang halfway off the screen. */
+export const PARK_W = 28;
+export const PARK_H = 44;
 export const FAB_STORE_KEY = "pulsern-labfab-v1";
 export const DEFAULT_ANCHOR = Object.freeze({ side: "right", y: 0.62 });
 const SIDE_SWITCH_COST = 140;
@@ -92,8 +96,54 @@ export function findClearSpot(anchor, view, blocks, { size = FAB_SIZE, margin = 
       }
     }
   }
-  if (best) return { x: best.x, y: best.y, side: best.side, clear: true };
-  return { x: sideX(side, view, size, margin), y: Math.round(ay), side, clear: false };
+  if (best) return { x: best.x, y: best.y, w: size, h: size, side: best.side, clear: true, parked: false };
+  return parkTab(ay, view, guardChrome(view, blocks), side);
+}
+
+/* The header and the tab bar are not in the caller's block list (the
+   usable band keeps a full-size button out of them). A parked tab has to
+   be told about them or it will sit on Home, the menu, or a tab. */
+function guardChrome(view, blocks) {
+  const extra = [];
+  if ((view.top ?? 0) > 0) extra.push({ x: 0, y: 0, w: view.vw, h: view.top });
+  const bottom = view.bottom ?? view.vh;
+  if (bottom < view.vh) extra.push({ x: 0, y: bottom, w: view.vw, h: view.vh - bottom });
+  return [...(blocks ?? []), ...extra];
+}
+
+function overlapArea(rect, block) {
+  const x = Math.max(rect.x, block.x);
+  const y = Math.max(rect.y, block.y);
+  const r = Math.min(rect.x + rect.w, block.x + block.w);
+  const b = Math.min(rect.y + rect.h, block.y + block.h);
+  if (r <= x || b <= y) return 0;
+  return (r - x) * (b - y);
+}
+
+/* A place the button can occupy without covering any control. Prefer a
+   visible edge tab; if the whole screen is blocked, hang fully outside
+   rather than sit on a button. Primary controls (Next, Check, grades,
+   the tab bar) are never covered, same as every other control. */
+function parkTab(preferY, view, blocks, side) {
+  const w = PARK_W;
+  const h = PARK_H;
+  const xs = side === "left"
+    ? [0, -Math.round(w / 2), view.vw - w, view.vw - Math.round(w / 2), -w, view.vw]
+    : [view.vw - w, view.vw - Math.round(w / 2), 0, -Math.round(w / 2), view.vw, -w];
+  let best = null;
+  for (const x of xs) {
+    for (let y = -h; y <= view.vh; y += 4) {
+      const rect = { x, y, w, h };
+      if (blocks.some((b) => overlapArea(rect, b) > 0)) continue;
+      const onW = Math.max(0, Math.min(x + w, view.vw) - Math.max(x, 0));
+      const onH = Math.max(0, Math.min(y + h, view.vh) - Math.max(y, 0));
+      const visible = onW * onH;
+      const score = visible * 1000 - Math.abs(y - preferY);
+      if (!best || score > best.score) best = { x, y, w, h, side: x + w / 2 < view.vw / 2 ? "left" : "right", score };
+    }
+  }
+  if (!best) return { x: side === "left" ? -w : view.vw, y: 0, w, h, side, clear: true, parked: true };
+  return { x: best.x, y: best.y, w, h, side: best.side, clear: true, parked: true };
 }
 
 export function loadAnchor(storage) {
