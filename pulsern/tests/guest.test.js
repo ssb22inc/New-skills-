@@ -113,7 +113,7 @@ describe("progress handoff into a new account", () => {
   });
 
   it("ignores stale guest data", () => {
-    const g = { ...played(), startedAt: NOW - 9 * 86400000 };
+    const g = { ...played(), startedAt: NOW - 9 * 86400000, lastAt: NOW - 8 * 86400000 };
     expect(mergeGuestIntoBlob(migrateBlob({}, CATS), g, { today: TODAY, now: NOW }).summary).toBeNull();
   });
 

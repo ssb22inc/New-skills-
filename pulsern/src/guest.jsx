@@ -9,7 +9,7 @@ import { emptyAbility, updateAbility } from "./ability-engine.js";
 import { updateMissSchedule } from "./question-review.js";
 import { todayStr } from "./dates.js";
 import { comboFor, CAREER } from "./rewards.js";
-import { rewardBeat, motionAllowed, DEFAULT_PREFS } from "./effects.js";
+import { rewardBeat, motionAllowed, GUEST_PREFS } from "./effects.js";
 import { RewardsStyle, EcgBeat, Ripple, StreakGlyph } from "./rewards-ui.jsx";
 import { freePassPlan } from "./free-pass.js";
 import {
@@ -31,7 +31,7 @@ export default function GuestTrial({ onSignUp, onSignIn }) {
   const [section, setSection] = useState("labs");
   const pool = useMemo(() => guestPool(QUESTIONS), []);
   const ability = guest.ability ?? emptyAbility(CATS);
-  const motion = motionAllowed(DEFAULT_PREFS);
+  const motion = motionAllowed(GUEST_PREFS);
 
   useEffect(() => { saveGuest(window.localStorage, guest); }, [guest]);
 
@@ -47,7 +47,7 @@ export default function GuestTrial({ onSignUp, onSignIn }) {
       ability: updateAbility(guest.ability ?? emptyAbility(CATS), q, correct, {}).ability,
       missSchedule: updateMissSchedule(guest.missSchedule ?? {}, q.id, correct),
     });
-    if (out.xp > 0) rewardBeat(out.combo ? "combo" : "correct", DEFAULT_PREFS);
+    if (out.xp > 0) rewardBeat(out.combo ? "combo" : "correct", GUEST_PREFS);
     return out;
   };
 
@@ -132,7 +132,7 @@ export function SaveProgress({ guest, onSignUp, onSignIn, motion = true }) {
           <button type="button" className="btn" onClick={onSignUp}>Create free account</button>
           <button type="button" className="btn ghost" onClick={onSignIn}>I have an account</button>
         </div>
-        <p className="small tip">Saved on this device for 7 days. Sign up here, on this browser, to keep it.</p>
+        <p className="small tip">Saved on this device for 7 days after your last answer. Create your account on this browser to keep it.</p>
       </section>
     </div>
   );

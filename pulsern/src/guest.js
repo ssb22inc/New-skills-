@@ -47,8 +47,12 @@ export function clearGuest(storage) {
   try { storage?.removeItem(GUEST_KEY); } catch { /* private mode */ }
 }
 
+/* Kept for GUEST_TTL_DAYS after the LAST answer (the save screen says so),
+   so answers the student just gave are never the ones that expire. */
 export function guestFresh(guest, now = Date.now()) {
-  return !!guest && Array.isArray(guest.log) && guest.log.length > 0 && now - (guest.startedAt ?? 0) <= GUEST_TTL_DAYS * 86400000;
+  if (!guest || !Array.isArray(guest.log) || guest.log.length === 0) return false;
+  const last = Number(guest.lastAt ?? guest.startedAt ?? 0);
+  return now - last <= GUEST_TTL_DAYS * 86400000;
 }
 
 export const guestRemaining = (guest) => Math.max(0, GUEST_LIMIT - (guest?.log?.length ?? 0));
@@ -63,7 +67,7 @@ export function guestAnswer(guest, q, correct, { ms = Infinity, today } = {}) {
      the page was opened (an idle trial tab must not age out the work). */
   const first = guest.log.length === 0;
   return {
-    guest: { ...guest, ...(first ? { startedAt: Date.now(), day: today ?? guest.day } : {}), day: first ? (today ?? guest.day) : (guest.day ?? today), log: [...guest.log, entry], xp: guest.xp + res.xp, run, bestRun: Math.max(guest.bestRun, run) },
+    guest: { ...guest, ...(first ? { startedAt: Date.now(), day: today ?? guest.day } : {}), lastAt: Date.now(), day: first ? (today ?? guest.day) : (guest.day ?? today), log: [...guest.log, entry], xp: guest.xp + res.xp, run, bestRun: Math.max(guest.bestRun, run) },
     res: { ...res, run },
     accepted: true,
   };
