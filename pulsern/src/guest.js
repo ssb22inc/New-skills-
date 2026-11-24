@@ -12,7 +12,7 @@
    account that already has answer history does not take the trial.
    Each trial answer is stored as builtin:<id>. A shared-bank question
    with the same number is bank:<id> and is a different question. */
-import { answerXp, answerCountsForRun, emptyRewards, MAX_COVERS } from "./rewards.js";
+import { answerXp, answerCountsForRun, emptyRewards, MAX_COVERS, advanceStreak, streakDayCounted } from "./rewards.js";
 import { applyAnswer, stampedQuestion } from "./answer-apply.js";
 import { canonicalKey } from "./question-key.js";
 
@@ -443,6 +443,46 @@ function replayUnseen(base, rows) {
   return state;
 }
 
+function blankScore(base) {
+  return { log: [], xp: 0, ability: {}, rewards: emptyRewards(), daily: null, missSchedule: {}, streak: null, run: 0, bestRun: Number(base?.bestRun) || 0 };
+}
+
+/* An incoming answer can be older than one this device already saved.
+   Scoring it on top of that newer answer reverses ability and the review
+   ladder. Replay the tail from the point before the older answer. */
+function replayOrdered(base, mergedLog) {
+  const attemptId = (row) => (row?.attempt != null && row.attempt !== "" ? String(row.attempt) : "");
+  const baseAttempts = new Set((base.log ?? []).map(attemptId).filter(Boolean));
+  const incoming = (mergedLog ?? []).filter((row) => attemptId(row) && !baseAttempts.has(attemptId(row)));
+  const times = incoming.map((row) => Number(row.at)).filter(Number.isFinite);
+  if (!incoming.length || times.length !== incoming.length) return { state: replayUnseen(base, mergedLog), fromZero: false };
+  const earliest = Math.min(...times);
+  const redo = new Set();
+  for (const row of base.log ?? []) {
+    const at = Number(row?.at);
+    if (attemptId(row) && Number.isFinite(at) && at >= earliest) redo.add(attemptId(row));
+  }
+  if (!redo.size) return { state: replayUnseen(base, mergedLog), fromZero: false };
+  const prefixRows = (base.log ?? []).filter((row) => !redo.has(attemptId(row)));
+  const prefix = replayUnseen(blankScore(base), prefixRows);
+  const suffix = (mergedLog ?? []).filter((row) => {
+    const id = attemptId(row);
+    return id && (redo.has(id) || !baseAttempts.has(id));
+  });
+  return { state: replayUnseen(prefix, suffix), fromZero: true };
+}
+
+function activityDays(base, log, blobs) {
+  const seen = new Set((base.log ?? []).map((row) => (row?.attempt != null && row.attempt !== "" ? String(row.attempt) : "")).filter(Boolean));
+  const knownOps = new Set((base.rewards?.cardOps ?? []).map((op) => op?.id).filter((id) => id != null));
+  const days = new Set();
+  for (const row of log ?? []) if (row?.day && row?.attempt && !seen.has(String(row.attempt))) days.add(row.day);
+  for (const blob of blobs) {
+    for (const op of blob?.rewards?.cardOps ?? []) if (op?.day && !knownOps.has(op.id)) days.add(op.day);
+  }
+  return [...days].sort();
+}
+
 function put(merged, key, value) {
   if (value === undefined) {
     if (merged[key] !== undefined) delete merged[key];
@@ -465,10 +505,12 @@ export function reconcileProgress(serverBlob, localBlob, baselineBlob = null) {
   const hasBaseline = baselineBlob == null || (typeof baselineBlob === "object" && !Array.isArray(baselineBlob));
   const base = baselineBlob != null && typeof baselineBlob === "object" && !Array.isArray(baselineBlob) ? baselineBlob : {};
   const log = mergeLogs(server.log, local.log, hasBaseline ? (base.log ?? []) : null);
-  const replayed = replayUnseen(base, log);
+  const ordered = replayOrdered(base, log);
+  const replayed = ordered.state;
+  const scoreBase = ordered.fromZero ? blankScore(base) : base;
   const unseen = log.some((row) => row?.attempt && !(base.log ?? []).some((item) => item?.attempt === row.attempt));
-  const localReplay = hasBaseline ? replayUnseen(base, local.log) : null;
-  const serverReplay = hasBaseline ? replayUnseen(base, server.log) : null;
+  const localReplay = hasBaseline ? replayUnseen(scoreBase, local.log) : null;
+  const serverReplay = hasBaseline ? replayUnseen(scoreBase, server.log) : null;
   const merged = { ...local };
   put(merged, "log", log);
   let nextXp;
@@ -488,10 +530,32 @@ export function reconcileProgress(serverBlob, localBlob, baselineBlob = null) {
   if (base.bestRun != null || server.bestRun != null || local.bestRun != null || unseen) {
     put(merged, "bestRun", Math.max(Number(base.bestRun) || 0, Number(server.bestRun) || 0, Number(local.bestRun) || 0, Number(replayed.bestRun) || 0));
   }
+  const days = activityDays(base, log, [server, local]);
+  const cardDays = days.filter((day) => [server, local].some((blob) => (blob?.rewards?.cardOps ?? []).some((op) => op?.day === day && !(base.rewards?.cardOps ?? []).some((item) => item?.id === op.id))));
   if (unseen) {
     put(merged, "ability", replayed.ability);
-    put(merged, "daily", replayed.daily);
-    put(merged, "streak", replayed.streak);
+    let daily = replayed.daily;
+    if (daily?.day && cardDays.includes(daily.day)) {
+      const known = new Set((base.rewards?.cardOps ?? []).map((op) => op?.id));
+      const uniqueExtra = new Set([server, local].flatMap((blob) => (blob?.rewards?.cardOps ?? []).filter((op) => op?.day === daily.day && !known.has(op?.id)).map((op) => op.id)));
+      const counted = [...uniqueExtra].reduce((sum, id) => {
+        const op = [local, server].flatMap((blob) => blob?.rewards?.cardOps ?? []).find((item) => item?.id === id);
+        return sum + (Number(op?.cards) || 0);
+      }, 0);
+      if (counted) daily = { ...daily, answered: (daily.answered ?? 0) + counted };
+    }
+    put(merged, "daily", daily);
+    if (cardDays.length) {
+      let streak = base.streak;
+      let rewards = base.rewards ?? emptyRewards();
+      for (const day of days) {
+        if (streakDayCounted(streak, null, day)) continue;
+        const adv = advanceStreak(streak, rewards, day);
+        streak = adv.streak;
+        rewards = adv.rewards;
+      }
+      put(merged, "streak", streak);
+    } else put(merged, "streak", replayed.streak);
   } else {
     if (base.ability || server.ability || local.ability) put(merged, "ability", mergeMap(base.ability, server.ability, local.ability));
     if (base.daily != null || server.daily != null || local.daily != null) put(merged, "daily", choose(base.daily, server.daily, local.daily));

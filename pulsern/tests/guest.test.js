@@ -347,7 +347,7 @@ describe("a trial cannot be lost, duplicated, or over-paid", () => {
     expect(guestClearOnSave(true)).toBe(true);
     const app = readFileSync("src/App.jsx", "utf8");
     const save = app.slice(app.indexOf("autosave on change"), app.indexOf("autosave on change") + 2200);
-    expect(save.indexOf("releaseHeldGuest(window.sessionStorage)")).toBeGreaterThan(save.indexOf("guestClearOnSave(pendingAtStart)"));
+    expect(save.indexOf("releaseHeldGuest(storageOrNull(() => window.sessionStorage))")).toBeGreaterThan(save.indexOf("guestClearOnSave(pendingAtStart)"));
     expect(readFileSync("src/guest.jsx", "utf8")).toContain("holdGuestTrial(guest, sessionBox())");
   });
 

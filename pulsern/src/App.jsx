@@ -712,7 +712,11 @@ export default function App() {
   };
   const loadProgress = useCallback(async () => {
     setLoadState("loading");
-    try { clearLegacyProgressBackup(window.localStorage); sweepPendingProgress(window.localStorage); } catch { /* storage blocked */ }
+    try {
+      const storage = storageOrNull(() => window.localStorage);
+      clearLegacyProgressBackup(storage);
+      sweepPendingProgress(storage);
+    } catch { /* storage blocked */ }
     const read = await readProgress(() => store.get(STORE_KEY));
     /* Failed read: stay unloaded. Autosave and the trial merge both wait
        for `loaded`, so nothing is written over the real row. */
@@ -731,7 +735,7 @@ export default function App() {
     let s = parsed.blob;
     /* Try-before-sign-up handoff (src/progress-load.js guestHandoff). */
     let guest = null;
-    try { guest = readGuestForHandoff(window.localStorage, window.sessionStorage); } catch { /* storage blocked */ }
+    guest = readGuestForHandoff(storageOrNull(() => window.localStorage), storageOrNull(() => window.sessionStorage));
     try { const { data } = await supabase.auth.getSession(); accountId.current = data?.session?.user?.id ?? null; } catch { /* unknown account */ }
     const handoff = guestHandoff({ guest, hasAnswers: accountHasAnswers(s?.log) });
     if (handoff === "merge") {
@@ -741,7 +745,10 @@ export default function App() {
     } else if (handoff === "keep") {
       setGuestNote({ skipped: true });
     } else if (handoff === "expired") {
-      try { clearGuest(window.localStorage); releaseHeldGuest(window.sessionStorage); } catch { /* storage blocked */ }
+      try {
+        clearGuest(storageOrNull(() => window.localStorage));
+        releaseHeldGuest(storageOrNull(() => window.sessionStorage));
+      } catch { /* storage blocked */ }
     }
     if (s) applyBlob(s);
     setLoadState("ok");
@@ -774,7 +781,11 @@ export default function App() {
         return;
       }
       setSaveFailed(false);
-      if (guestClearOnSave(pendingAtStart)) { pendingGuestClear.current = false; clearGuest(window.localStorage); releaseHeldGuest(window.sessionStorage); }
+      if (guestClearOnSave(pendingAtStart)) {
+        pendingGuestClear.current = false;
+        clearGuest(storageOrNull(() => window.localStorage));
+        releaseHeldGuest(storageOrNull(() => window.sessionStorage));
+      }
       if (outcome === "saved" && note) {
         setGuestNote(note);
         setGuestSaveError(false);
@@ -1532,7 +1543,10 @@ export default function App() {
           <section className="card rw-saved" role="status">
             <p className="small">This account already has progress, so your practice answers weren't added.</p>
             <button type="button" className="btn ghost" onClick={() => {
-              try { clearGuest(window.localStorage); releaseHeldGuest(window.sessionStorage); } catch { /* storage blocked */ }
+              try {
+                clearGuest(storageOrNull(() => window.localStorage));
+                releaseHeldGuest(storageOrNull(() => window.sessionStorage));
+              } catch { /* storage blocked */ }
               setGuestNote(null);
             }}>Discard practice answers</button>
           </section>

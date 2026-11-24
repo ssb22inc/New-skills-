@@ -6,7 +6,8 @@ import { applyAnswer } from "../src/answer-apply.js";
 import { emptyRewards, bumpDay, reverseCardDay, recordCardGrade } from "../src/rewards.js";
 import { migrateBlob } from "../src/state.js";
 import { signOutAndForgetTrial } from "../src/sign-out.js";
-import { recoverProgressWrite, blobForSave, reconcileProgress, storageOrNull, createProgressEpoch, noteAccountRead, saveGuest, holdGuestTrial, mergeGuestIntoBlob, bindCommittedProgress } from "../src/guest.js";
+import fs from "node:fs";
+import { recoverProgressWrite, blobForSave, reconcileProgress, storageOrNull, createProgressEpoch, noteAccountRead, saveGuest, holdGuestTrial, mergeGuestIntoBlob, bindCommittedProgress, readGuestForHandoff, releaseHeldGuest } from "../src/guest.js";
 import { refreshedUnresolved, latestResults } from "../src/question-review.js";
 
 const answer = (attempt, id = 1) => ({ id, key: `bank:${id}`, source: "bank", cat: "Pharmacology", diff: 1, correct: true, attempt });
@@ -296,6 +297,79 @@ describe("a revision conflict keeps both devices' answers", () => {
     expect(merged.xp).toBe(server.xp);
     expect(merged.ability.Pharmacology.n).toBe(server.ability.Pharmacology.n);
     expect(merged.ability.Pharmacology.theta).toBe(server.ability.Pharmacology.theta);
+  });
+
+  it("scores a delayed older miss before the newer answer already saved", () => {
+    const baseline = { log: [], xp: 0, ability: {}, rewards: emptyRewards(), missSchedule: {}, daily: null, bestRun: 0, streak: null };
+    const q = { id: 4, key: "bank:4", source: "bank", cat: "Pharmacology", diff: 1, stem: "eight words are enough here now" };
+    const taken = { ms: 9000, today: "2026-11-24", words: 8, rating: 1300, calibration: { 4: { rating: 1300 } } };
+    const newer = applyAnswer(baseline, { q, correct: true, attempt: "newer", at: 2000, ...taken }).state;
+    const older = applyAnswer(baseline, { q, correct: false, attempt: "older", at: 1000, ...taken }).state;
+    const inOrder = applyAnswer(older, { q, correct: true, attempt: "newer", at: 2000, ...taken }).state;
+    const server = { ...inOrder, theme: "light" };
+    const local = { ...newer, theme: "dim" };
+    const merged = blobForSave(server, local, newer);
+    expect(merged.log.map((row) => row.attempt)).toEqual(["older", "newer"]);
+    expect(merged.missSchedule["bank:4"].interval).toBe(inOrder.missSchedule["bank:4"].interval);
+    expect(merged.xp).toBe(inOrder.xp);
+    expect(merged.ability.Pharmacology.theta).toBe(inOrder.ability.Pharmacology.theta);
+    expect(merged.theme).toBe("dim");
+  });
+
+  it("keeps a card-only day in the streak when the next day's question is saved with it", () => {
+    const baseline = {
+      log: [], xp: 0, ability: {}, rewards: emptyRewards(), srsMap: {}, bestRun: 0,
+      streak: { count: 5, lastDay: "2026-11-22", shield: true },
+      daily: { day: "2026-11-22", answered: 8 },
+    };
+    const op = { id: "card:c1", day: "2026-11-23", xp: 5, cards: 1 };
+    const withCard = {
+      ...baseline,
+      xp: 5,
+      rewards: { ...bumpDay(emptyRewards(), "2026-11-23", { cards: 1, xp: 5 }), cardOps: [op] },
+      streak: { count: 6, lastDay: "2026-11-23", shield: true },
+      daily: { day: "2026-11-23", answered: 1 },
+      srsMap: { c1: { interval: 3, due: "2026-11-26", seen: "2026-11-23" } },
+    };
+    const q = { id: 8, key: "bank:8", source: "bank", cat: "Pharmacology", diff: 1, stem: "eight words are enough here now" };
+    const local = applyAnswer(withCard, {
+      q, correct: true, ms: 9000, today: "2026-11-24", attempt: "next-day", words: 8, rating: 1300, calibration: { 8: { rating: 1300 } },
+    }).state;
+    const merged = blobForSave(baseline, local, baseline);
+    expect(merged.streak).toMatchObject({ count: 7, lastDay: "2026-11-24", shield: true });
+    expect(merged.daily).toMatchObject({ day: "2026-11-24", answered: 1 });
+    expect(merged.xp).toBe(local.xp);
+  });
+
+  it("counts a card and a question on the same day", () => {
+    const baseline = { log: [], xp: 0, ability: {}, rewards: emptyRewards(), srsMap: {}, daily: null, streak: null, bestRun: 0 };
+    const op = { id: "card:c2", day: "2026-11-24", xp: 5, cards: 1 };
+    const withCard = {
+      ...baseline,
+      xp: 5,
+      rewards: { ...bumpDay(emptyRewards(), "2026-11-24", { cards: 1, xp: 5 }), cardOps: [op] },
+      daily: { day: "2026-11-24", answered: 1 },
+      streak: { count: 1, lastDay: "2026-11-24", shield: true },
+    };
+    const q = { id: 9, key: "bank:9", source: "bank", cat: "Pharmacology", diff: 1, stem: "eight words are enough here now" };
+    const local = applyAnswer(withCard, {
+      q, correct: true, ms: 9000, today: "2026-11-24", attempt: "same-day", words: 8, rating: 1300, calibration: { 9: { rating: 1300 } },
+    }).state;
+    const merged = blobForSave(baseline, local, baseline);
+    expect(merged.daily).toMatchObject({ day: "2026-11-24", answered: 2 });
+    expect(merged.xp).toBe(local.xp);
+  });
+
+  it("reads a trial held in memory when storage cannot be opened", () => {
+    const guest = {
+      v: 1, startedAt: Date.now(), lastAt: Date.now(), day: "2026-11-24", xp: 0, run: 0, bestRun: 0,
+      log: [{ id: 1, source: "builtin", correct: true, attempt: "mem", day: "2026-11-24", ms: 9000 }],
+    };
+    holdGuestTrial(guest, null);
+    expect(readGuestForHandoff(null, null).log).toHaveLength(1);
+    releaseHeldGuest();
+    const app = fs.readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+    expect(app).toContain("readGuestForHandoff(storageOrNull(() => window.localStorage), storageOrNull(() => window.sessionStorage))");
   });
 
   it("still signs out when the browser refuses storage", async () => {
