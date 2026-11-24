@@ -10,6 +10,15 @@ export const todayStr = () => fmtLocal(new Date());
 export const yesterdayStr = () => { const d = new Date(); d.setDate(d.getDate() - 1); return fmtLocal(d); };
 export const twoDaysAgoStr = () => { const d = new Date(); d.setDate(d.getDate() - 2); return fmtLocal(d); };
 export const addDays = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return fmtLocal(d); };
+/* Same offset, counted from a stored local day rather than the clock.
+   An imported answer schedules its review from the day it was taken. */
+export const addDaysFrom = (day, n) => {
+  const [y, m, d] = String(day).split("-").map(Number);
+  if (!y || !m || !d) return addDays(n);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + n);
+  return fmtLocal(dt);
+};
 export const weekStart = () => {
   const d = new Date();
   d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // back to local Monday

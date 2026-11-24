@@ -14,6 +14,7 @@
      - Ranks and badges need accuracy over a recent window, not volume. */
 
 import { CASE_STUDIES } from "./case-studies.js";
+import { questionIdentity } from "./question-identity.js";
 
 /* ---------------- dates (LOCAL) ---------------- */
 export function parseDay(s) {
@@ -180,19 +181,9 @@ export function tagLegacyCaseRows(log, questionIds = []) {
 /* A log row is this question only when both sides carry the same
    canonical key (`builtin:7` is not `bank:7`). An unclassified row,
    or a row with no source, is not a match. */
-function canonicalOf(row) {
-  if (!row || row.unclassified) return null;
-  if (typeof row.key === "string" && row.key) return row.key;
-  if (row.source === "builtin" || row.source === "bank" || row.source === "case") {
-    if (row.id == null || row.id === "") return null;
-    return `${row.source}:${row.id}`;
-  }
-  return null;
-}
-
 export function sameAnswer(q, row) {
-  const a = canonicalOf(q);
-  const b = canonicalOf(row);
+  const a = questionIdentity(q);
+  const b = questionIdentity(row);
   return !!a && a === b;
 }
 

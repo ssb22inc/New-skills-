@@ -2,7 +2,7 @@
    srsMap: { [cardId]: { interval, due } } — replaces the fixed-position
    array now that the bank grows past the built-in dozen. Deterministic
    plain code (CLAUDE.md rule 6); dates LOCAL (rule 4). */
-import { todayStr, addDays } from "./dates.js";
+import { todayStr, addDays, addDaysFrom } from "./dates.js";
 
 export const NEW_PER_DAY = 20; // Anki-style cap so a 1,000-card bank isn't due on day one
 
@@ -72,15 +72,17 @@ export function refundNewCard(fcNew, today = todayStr(), id) {
 
 /* Grade → next {interval, due}. Same ladder the app has always used:
    again = later today · hard = tomorrow · good = 3→7→15→31…60d · easy = 7→22…90d */
-export function nextSchedule(entry, grade) {
+export function nextSchedule(entry, grade, fromDay = null) {
   const interval = entry?.interval ?? 0;
   let next;
   if (grade === "again") next = 0;
   else if (grade === "hard") next = 1;
   else if (grade === "good") next = interval < 1 ? 3 : Math.min(interval * 2 + 1, 60);
   else next = interval < 1 ? 7 : Math.min(interval * 3 + 1, 90);
+  const steps = Math.max(0, next);
+  const base = typeof fromDay === "string" && /^\d{4}-\d{2}-\d{2}$/.test(fromDay) ? fromDay : null;
   // `seen` orders same-day reviews so a card just graded does not jump the queue.
-  return { interval: next, due: addDays(Math.max(0, next)), seen: todayStr() };
+  return { interval: next, due: base ? addDaysFrom(base, steps) : addDays(steps), seen: base || todayStr() };
 }
 
 /* Runs once on load. Two jobs: fold the legacy fixed-position array into

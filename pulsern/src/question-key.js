@@ -13,13 +13,9 @@
    in none, stays unclassified. */
 import { CASE_STUDIES } from "./case-studies.js";
 import { caseStepIds, legacyCaseAllowlist } from "./rewards.js";
+import { QUESTION_SOURCES, canonicalKey } from "./question-identity.js";
 
-export const QUESTION_SOURCES = Object.freeze(["builtin", "bank", "case"]);
-
-export function canonicalKey(source, id) {
-  if (!QUESTION_SOURCES.includes(source) || id == null || id === "") return null;
-  return `${source}:${id}`;
-}
+export { QUESTION_SOURCES, canonicalKey, questionIdentity, stampCatalogQuestion } from "./question-identity.js";
 
 export function keyOf(row) {
   if (!row || row.unclassified) return null;

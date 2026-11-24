@@ -10,22 +10,23 @@
    Deterministic plain code (CLAUDE.md rule 6); dates LOCAL (rule 4). */
 import { nextSchedule } from "./srs.js";
 import { todayStr } from "./dates.js";
+import { questionIdentity } from "./question-identity.js";
 
-/* Next schedule after one answer. Returns a NEW map (React-state safe). */
-export function updateMissSchedule(schedule, id, correct) {
+/* Next schedule after one answer. Returns a NEW map (React-state safe).
+   `day` is the local day the answer was taken. Omit it and the review
+   is counted from the clock, which is what a live answer wants. */
+export function updateMissSchedule(schedule, id, correct, day = null) {
+  if (id == null) return schedule ?? {};
   const map = schedule ?? {};
   const entry = map[id];
   if (correct && !entry) return map; // never missed — nothing to schedule
-  return { ...map, [id]: nextSchedule(entry, correct ? "good" : "hard") };
+  return { ...map, [id]: nextSchedule(entry, correct ? "good" : "hard", day) };
 }
 
-/* Latest result per canonical key. A row with no key falls back to its
-   id so older fixtures still group. An unclassified row is skipped. */
+/* Lookup key. The canonical key wins. A row that was never stamped
+   still groups by its raw id so older fixtures keep their pools. */
 export function answerIdentity(row) {
-  if (!row || row.unclassified) return null;
-  if (typeof row.key === "string" && row.key) return row.key;
-  if (row.source === "builtin" || row.source === "bank" || row.source === "case") return `${row.source}:${row.id}`;
-  return row.id != null ? String(row.id) : null;
+  return questionIdentity(row) ?? (row && !row.unclassified && row.id != null ? String(row.id) : null);
 }
 
 export function latestResults(log) {
@@ -60,8 +61,29 @@ export const isDue = (schedule, id, today = todayStr()) => {
    misses   — every current miss (latest answer wrong), due or not, for
               on-demand Review Misses;
    review   — due ∪ misses, due ones first: what Review Misses serves. */
-/* A merged trial answer is stored as guest-<built-in id> so it cannot
-   collide with a shared-bank item. Review still needs the original stem. */
+export function questionByIdentity(questions, id) {
+  if (id == null) return null;
+  const want = String(id);
+  return (questions ?? []).find((q) => String(answerIdentity(q) ?? "") === want) ?? null;
+}
+
+/* Questions whose canonical key is not already in the log. A built-in
+   answer does not hide the bank question that shares its number. */
+export function unseenQuestions(questions, log) {
+  const seen = new Set();
+  for (const row of log ?? []) {
+    const id = answerIdentity(row);
+    if (id != null) seen.add(String(id));
+  }
+  return (questions ?? []).filter((q) => {
+    const id = answerIdentity(q);
+    return q && id != null && !seen.has(String(id));
+  });
+}
+
+/* A merged trial answer keeps the built-in stem. Its navigation id is
+   the canonical key, so a bank row with the same number is a different
+   question. Legacy guest- prefixed rows still resolve to the built-in. */
 export function expandTrialQuestions(questions, log, registry = null) {
   const list = questions ?? [];
   const have = new Set(list.map((q) => answerIdentity(q) ?? String(q.id)));
@@ -108,16 +130,24 @@ export function todayPool(questions, log, schedule, freshPool, today = todayStr(
    (including a skip) are removed BEFORE the due-only shortcut. Skipping the
    only due review must fall through to other misses and new questions,
    and Review misses must still reach a miss that is not due yet. */
+function heldKeys(held) {
+  return new Set((held ?? []).map((id) => String(id)));
+}
+
+function stillOpen(q, skip) {
+  return q && !skip.has(String(answerIdentity(q) ?? q.id));
+}
+
 export function sessionPool(questions, { log, schedule, fresh, mode, held = [], today = todayStr() } = {}) {
-  const skip = new Set(held);
-  const visible = (questions ?? []).filter((q) => q && !skip.has(q.id));
+  const skip = heldKeys(held);
+  const visible = (questions ?? []).filter((q) => stillOpen(q, skip));
   if (mode === "review") {
     const { due, review } = reviewPools(visible, log, schedule, today);
     return due.length ? due : review;
   }
   if (mode === "today") {
-    const visibleFresh = (fresh ?? []).filter((q) => q && !skip.has(q.id));
+    const visibleFresh = (fresh ?? []).filter((q) => stillOpen(q, skip));
     return todayPool(visible, log, schedule, visibleFresh, today);
   }
-  return (fresh ?? []).filter((q) => q && !skip.has(q.id));
+  return (fresh ?? []).filter((q) => stillOpen(q, skip));
 }

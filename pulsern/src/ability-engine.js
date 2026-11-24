@@ -36,9 +36,12 @@ const PASS_SCALE = 140;         // logistic width for the pass mapping
 export const emptyAbility = (cats) =>
   Object.fromEntries(cats.map((c) => [c, { theta: BASE, n: 0 }]));
 
-/* Item rating: calibrated value if we have one, else the diff seed. */
-export const itemRating = (q, calibration = {}) =>
-  calibration[q.id]?.rating ?? SEED[q.diff] ?? 1300;
+/* Item rating: a calibrated bank row uses its own rating. A built-in
+   or a case step that happens to share the numeric id does not. */
+export const itemRating = (q, calibration = {}) => {
+  const bankRating = q && q.source !== "builtin" && q.source !== "case" ? calibration[q.id]?.rating : undefined;
+  return bankRating ?? SEED[q?.diff] ?? 1300;
+};
 
 const expected = (theta, rating) =>
   1 / (1 + Math.pow(10, (rating - theta) / 400));

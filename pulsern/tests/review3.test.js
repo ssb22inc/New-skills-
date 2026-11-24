@@ -40,7 +40,9 @@ describe("Codex P2 wiring", () => {
     expect(app).toContain("stampedQuestion(");
     expect(app).toContain("run: runRef.current");
     expect(app).toContain("runRef.current = next.run");
-    expect(app).toContain("linkBuiltInGuest(x, QUESTIONS)");
+    expect(app).toContain("unseenQuestions(catalog, log)");
+    expect(app).toContain("questionByIdentity(reviewQuestions, view.id)");
+    expect(app).toContain("stampCatalogQuestion(");
     expect(app).toContain("createSaveQueue");
     expect(save).toContain("saveQueue.current.enqueue");
     expect(app).toMatch(/useState\(\(\) => \(\{ \.\.\.emptyRewards\(\), rankHigh: 0 \}\)\)/);

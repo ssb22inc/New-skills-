@@ -232,6 +232,22 @@ export function guestImportIdentity(entry) {
   return stampedQuestion({ ...entry, id, source, key: entry?.key ?? canonicalKey(source, id) });
 }
 
+/* The attempt id starts with the trial clock. That instant, not the
+   moment of import, is when the answer happened. A row with no clock
+   falls back to noon on the local day it names. */
+export function guestEventAt(attempt, day) {
+  const [head, tail] = String(attempt ?? "").split(":");
+  const base = Number(head);
+  const index = Number(tail);
+  const extra = Number.isFinite(index) ? index : 0;
+  if (Number.isFinite(base) && base > 1e11) return base + extra;
+  if (typeof day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    const [y, m, d] = day.split("-").map(Number);
+    return new Date(y, m - 1, d, 12, 0, 0).getTime() + extra;
+  }
+  return null;
+}
+
 export function mergeGuestIntoBlob(s, guest, { today, now = Date.now(), calibration = {} } = {}) {
   if (!guestFresh(guest, now)) return { blob: s, summary: null };
   /* Import identity is the attempt, never the question id. guest-1 from a
@@ -253,11 +269,12 @@ export function mergeGuestIntoBlob(s, guest, { today, now = Date.now(), calibrat
       day: typeof l.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(l.day) ? l.day : (guest.day ?? today),
     }))
     .map((l) => ({ ...guestImportIdentity(l), ...l, key: guestImportIdentity(l).key, source: guestImportIdentity(l).source }))
-    .filter((l) => !have.has(String(l.attempt)));
+    .filter((l) => !have.has(String(l.attempt)))
+    .sort((a, b) => (guestEventAt(a.attempt, a.day) ?? 0) - (guestEventAt(b.attempt, b.day) ?? 0));
   if (!entries.length) return { blob: s, summary: null };
   let state = {
     log: s.log ?? [], xp: s.xp ?? 0, ability: s.ability, streak: s.streak, rewards: s.rewards,
-    daily: s.daily, missSchedule: s.missSchedule, run: 0, bestRun: s.bestRun ?? 0,
+    daily: s.daily, missSchedule: s.missSchedule, run: s.run ?? 0, bestRun: s.bestRun ?? 0,
   };
   const beforeDay = s.streak?.lastDay ?? null;
   let xpGain = 0;
@@ -269,6 +286,7 @@ export function mergeGuestIntoBlob(s, guest, { today, now = Date.now(), calibrat
       ms: Number.isFinite(e.ms) ? e.ms : Infinity,
       today: e.day,
       attempt: e.attempt,
+      at: guestEventAt(e.attempt, e.day) ?? undefined,
       calibration,
     });
     if (applied.duplicate) continue;

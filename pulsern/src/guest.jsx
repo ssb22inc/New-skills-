@@ -7,7 +7,7 @@ import { QBank, QUESTIONS, CATS, Style, Toolkit } from "./App.jsx";
 import { LabFab } from "./lab-fab.jsx";
 import { OPEN_LABS_EVENT } from "./question-nav.jsx";
 import { emptyAbility, updateAbility } from "./ability-engine.js";
-import { updateMissSchedule } from "./question-review.js";
+import { updateMissSchedule, answerIdentity } from "./question-review.js";
 import { todayStr } from "./dates.js";
 import { comboFor, CAREER } from "./rewards.js";
 import { rewardBeat, motionAllowed, GUEST_PREFS } from "./effects.js";
@@ -53,7 +53,7 @@ export default function GuestTrial({ onSignUp, onSignIn }) {
     setGuest({
       ...r.guest,
       ability: updateAbility(guest.ability ?? emptyAbility(CATS), q, correct, {}).ability,
-      missSchedule: updateMissSchedule(guest.missSchedule ?? {}, q.id, correct),
+      missSchedule: updateMissSchedule(guest.missSchedule ?? {}, answerIdentity(q), correct, todayStr()),
     });
     if (out.xp > 0) rewardBeat(out.combo ? "combo" : "correct", GUEST_PREFS);
     announce(comboSpeech(out.combo, newBest));

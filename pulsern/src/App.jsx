@@ -270,7 +270,7 @@ import {
   sessionProgress as cardProgress, canUndoGrade, undoGrade,
 } from "./card-nav.js";
 import { pickCategory, seededRandom, seedFrom, STARVE_WINDOW } from "./weak-spots.js";
-import { updateMissSchedule, reviewPools, sessionPool, expandTrialQuestions } from "./question-review.js";
+import { updateMissSchedule, reviewPools, sessionPool, expandTrialQuestions, unseenQuestions, questionByIdentity, answerIdentity } from "./question-review.js";
 import {
   emptyNav, appendQuestion, saveDraft, markAnswered, canGoBack, goBack, present,
   forward, fallbackSkip, jumpToSkipped, skippedCount, currentEntry, nextUnvisited,
@@ -318,9 +318,10 @@ import {
   RewardsStyle, StreakGlyph, EcgBeat, ComboChip, MomentSheet, streakMoment, ShiftCard, CareerCard,
   BadgeGrid, RoundsCard, BestsCard, SessionRecap, EffectsCard, comboSpeech, useAnnouncer,
 } from "./rewards-ui.jsx";
-import { loadGuest, mergeGuestIntoBlob, clearGuest, guestSummary, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, linkBuiltInGuest, readGuestForHandoff, releaseHeldGuest } from "./guest.js";
+import { loadGuest, mergeGuestIntoBlob, clearGuest, guestSummary, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, readGuestForHandoff, releaseHeldGuest } from "./guest.js";
 import { applyAnswer, stampedQuestion } from "./answer-apply.js";
 import { classifyLog, rekeySchedule } from "./question-key.js";
+import { stampCatalogQuestion } from "./question-identity.js";
 import { signOutAndForgetTrial as signOut } from "./sign-out.js";
 import { readProgress, parseProgress, clearLegacyProgressBackup, guestHandoff, sessionReadDecision } from "./progress-load.js";
 
@@ -913,7 +914,6 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, catalog]);
 
-  const answeredIds = log.map((l) => l.id);
   const acc = log.length ? log.filter((l) => l.correct).length / log.length : 0;
 
   // Elo/Rasch readiness: {pct, low, high, theta, weakest} or null under 12 answers
@@ -1028,7 +1028,7 @@ export default function App() {
   const onNewCard = (id) => setFcNew((f) => noteNewCard(f, todayStr(), id));
   const onRefundNewCard = (id) => setFcNew((f) => refundNewCard(f, todayStr(), id));
   const allQuestions = useMemo(
-    () => [...(bankQs ?? [...QUESTIONS, ...NGN_SAMPLES, ...CALC_SAMPLES, ...COVERAGE_SAMPLES]), ...customQs],
+    () => [...(bankQs ?? BUNDLED_QUESTIONS), ...customQs].map((q) => stampCatalogQuestion(q, BUNDLED_QUESTIONS)),
     [bankQs, customQs]
   );
   const addQuestions = (qs) => setCustomQs((c) => [...c, ...qs]);
@@ -1113,11 +1113,17 @@ export default function App() {
       try {
         // honest inventory: the plan may never schedule questions that
         // don't exist (RN pack prompt 2)
-        const answeredIds = new Set(log.map((l) => l.id));
+        const answeredIds = new Set(log.map((l) => answerIdentity(l)).filter((id) => id != null));
         const lastById = {};
-        for (const l of log) lastById[l.id] = l.correct;
+        for (const l of log) {
+          const id = answerIdentity(l);
+          if (id != null) lastById[id] = l.correct;
+        }
         const perCat = Object.fromEntries(CATS.map((c) => [c, 0]));
-        for (const q of allQuestions) if (!answeredIds.has(q.id) && perCat[q.cat] !== undefined) perCat[q.cat]++;
+        for (const q of allQuestions) {
+          const id = answerIdentity(q);
+          if (id != null && !answeredIds.has(id) && perCat[q.cat] !== undefined) perCat[q.cat]++;
+        }
         const misses = Object.values(lastById).filter((ok) => !ok).length;
         const token = await currentAccessToken();
         const r = await fetch("/api/plan", {
@@ -1890,7 +1896,10 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
   qKeys.current = {}; // filled in below only while a question is on screen
   useStudyKeys(qKeys);
 
-  const answeredIds = [...new Set(log.map((l) => l.id))];
+  const catalog = useMemo(
+    () => (questions ?? []).map((item) => stampCatalogQuestion(item, BUNDLED_QUESTIONS)),
+    [questions],
+  );
 
   // focused practice: empty filter = everything (the adaptive default)
   const [catFilter, setCatFilter] = useState([]);
@@ -1902,12 +1911,8 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
     (!popFilter.length || popFilter.includes(x.population));
   const toggleIn = (arr, set) => (v) => set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
 
-  const freshPool = questions.filter((x) => {
-    if (!inFocus(x)) return false;
-    const linked = linkBuiltInGuest(x, QUESTIONS);
-    return !answeredIds.some((id) => String(id) === String(x.id) || (linked.aliases ?? []).map(String).includes(String(id)));
-  });
-  const reviewQuestions = expandTrialQuestions(questions, log, QUESTIONS);
+  const freshPool = unseenQuestions(catalog, log).filter(inFocus);
+  const reviewQuestions = expandTrialQuestions(catalog, log, BUNDLED_QUESTIONS);
   /* Missed questions run on a spaced-review schedule (question-review.js):
      duePool = scheduled reviews whose LOCAL date has arrived; reviewPool =
      those plus every current miss, so Review Misses still serves all misses
@@ -1917,13 +1922,13 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
 
   const reveal = (navState, knownQ) => {
     const view = present(navState);
-    const question = knownQ ?? (view ? reviewQuestions.find((x) => x.id === view.id) : null);
+    const question = knownQ ?? (view ? questionByIdentity(reviewQuestions, view.id) : null);
     justScored.current = false;
     if (!view || !question) { setNav(navState); setQ(null); setPhase("done"); return; }
     setNav(navState);
     setQ(question);
     if (view.mode === "review") {
-      setLastRes(resById.current[question.id] ?? null);
+      setLastRes(resById.current[answerIdentity(question)] ?? null);
       setSel(view.sel);
       setOrder(view.order ?? []);
       setWasCorrect(!!view.wasCorrect);
@@ -1982,7 +1987,7 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
       Math.abs(itemRating(b, calibration) - pickTargetRating(ability, b.cat)));
     const pick = pool[Math.floor(rand() * Math.min(3, pool.length))];
     setLastCat(pick.cat);
-    reveal(appendQuestion(trail, pick.id), pick);
+    reveal(appendQuestion(trail, answerIdentity(pick)), pick);
   };
 
   /* Next on an unanswered question skips it: no log line, no schedule,
@@ -2009,7 +2014,8 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
     // NCSBN-style partial credit (ngn.js); the engine gets full credit as "correct".
     const c = scoreItem(q, q.type === "order" ? order : sel);
     const ok = isFullCredit(c);
-    const review = updateMissSchedule(missSchedule, q.id, ok)[q.id]?.due ?? null;
+    const ident = answerIdentity(q);
+    const review = updateMissSchedule(missSchedule, ident, ok)[ident]?.due ?? null;
     const marked = markAnswered(nav, { sel, order, wasCorrect: ok, credit: c, nextReview: review });
     setCredit(c);
     setWasCorrect(ok);
@@ -2018,7 +2024,7 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
        neither does a second look at an answer already saved. */
     if (marked.recorded) {
       const res = record(q, ok, { ms: Date.now() - shownAt.current }) ?? null;
-      resById.current[q.id] = res;
+      resById.current[ident] = res;
       setLastRes(res);
       setSessionN((n) => n + 1);
       setDiffTarget((d) => Math.max(1, Math.min(3, d + (ok ? 1 : -1))));
@@ -2051,11 +2057,12 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
   const fbSegs = useMemo(() => (q && phase === "feedback" ? questionFeedbackSegments(q, result) : []), [q, phase, wasCorrect, credit]); // eslint-disable-line react-hooks/exhaustive-deps
   /* Bank items (they carry a calibration) can use the AI voice; built-in
      ones use the device voice. */
-  const inBank = q && calibration[q.id] !== undefined;
+  const inBank = !!(q && q.source === "bank" && calibration[q.id] !== undefined);
+  const shownKey = q ? (answerIdentity(q) ?? q.id) : null;
   /* The key changes when the student moves, which stops whatever is
      playing and, with "Read each new one" on, reads the question now shown. */
-  const qReader = useReadAloud(qSegs, phase === "answering" && q ? `q:${q.id}:${nav.index}` : "off", inBank ? { kind: "question", id: q.id, part: "question" } : null);
-  const fbReader = useReadAloud(fbSegs, phase === "feedback" && q ? `fb:${q.id}:${nav.index}` : "off", inBank ? { kind: "question", id: q.id, part: "feedback", result } : null);
+  const qReader = useReadAloud(qSegs, phase === "answering" && q ? `q:${shownKey}:${nav.index}` : "off", inBank ? { kind: "question", id: q.id, part: "question" } : null);
+  const fbReader = useReadAloud(fbSegs, phase === "feedback" && q ? `fb:${shownKey}:${nav.index}` : "off", inBank ? { kind: "question", id: q.id, part: "feedback", result } : null);
   useSessionReport(onSession, {
     inSession: phase === "answering" || phase === "feedback" || phase === "break",
     hasDraft: phase === "answering" && hasDraftAnswer(q, sel, order),
@@ -2064,8 +2071,8 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
      start at the stem, below the sticky header, on a short phone. */
   useEffect(() => {
     if (phase === "answering" && q) window.scrollTo(0, 0);
-  }, [q?.id, phase]);
-  useLabSettleKey(q ? `${q.id}:${phase}` : phase);
+  }, [shownKey, phase]);
+  useLabSettleKey(q ? `${shownKey}:${phase}` : phase);
 
   const TYPE_CHIPS =[["mc", "Multiple choice"], ["sata", "Select all"], ["order", "Ordering"], ["matrix", "Matrix"], ["bowtie", "Bow-tie"], ["cloze", "Cloze"], ["calc", "Dosage calc"], ["highlight", "Highlight"]];
 
@@ -2099,7 +2106,7 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
           <button className="btn" onClick={() => { onBegin?.(); setMode("new"); pickFrom(emptyNav(), "new"); }} disabled={!freshPool.length}>{freshPool.length ? "New questions" : "All questions seen"}</button>
           <button className="btn ghost" onClick={() => { onBegin?.(); setMode("review"); pickFrom(emptyNav(), "review"); }} disabled={!reviewPool.length}>Review misses ({reviewPool.length})</button>
         </div>
-        {addQuestions && isOwner && <Generator provider={provider} addQuestions={addQuestions} log={log} questions={questions} lowOnNew={freshPool.length < 5} />}
+        {addQuestions && isOwner && <Generator provider={provider} addQuestions={addQuestions} log={log} questions={catalog} lowOnNew={freshPool.length < 5} />}
 
         {!freshPool.length && !reviewPool.length && <p className="small tip">Bank cleared with every miss corrected. That's mastery. Check Stats, then keep the flashcard schedule alive.</p>}
       </section>
@@ -2391,13 +2398,13 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
             )}
             <ReadAloudBar reader={fbReader} label="Listen to the explanation" />
             <p className={ra(fbReader, "rationale", "rationale")}><strong>Rationale.</strong> {q.rationale}</p>
-            {q.ai && <p className="small">{calibration[q.id] !== undefined ? "✨ AI-assisted practice item that passed automated quality checks." : "✨ AI-assisted practice item."}</p>}
+            {q.ai && q.source === "bank" && <p className="small">{calibration[q.id] !== undefined ? "✨ AI-assisted practice item that passed automated quality checks." : "✨ AI-assisted practice item."}</p>}
             {/* Astra-confirmed concept diagrams for this exact question (if any) */}
-            <ConceptExplainers key={`dx${q.id}`} q={q} />
+            <ConceptExplainers key={`dx${shownKey}`} q={q} />
             {guest
               ? <GuestAiNote onSignIn={onGuestSignIn} />
-              : <TutorExplain key={q.id} q={q} wasCorrect={wasCorrect} provider={provider} isBank={calibration[q.id] !== undefined} />}
-            <ReportIssue key={`r${q.id}`} itemId={calibration[q.id] !== undefined ? q.id : null} label="question" />
+              : <TutorExplain key={shownKey} q={q} wasCorrect={wasCorrect} provider={provider} isBank={inBank} />}
+            <ReportIssue key={`r${shownKey}`} itemId={inBank ? q.id : null} label="question" />
             {nav.index < nav.entries.length - 1 && !justScored.current && (
               <p className="small tip">Answered earlier. This result is not scored again.</p>
             )}
