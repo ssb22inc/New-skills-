@@ -9,6 +9,8 @@ import { PNG } from "pngjs";
 import { auditCommercialGovernance, auditGovernance, auditHtml } from "../ops/seo-guardian.mjs";
 import { candidateCommercialPagesFromDist, candidateGuidePagesFromDist, extractOutputText, guideCoverageFromEvidence, parseReview, runAdversary } from "../ops/seo-adversary-ai.mjs";
 import { adviseAdversary, enforceAdversary } from "../ops/seo-enforce-adversary.mjs";
+import { execFileSync } from "node:child_process";
+import { isMarketingPagePath, marketingPagesChanged, parseNulNames } from "../ops/seo-page-change.mjs";
 import { articleJsonLd, related } from "../ops/build-learn.mjs";
 import { ARTICLES } from "../ops/learn-content.mjs";
 import { CLINICAL_ARTICLES } from "../ops/learn-clinical.mjs";
@@ -837,16 +839,43 @@ describe("SEO guardian", () => {
     await expect(adviseAdversary(badJson)).rejects.toThrow(/release blocker/i);
   });
 
-  /* Owner decision 2026-10-29: the model review is advisory. It must still
-     run on every change and its verdict must still be reported, while every
-     other check stays an explicit, required outcome. */
-  it("runs the advisory model review and keeps explicit outcome enforcement in workflow", async () => {
+  /* Owner order 2026-11-24: the model review runs only when a public
+     marketing page or SEO file changed. A missing report still fails when
+     the review was required. Every other check stays required. */
+  it("runs the advisory model review only for a public marketing page or SEO file", async () => {
     const workflow = await fs.readFile(new URL("../../.github/workflows/pulsern-seo-guardian.yml", import.meta.url), "utf8");
+    const rules = await fs.readFile(new URL("../CLAUDE.md", import.meta.url), "utf8");
+    expect(rules).toContain("narrowed by explicit order 2026-11-24");
+    expect(rules).toContain("does not call the model");
     expect(workflow).toContain("Adversarial model review (advisory");
     expect(workflow).toContain("npm run seo:adversary");
+    expect(workflow).toContain("steps.pages.outputs.changed == 'true'");
+    expect(workflow).toContain("git diff --no-renames --name-only -z");
     expect(workflow).not.toContain("env.OPENROUTER_API_KEY != ''");
+    expect(workflow).not.toContain("--skip-report");
     expect(workflow).toContain("npm run seo:enforce -- --advisory");
+    expect(workflow).toContain("adversarial review not required: no public marketing page or SEO file changed");
     expect(workflow).not.toMatch(/seo:enforce[^\n]*\|\|/);
+    expect(isMarketingPagePath("pulsern/public/learn/nclex-fees-and-payment/index.html")).toBe(true);
+    expect(isMarketingPagePath("pulsern/ops/seo-adversary-ai.mjs")).toBe(true);
+    expect(isMarketingPagePath("pulsern/ops/learn-clinical.mjs")).toBe(true);
+    expect(isMarketingPagePath("pulsern/src/App.jsx")).toBe(false);
+    expect(isMarketingPagePath("pulsern/public/product/pulsern-today-dashboard.png")).toBe(false);
+    expect(marketingPagesChanged(["pulsern/src/App.jsx", "pulsern/ops/models.mjs"])).toBe(false);
+    expect(marketingPagesChanged(["pulsern/public/pricing/index.html"])).toBe(true);
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-page-names-"));
+    const git = (...args) => execFileSync("git", args, { cwd: dir });
+    git("init", "-q"); git("config", "user.email", "t@t"); git("config", "user.name", "t");
+    await fs.mkdir(path.join(dir, "pulsern/public/campaign"), { recursive: true });
+    await fs.writeFile(path.join(dir, "pulsern/public/campaign/index.html"), "<p>old</p>\n");
+    git("add", "-A"); git("commit", "-qm", "b");
+    await fs.mkdir(path.join(dir, "pulsern/archive"), { recursive: true });
+    git("mv", "pulsern/public/campaign/index.html", "pulsern/archive/retired-campaign.html");
+    git("commit", "-qm", "h");
+    const names = parseNulNames(execFileSync("git", ["diff", "--no-renames", "--name-only", "-z", "HEAD~1", "HEAD"], { cwd: dir }));
+    expect(names).toContain("pulsern/public/campaign/index.html");
+    expect(marketingPagesChanged(names)).toBe(true);
+    await fs.rm(dir, { recursive: true, force: true });
     for (const id of ["tests", "build", "deterministic", "product_images", "app_boundary", "crawl", "crawl_live", "live_release", "indexnow", "sources", "commercial", "exam_rules", "accessibility"]) {
       expect(workflow).toContain(`test "\${{ steps.${id}.outcome }}" = "success"`);
     }

@@ -23,8 +23,9 @@ export const GEN_MODEL = "anthropic/claude-sonnet-4.6";
 export const REVIEW_MODEL = "deepseek/deepseek-v4-pro-0813";
 export const REVIEWER_NAME = "DeepSeek";
 /* OpenRouter models list, 2026-11-24: deepseek-v4-pro-0813 is text only.
-   gpt-6.1-sol accepts images. Image reviews use that id, still on OpenRouter. */
-export const IMAGE_REVIEW_MODEL = "openai/gpt-6.1-sol";
+   Image-only passes use DeepSeek V4 Flash Vision, which accepts images
+   and is much cheaper than Sol. Still OpenRouter. */
+export const IMAGE_REVIEW_MODEL = "deepseek/deepseek-v4-flash-vision-exp";
 export const reviewerFor = ({ images = false } = {}) => (images ? IMAGE_REVIEW_MODEL : REVIEW_MODEL);
 
 /* Reasoning models reject or silently ignore sampling temperature. Sending
