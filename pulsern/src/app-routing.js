@@ -54,6 +54,8 @@ export function authRedirectUrl(kind = "signin", origin = window.location.origin
   return url.toString();
 }
 
+export const GUEST_TRIAL_KEY = "pulsern-guest-v1";
+
 export async function enforceOneTimeAppRelogin({ auth, storage, href }) {
   if (storage.getItem(APP_SESSION_MIGRATION_KEY) === "complete") return { action: "already-complete" };
   if (isAuthCallbackUrl(href)) {
@@ -66,6 +68,9 @@ export async function enforceOneTimeAppRelogin({ auth, storage, href }) {
   if (data?.session) {
     const { error: signOutError } = await auth.signOut({ scope: "local" });
     if (signOutError) throw signOutError;
+    /* A forced sign-out forgets trial answers on this device too (same rule
+       as src/sign-out.js; the key is GUEST_KEY in src/guest.js). */
+    try { storage.removeItem(GUEST_TRIAL_KEY); } catch { /* storage blocked */ }
   }
   storage.setItem(APP_SESSION_MIGRATION_KEY, "complete");
   return { action: data?.session ? "signed-out-existing-session" : "no-existing-session" };
