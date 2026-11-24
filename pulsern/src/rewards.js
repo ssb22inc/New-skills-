@@ -122,14 +122,17 @@ export function minThinkMs(q) {
 export function answerXp({ q, correct, ms = Infinity, log = [], skipped = false }) {
   if (skipped) return { xp: 0, reason: "skip", base: 0, bonus: 0 };
   let last = null;
-  for (let i = log.length - 1; i >= 0; i--) if (log[i].id === q.id) { last = log[i]; break; }
+  for (let i = log.length - 1; i >= 0; i--) if (String(log[i].id) === String(q.id)) { last = log[i]; break; }
   if (!correct) return { xp: 0, reason: "incorrect", base: 0, bonus: 0, fix: false };
   if (last && last.correct) return { xp: 0, reason: "repeat", base: 0, bonus: 0, fix: false };
   if (Number.isFinite(ms) && ms < minThinkMs(q)) return { xp: 0, reason: "too-fast", base: 0, bonus: 0, fix: false };
-  const base = 10 * (q.diff || 1);
   const fix = !!(last && !last.correct);
-  const bonus = fix ? REVIEW_FIX_BONUS : 0;
-  return { xp: base + bonus, reason: fix ? "fix" : "correct", base, bonus, fix };
+  /* A corrected miss earns the fix bonus only, never the full first-try XP:
+     wrong-then-right must never pay more than right the first time
+     (otherwise "miss on purpose, read the rationale, re-answer" farms XP). */
+  if (fix) return { xp: REVIEW_FIX_BONUS, reason: "fix", base: 0, bonus: REVIEW_FIX_BONUS, fix };
+  const base = 10 * (q.diff || 1);
+  return { xp: base, reason: "correct", base, bonus: 0, fix };
 }
 
 export function xpNote(res) {

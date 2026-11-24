@@ -35,7 +35,7 @@ describe("answer XP", () => {
   });
   it("adds a bonus for correcting an earlier miss", () => {
     const log = [{ id: 7, cat: "Pharmacology", diff: 2, correct: false }];
-    expect(answerXp({ q, correct: true, ms: 9000, log })).toMatchObject({ xp: 20 + REVIEW_FIX_BONUS, reason: "fix", fix: true });
+    expect(answerXp({ q, correct: true, ms: 9000, log })).toMatchObject({ xp: REVIEW_FIX_BONUS, reason: "fix", fix: true });
   });
   it("cannot be farmed: twenty rapid taps on known items earn 0", () => {
     let log = [{ id: 7, cat: "Pharmacology", diff: 2, correct: true }];

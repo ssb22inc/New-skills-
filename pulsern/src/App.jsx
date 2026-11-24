@@ -850,6 +850,7 @@ export default function App() {
     return { ...res, run: nextRun, combo, newBest };
   };
   const noteCard = () => setRewards((r) => bumpDay(r, todayStr(), { cards: 1 }));
+  const unnoteCard = () => setRewards((r) => ((r.days[todayStr()]?.cards ?? 0) > 0 ? bumpDay(r, todayStr(), { cards: -1 }) : r));
   const setPref = (k, v) => setRewards((r) => ({ ...r, prefs: { ...r.prefs, [k]: v } }));
   const motion = motionAllowed(rewards.prefs);
 
@@ -889,7 +890,7 @@ export default function App() {
   const board = useMemo(() => badgeBoard(log, CATS, rewards.badgesSeen), [log, rewards.badgesSeen]);
   const career = useMemo(() => careerStatus({ xp, log, cats: CATS, rankHigh: rewards.rankHigh }), [xp, log, rewards.rankHigh]);
   const missesOpen = useMemo(() => reviewPools(allQuestions, log, missSchedule, today).review.length, [allQuestions, log, missSchedule, today]);
-  const shift = shiftStatus({ day: rewards.days[today], answeredToday: daily.day === today ? daily.answered : 0, dueCount, missesOpen });
+  const shift = shiftStatus({ day: rewards.days[today], answeredToday: rewards.days[today]?.q ?? 0, dueCount, missesOpen });
   const week = weekRounds(rewards, today);
   const nextDue = useMemo(() => {
     let m = null;
@@ -1184,11 +1185,11 @@ export default function App() {
             cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} addXp={(n) => setXp((x) => x + n)}
             needsFirstAnswer={activating} quizKick={quizKick} appliedQuizKick={appliedQuizKick} accessPending={accessPending}
             homeEpoch={homeEpoch} tourHold={tourStep != null} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} onSession={onSession}
-            rewards={rewards} shift={shift} career={career} beginSession={beginSession} recapProps={recapProps} onGrade={noteCard} />}
+            rewards={rewards} shift={shift} career={career} beginSession={beginSession} recapProps={recapProps} onGrade={noteCard} onUngrade={unnoteCard} />}
           {tab === "qbank" && <QBank key={sectionEpoch} record={record} log={log} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} missSchedule={missSchedule} isOwner={isOwner} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus}
             onBegin={beginSession} renderBreak={({ onMore, onEnd }) => <RecapPanel {...recapProps} doneLabel="End session" onDone={onEnd} onMore={onMore} moreLabel="One more block →" />} />}
           {tab === "case" && <CaseStudy key={sectionEpoch} record={record} provider={provider} cases={allCases} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
-          {tab === "cards" && <Flashcards key={sectionEpoch} onGrade={noteCard} addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)} newAllowance={newAllowance} onNewCard={onNewCard} onRefundNewCard={onRefundNewCard} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
+          {tab === "cards" && <Flashcards key={sectionEpoch} onGrade={noteCard} onUngrade={unnoteCard} addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)} newAllowance={newAllowance} onNewCard={onNewCard} onRefundNewCard={onRefundNewCard} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
           {tab === "exams" && <ExamCenter record={record} examResults={examResults} setExamResults={setExamResults} cats={CATS} ent={ent} isOwner={isOwner} onRunning={setExamLock} onAttempt={(f) => setEnt((e) => (e ? { ...e, examsLeft: Math.max(0, e.examsLeft - 1), attempted: [...e.attempted, f] } : e))} onUpgrade={() => goSection("plans")} onSession={onSession} bindExit={examLeave.bindExit} onScored={examLeave.onScored} onLeaveSubmit={examLeave.onLeaveSubmit} />}
           {tab === "plans" && <Paywall ent={ent} onRefresh={refreshEnt} trialBanner={ent?.status === "trial"} />}
           {tab === "stats" && <Stats rewards={rewards} career={career} board={board} week={week} xp={xp} streak={streak} bestRun={bestRun} readiness={readiness} readyLabel={readyLabel} log={log} catStats={catStats} popStats={popStats} acc={acc} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => goSection("plans")} profile={profile} setProfile={setProfile} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
@@ -1480,7 +1481,7 @@ function Today(props) {
   if (stage === "cards") return (
     <div className="stack">
       <p className="eyebrow stage-label">TODAY'S ROUND · STEP 1 OF 2 · CARDS</p>
-      <Flashcards addXp={props.addXp} onGrade={props.onGrade} cards={props.cards} srsMap={props.srsMap} setSrsMap={props.setSrsMap} touchDay={props.touchDay} ready={props.ready} fcFlips={props.fcFlips} onFlip={props.onFlip} newAllowance={props.newAllowance} onNewCard={props.onNewCard} onRefundNewCard={props.onRefundNewCard} embedded onDone={() => setStage("quiz")} onSession={props.onSession} />
+      <Flashcards addXp={props.addXp} onGrade={props.onGrade} onUngrade={props.onUngrade} cards={props.cards} srsMap={props.srsMap} setSrsMap={props.setSrsMap} touchDay={props.touchDay} ready={props.ready} fcFlips={props.fcFlips} onFlip={props.onFlip} newAllowance={props.newAllowance} onNewCard={props.onNewCard} onRefundNewCard={props.onRefundNewCard} embedded onDone={() => setStage("quiz")} onSession={props.onSession} />
     </div>
   );
 
@@ -2532,7 +2533,7 @@ const isCalcCard = (c) => /dosage|calculation|conversion|drip rate|drop factor/i
 
 const GRADE_WORD = { again: "Again", hard: "Hard", good: "Good", easy: "Easy" };
 
-export function Flashcards({ addXp, onGrade, cards, srsMap, setSrsMap, touchDay, ready = true, embedded = false, onDone, fcFlips = 99, onFlip, newAllowance = NEW_PER_DAY, onNewCard, onRefundNewCard, onSession, tourFocus = null }) {
+export function Flashcards({ addXp, onGrade, onUngrade, cards, srsMap, setSrsMap, touchDay, ready = true, embedded = false, onDone, fcFlips = 99, onFlip, newAllowance = NEW_PER_DAY, onNewCard, onRefundNewCard, onSession, tourFocus = null }) {
   const [catFilter, setCatFilter] = useState([]); // empty = all categories
   const [calcOpen, setCalcOpen] = useState(false); // on-screen calculator for dosage cards
   const [focusOpen, setFocusOpen] = useState(false); // Focus bottom sheet
@@ -2625,6 +2626,7 @@ export function Flashcards({ addXp, onGrade, cards, srsMap, setSrsMap, touchDay,
         return n;
       });
       if (rec.xp) addXp(-rec.xp);
+      onUngrade?.();
       delete undoLog.current[id];
     }
     setSession((s) => undoGrade(s));

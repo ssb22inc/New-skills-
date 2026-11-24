@@ -59,8 +59,11 @@ export function guestAnswer(guest, q, correct, { ms = Infinity, today } = {}) {
   const res = answerXp({ q, correct, ms, log: guest.log });
   const run = correct && res.reason !== "too-fast" ? guest.run + 1 : 0;
   const entry = { id: q.id, cat: q.cat, diff: q.diff, correct, ...(q.population ? { pop: q.population } : {}) };
+  /* The trial clock and its study day start at the FIRST answer, not when
+     the page was opened (an idle trial tab must not age out the work). */
+  const first = guest.log.length === 0;
   return {
-    guest: { ...guest, day: guest.day ?? today, log: [...guest.log, entry], xp: guest.xp + res.xp, run, bestRun: Math.max(guest.bestRun, run) },
+    guest: { ...guest, ...(first ? { startedAt: Date.now(), day: today ?? guest.day } : {}), day: first ? (today ?? guest.day) : (guest.day ?? today), log: [...guest.log, entry], xp: guest.xp + res.xp, run, bestRun: Math.max(guest.bestRun, run) },
     res: { ...res, run },
     accepted: true,
   };
@@ -78,10 +81,19 @@ export function guestSummary(guest) {
 export function mergeGuestIntoBlob(s, guest, { today, now = Date.now(), updateAbility = null, calibration = {} } = {}) {
   if (!guestFresh(guest, now)) return { blob: s, summary: null };
   const have = new Set((s.log ?? []).map((l) => String(l.id)));
-  const entries = guest.log
+  /* localStorage is user-editable: never trust its totals. Keep at most
+     GUEST_LIMIT well-formed rows and recompute XP from them. */
+  const valid = guest.log
+    .filter((l) => l && (typeof l.id === "number" || typeof l.id === "string") && typeof l.cat === "string" && typeof l.correct === "boolean")
+    .slice(0, GUEST_LIMIT)
+    .map((l) => ({ id: l.id, cat: l.cat, diff: Math.max(1, Math.min(3, Number(l.diff) || 1)), correct: l.correct, ...(l.pop ? { pop: l.pop } : {}) }));
+  const entries = valid
     .map((l) => ({ ...l, id: `guest-${l.id}` }))
     .filter((l) => !have.has(String(l.id)));
   if (!entries.length) return { blob: s, summary: null };
+  let gxp = 0;
+  { const seen = []; for (const e of entries) { gxp += answerXp({ q: { id: e.id, diff: e.diff }, correct: e.correct, log: seen }).xp; seen.push(e); } }
+  guest = { ...guest, xp: gxp, bestRun: Math.min(guest.bestRun ?? 0, entries.length) };
   const ok = entries.filter((e) => e.correct).length;
   let ability = s.ability;
   if (typeof updateAbility === "function") {
