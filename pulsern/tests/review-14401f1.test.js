@@ -3,8 +3,10 @@
    that throws, and an unresolved card whose catalog arrives late. */
 import { describe, it, expect } from "vitest";
 import { applyAnswer } from "../src/answer-apply.js";
-import { emptyRewards, bumpDay, reverseCardDay } from "../src/rewards.js";
-import { recoverProgressWrite, blobForSave, storageOrNull, createProgressEpoch, noteAccountRead, saveGuest, holdGuestTrial, mergeGuestIntoBlob, bindCommittedProgress } from "../src/guest.js";
+import { emptyRewards, bumpDay, reverseCardDay, recordCardGrade } from "../src/rewards.js";
+import { migrateBlob } from "../src/state.js";
+import { signOutAndForgetTrial } from "../src/sign-out.js";
+import { recoverProgressWrite, blobForSave, reconcileProgress, storageOrNull, createProgressEpoch, noteAccountRead, saveGuest, holdGuestTrial, mergeGuestIntoBlob, bindCommittedProgress } from "../src/guest.js";
 import { refreshedUnresolved, latestResults } from "../src/question-review.js";
 
 const answer = (attempt, id = 1) => ({ id, key: `bank:${id}`, source: "bank", cat: "Pharmacology", diff: 1, correct: true, attempt });
@@ -268,6 +270,38 @@ describe("a revision conflict keeps both devices' answers", () => {
     const live = bindCommittedProgress(held, { blob: saved, revision: 3, current: true, epoch: 1, seenEpoch: 1 });
     expect(live.baseline).toBe(saved);
     expect(live.revision).toBe(3);
+  });
+
+  it("keeps a card grade after the saved progress is loaded again", () => {
+    const stored = {
+      log: [], xp: 5, srsMap: { c17: { interval: 3, due: "2026-12-01", seen: "2026-11-24" } },
+      rewards: recordCardGrade(emptyRewards(), { id: "card:c17:1", day: "2026-11-24", xp: 5 }),
+    };
+    const migrated = migrateBlob(JSON.parse(JSON.stringify(stored)), ["Pharmacology"]);
+    const saved = blobForSave(stored, migrated, stored);
+    expect(saved.xp).toBe(5);
+    expect(saved.rewards.cardOps.map((op) => op.id)).toEqual(["card:c17:1"]);
+    expect(saved.rewards.days["2026-11-24"].cards).toBe(1);
+    expect(saved.srsMap.c17.due).toBe("2026-12-01");
+  });
+
+  it("keeps the other device's first answer when this device still has an empty baseline", () => {
+    const blank = { log: [], xp: 0, ability: {}, rewards: emptyRewards(), bestRun: 0 };
+    const q = { id: 1, key: "bank:1", source: "bank", cat: "Pharmacology", diff: 1, stem: "eight words are enough here now" };
+    const server = applyAnswer(blank, {
+      q, correct: true, ms: 9000, today: "2026-11-24", attempt: "a", words: 8, rating: 1300, calibration: { 1: { rating: 1300 } },
+    }).state;
+    const merged = reconcileProgress(server, blank, null);
+    expect(merged.log.map((row) => row.attempt)).toEqual(["a"]);
+    expect(merged.xp).toBe(server.xp);
+    expect(merged.ability.Pharmacology.n).toBe(server.ability.Pharmacology.n);
+    expect(merged.ability.Pharmacology.theta).toBe(server.ability.Pharmacology.theta);
+  });
+
+  it("still signs out when the browser refuses storage", async () => {
+    const calls = [];
+    await signOutAndForgetTrial({ auth: { signOut: () => { calls.push("out"); return Promise.resolve(); } }, storage: null, holdStorage: null });
+    expect(calls).toEqual(["out"]);
   });
 
   it("keeps the time a trial answer was taken", () => {

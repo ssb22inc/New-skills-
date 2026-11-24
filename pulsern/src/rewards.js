@@ -110,7 +110,19 @@ export function migrateRewards(r) {
     rankHigh: Number.isInteger(r.rankHigh) && r.rankHigh >= 0 && r.rankHigh < CAREER.length ? r.rankHigh : null,
     badgesSeen: Object.fromEntries(Object.entries(r.badgesSeen && typeof r.badgesSeen === "object" ? r.badgesSeen : {}).filter(([, tier]) => Number.isInteger(tier) && tier >= 0 && tier < TIERS.length)),
     prefs: { ...base.prefs, ...(r.prefs && typeof r.prefs === "object" ? r.prefs : {}) },
+    ...(cardOpsFrom(r.cardOps) ? { cardOps: cardOpsFrom(r.cardOps) } : {}),
   };
+}
+
+function cardOpsFrom(raw) {
+  if (!Array.isArray(raw)) return undefined;
+  const ops = [];
+  for (const op of raw) {
+    if (!op || typeof op.id !== "string" || !op.id || typeof op.day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(op.day)) continue;
+    if (!Number.isFinite(Number(op.xp)) || !Number.isFinite(Number(op.cards))) continue;
+    ops.push({ id: op.id, day: op.day, xp: num(op.xp), cards: num(op.cards) });
+  }
+  return ops;
 }
 
 /* ---------------- XP for one answer ---------------- */

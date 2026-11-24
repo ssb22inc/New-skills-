@@ -367,7 +367,7 @@ const store = {
     }
     accountRead = next;
     acceptedBlob = next.blob;
-    loadedBaseline = next.blob;
+    loadedBaseline = next.blob ?? {};
     if (!data) { progressGate.note(0, progressGate.epoch()); return null; }
     progressGate.note(next.revision, progressGate.epoch());
     return JSON.stringify(data.blob);
@@ -654,7 +654,7 @@ export default function App() {
     accountId.current = null;
     setSaveStall(false);
     setMenuOpen(false);
-    signOut({ auth: supabase.auth, storage: window.localStorage, holdStorage: window.sessionStorage });
+    signOut({ auth: supabase.auth, storage: storageOrNull(() => window.localStorage), holdStorage: storageOrNull(() => window.sessionStorage) });
   };
   const signOutAndForgetTrial = async () => {
     const saved = await waitForFlush(() => saveQueue.current.flush());

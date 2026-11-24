@@ -78,7 +78,7 @@ export function sweepPendingProgress(storage) {
 }
 
 export function clearLegacyProgressBackup(storage) {
-  try { storage.removeItem(LEGACY_PROGRESS_BACKUP_KEY); } catch { /* storage blocked */ }
+  try { storage?.removeItem(LEGACY_PROGRESS_BACKUP_KEY); } catch { /* storage blocked */ }
 }
 
 /* "none" | "expired" | "merge" | "keep"

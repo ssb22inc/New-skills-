@@ -459,8 +459,11 @@ function put(merged, key, value) {
 export function reconcileProgress(serverBlob, localBlob, baselineBlob = null) {
   const server = serverBlob && typeof serverBlob === "object" && !Array.isArray(serverBlob) ? serverBlob : {};
   const local = localBlob && typeof localBlob === "object" && !Array.isArray(localBlob) ? localBlob : {};
-  const hasBaseline = baselineBlob != null && typeof baselineBlob === "object" && !Array.isArray(baselineBlob);
-  const base = hasBaseline ? baselineBlob : server;
+  /* A missing baseline is an empty account, not "the server is the baseline".
+     Otherwise a late empty save treats the other device's answer as already
+     scored and writes its XP back to zero. */
+  const hasBaseline = baselineBlob == null || (typeof baselineBlob === "object" && !Array.isArray(baselineBlob));
+  const base = baselineBlob != null && typeof baselineBlob === "object" && !Array.isArray(baselineBlob) ? baselineBlob : {};
   const log = mergeLogs(server.log, local.log, hasBaseline ? (base.log ?? []) : null);
   const replayed = replayUnseen(base, log);
   const unseen = log.some((row) => row?.attempt && !(base.log ?? []).some((item) => item?.attempt === row.attempt));
