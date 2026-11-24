@@ -454,11 +454,7 @@ function undoReviewStep(schedule, key, correct) {
     delete next[key];
     return next;
   }
-  if (interval === 3) {
-    const next = { ...schedule };
-    delete next[key];
-    return next;
-  }
+  if (interval === 3) return { ...schedule, [key]: { ...entry, interval: 1 } };
   const prev = (interval - 1) / 2;
   if (Number.isInteger(prev) && prev >= 1) return { ...schedule, [key]: { ...entry, interval: prev } };
   return schedule;
@@ -626,7 +622,7 @@ export function reconcileProgress(serverBlob, localBlob, baselineBlob = null) {
       if (counted) daily = { ...daily, answered: (daily.answered ?? 0) + counted };
     }
     put(merged, "daily", daily);
-    put(merged, "streak", cardDays.length ? streakFrom(base, days) : replayed.streak);
+    put(merged, "streak", ordered.redo && sameJson(local.streak, base.streak) && server.streak ? server.streak : (cardDays.length ? streakFrom(base, days) : replayed.streak));
   } else if (cardDays.length) {
     if (base.ability || server.ability || local.ability) put(merged, "ability", mergeMap(base.ability, server.ability, local.ability));
     if (base.daily != null || server.daily != null || local.daily != null) put(merged, "daily", choose(base.daily, server.daily, local.daily));

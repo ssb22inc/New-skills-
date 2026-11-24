@@ -333,6 +333,40 @@ describe("a revision conflict keeps both devices' answers", () => {
     for (const cat of ABILITY_CATS) if (cat !== "Pharmacology") expect(merged.ability[cat]).toEqual({ theta: 1200, n: 0 });
   });
 
+  it("keeps a corrected miss on its review ladder when an older answer arrives", () => {
+    const blank = { log: [], xp: 0, ability: emptyAbility(ABILITY_CATS), rewards: emptyRewards(), missSchedule: {}, daily: null, streak: null, bestRun: 0 };
+    const missedQ = { id: 4, key: "bank:4", source: "bank", cat: "Pharmacology", diff: 1, stem: "eight words are enough here now" };
+    const other = { id: 5, key: "bank:5", source: "bank", cat: "Safety & Infection Control", diff: 1, stem: "eight words are enough here now" };
+    const taken = { ms: 9000, words: 8, rating: 1300 };
+    const missed = applyAnswer(blank, { q: missedQ, correct: false, attempt: "miss", at: 1000, today: "2026-11-20", ...taken, calibration: { 4: { rating: 1300 } } }).state;
+    const corrected = applyAnswer(missed, { q: missedQ, correct: true, attempt: "fix", at: 3000, today: "2026-11-22", ...taken, calibration: { 4: { rating: 1300 } } }).state;
+    expect(corrected.missSchedule["bank:4"].interval).toBe(3);
+    const between = applyAnswer(blank, { q: other, correct: true, attempt: "between", at: 2000, today: "2026-11-21", ...taken, calibration: { 5: { rating: 1300 } } }).state;
+    const inOrder = applyAnswer(applyAnswer(missed, { q: other, correct: true, attempt: "between", at: 2000, today: "2026-11-21", ...taken, calibration: { 5: { rating: 1300 } } }).state, {
+      q: missedQ, correct: true, attempt: "fix", at: 3000, today: "2026-11-22", ...taken, calibration: { 4: { rating: 1300 } },
+    }).state;
+    const merged = blobForSave(inOrder, { ...corrected, theme: "dim" }, corrected);
+    expect(merged.missSchedule["bank:4"].interval).toBe(3);
+    expect(merged.log.map((row) => row.attempt)).toEqual(["miss", "between", "fix"]);
+    expect(between.log).toHaveLength(1);
+  });
+
+  it("keeps the corrected streak when this device only changes a setting", () => {
+    const answerRow = (attempt, at, day) => ({ id: 1, key: "bank:1", source: "bank", cat: "Pharmacology", diff: 1, correct: true, attempt, at, day, ms: 9000, words: 8, rating: 1300 });
+    const tuesday = {
+      log: [answerRow("tue", 2000, "2026-11-24")], xp: 10, ability: {}, rewards: emptyRewards(),
+      streak: { count: 6, lastDay: "2026-11-24", shield: false }, daily: { day: "2026-11-24", answered: 1 }, theme: "light",
+    };
+    const corrected = {
+      ...tuesday,
+      log: [answerRow("mon", 1000, "2026-11-23"), answerRow("tue", 2000, "2026-11-24")],
+      streak: { count: 7, lastDay: "2026-11-24", shield: true },
+    };
+    const merged = blobForSave(corrected, { ...tuesday, theme: "dim" }, tuesday);
+    expect(merged.streak).toMatchObject({ count: 7, lastDay: "2026-11-24", shield: true });
+    expect(merged.theme).toBe("dim");
+  });
+
   it("does not count a saved answer twice when an older answer arrives", () => {
     const baseline = { log: [], xp: 0, ability: emptyAbility(ABILITY_CATS), rewards: emptyRewards(), daily: null, missSchedule: {}, streak: null, bestRun: 0 };
     const taken = { ms: 9000, today: "2026-11-24", words: 8, rating: 1300 };

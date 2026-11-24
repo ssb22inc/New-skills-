@@ -345,7 +345,9 @@ let accountEpoch = 0;
 let accountRead = { user: null, blob: null, revision: 0, epoch: 0 };
 const store = {
   async get(key) {
+    const seenEpoch = accountEpoch;
     const result = await supabase.auth.getSession();
+    if (seenEpoch !== accountEpoch) return null;
     const decision = sessionReadDecision(result);
     if (decision !== "read") {
       const err = new Error(result?.error?.message || "Could not confirm the signed-in account");
@@ -353,7 +355,6 @@ const store = {
       throw err;
     }
     const session = result.data.session;
-    const seenEpoch = accountEpoch;
     const { data, error } = await supabase.from("progress")
       .select("blob, revision").eq("user_id", session.user.id).eq("key", key).maybeSingle();
     if (seenEpoch !== accountEpoch) return data ? JSON.stringify(data.blob) : null;
@@ -474,14 +475,18 @@ const store = {
     accountRead = { user: null, blob: null, revision: 0, epoch: accountEpoch };
   },
   async delete(key) {
+    const seenEpoch = accountEpoch;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (seenEpoch !== accountEpoch) return;
+    if (!session) return;
+    const { error } = await supabase.from("progress").delete().eq("user_id", session.user.id).eq("key", key);
+    if (seenEpoch !== accountEpoch) return;
+    if (error) throw new Error(error.message || "Could not erase saved progress");
     accountEpoch += 1;
     progressGate.abandon();
     acceptedBlob = null;
     loadedBaseline = null;
     accountRead = { user: null, blob: null, revision: 0, epoch: accountEpoch };
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-    await supabase.from("progress").delete().eq("user_id", session.user.id).eq("key", key);
   },
 };
 
@@ -1245,7 +1250,7 @@ export default function App() {
     /* Never while not saving: the only server copy is the row we couldn't open (REVIEW-4 R4-1). */
     if (saveBlocked) return;
     saveQueue.current?.invalidate();
-    try { await store.delete(STORE_KEY); } catch (e) { /* nothing saved */ }
+    try { await store.delete(STORE_KEY); } catch (e) { setSaveFailed(true); return; }
     setXp(0); setRun(0); setBestRun(0); setLog([]); setFlagged([]); setCustomQs([]);
     touchedDay.current = null;
     setStreak({ count: 0, lastDay: null, shield: true }); setDaily({ day: todayStr(), answered: 0 });
