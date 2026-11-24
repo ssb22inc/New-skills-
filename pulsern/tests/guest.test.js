@@ -282,13 +282,14 @@ describe("a trial cannot be lost, duplicated, or over-paid", () => {
   it("imports a later attempt of the same question and does not pay it twice", () => {
     const first = trial(NOW, false);
     const second = trial(NOW + 5000, true);
+    second.missSchedule = { 1: { interval: 3, due: "2026-11-27" } };
     const once = mergeGuestIntoBlob(migrateBlob({}, CATS), first, { today: TODAY, now: NOW });
     const twice = mergeGuestIntoBlob(once.blob, second, { today: TODAY, now: NOW + 5000 });
     expect(twice.summary.answers).toBe(1);
     expect(twice.blob.log.map((l) => l.id)).toEqual(["guest-1", "guest-1"]);
     expect(new Set(twice.blob.log.map((l) => l.attempt)).size).toBe(2);
     expect(twice.blob.xp).toBe(REVIEW_FIX_BONUS);
-    expect(twice.blob.missSchedule["guest-1"]).toBeUndefined();
+    expect(twice.blob.missSchedule["guest-1"]).toEqual({ interval: 3, due: "2026-11-27" });
     const again = mergeGuestIntoBlob(twice.blob, second, { today: TODAY, now: NOW + 5000 });
     expect(again.summary).toBeNull();
     expect(again.blob.xp).toBe(twice.blob.xp);
@@ -335,14 +336,20 @@ describe("a trial cannot be lost, duplicated, or over-paid", () => {
     expect(twice.blob.streak.count).toBe(once.blob.streak.count);
   });
 
-  it("sign-out forgets a held trial so the next person does not inherit it", async () => {
+  it("sign-out forgets a held trial in session storage, not only the device copy", async () => {
     releaseHeldGuest();
-    const storage = memStore();
-    holdGuestTrial(trial(NOW, true), storage);
+    const local = memStore();
+    const session = memStore();
+    holdGuestTrial(trial(NOW, true), session);
+    clearHeldMemory();
     const { signOutAndForgetTrial } = await import("../src/sign-out.js");
-    await signOutAndForgetTrial({ auth: { signOut: async () => {} }, storage });
-    expect(peekHeldGuest(storage)).toBeNull();
-    expect(storage.getItem(GUEST_HOLD_KEY)).toBeNull();
+    await signOutAndForgetTrial({ auth: { signOut: async () => {} }, storage: local, holdStorage: session });
+    expect(session.getItem(GUEST_HOLD_KEY)).toBeNull();
+    expect(readGuestForHandoff(local, session)).toBeNull();
+    const guestSrc = readFileSync("src/guest.jsx", "utf8");
+    expect(guestSrc).toContain("const leaveForAuth");
+    expect(guestSrc).toContain("onClick={() => leaveForAuth(onSignIn)}");
+    expect(guestSrc).toContain("onGuestSignIn={() => leaveForAuth(onSignUp)}");
   });
 });
 

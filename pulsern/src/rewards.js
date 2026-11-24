@@ -149,7 +149,11 @@ export function sameAnswer(q, row) {
   if (String(row.id) === String(q.id)) return true;
   const id = String(row.id);
   if ((q.aliases ?? []).map(String).includes(id)) return true;
-  return (q.legacyAliases ?? []).map(String).includes(id) && row.source === "case" && row.cat === q.cat;
+  /* Case steps were logged at difficulty 3. An unsourced row at that
+     difficulty is a pre-change case answer. Any other difficulty is a
+     bank question that happens to share the number. */
+  const legacyCase = row.source === "case" || (row.source == null && row.diff === 3);
+  return (q.legacyAliases ?? []).map(String).includes(id) && legacyCase && row.cat === q.cat;
 }
 
 export function answerXp({ q, correct, ms = Infinity, log = [], skipped = false }) {

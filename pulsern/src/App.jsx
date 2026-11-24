@@ -520,7 +520,7 @@ export default function App() {
     }
     saveQueue.current.invalidate();
     accountId.current = null;
-    signOut({ auth: supabase.auth, storage: window.localStorage });
+    signOut({ auth: supabase.auth, storage: window.localStorage, holdStorage: window.sessionStorage });
   };
 
   /* ---- load saved progress (retryable; never treats a failed read as new) ---- */

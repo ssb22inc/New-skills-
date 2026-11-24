@@ -4,8 +4,8 @@
 import { clearGuest, releaseHeldGuest } from "./guest.js";
 import { clearLegacyProgressBackup } from "./progress-load.js";
 
-export function signOutAndForgetTrial({ auth, storage }) {
-  try { clearGuest(storage); releaseHeldGuest(storage); } catch { /* storage blocked */ }
+export function signOutAndForgetTrial({ auth, storage, holdStorage }) {
+  try { clearGuest(storage); releaseHeldGuest(storage, holdStorage); } catch { /* storage blocked */ }
   clearLegacyProgressBackup(storage);
   return auth.signOut();
 }

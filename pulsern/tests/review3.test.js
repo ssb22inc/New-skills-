@@ -130,10 +130,10 @@ describe("N7: case steps already answered stay answered", () => {
   });
   it("a step answered under the old id pays no first-try XP again", () => {
     const step = caseStepIds({ key: "sepsis", index: 0, step: 1 });
-    const log = [{ id: 101, cat: "Physiological Adaptation", diff: 3, correct: true, source: "case" }];
+    const log = [{ id: 101, cat: "Physiological Adaptation", diff: 3, correct: true }];
     expect(answerXp({ q: { ...step, cat: "Physiological Adaptation", diff: 3 }, correct: true, log }).reason).toBe("repeat");
     const db = caseStepIds({ dbId: 12, step: 0 });
-    expect(answerXp({ q: { ...db, cat: "Pharmacology", diff: 3 }, correct: true, log: [{ id: 50120, cat: "Pharmacology", diff: 3, correct: true, source: "case" }] }).xp).toBe(0);
+    expect(answerXp({ q: { ...db, cat: "Pharmacology", diff: 3 }, correct: true, log: [{ id: 50120, cat: "Pharmacology", diff: 3, correct: true }] }).xp).toBe(0);
   });
   it("a bank question with the same number and category does not spend the case step", () => {
     const step = caseStepIds({ key: "sepsis", index: 0, step: 1 });

@@ -78,10 +78,11 @@ export function peekHeldGuest(storage) {
   } catch { return null; }
 }
 
-export function releaseHeldGuest(storage) {
+export function releaseHeldGuest(...stores) {
   heldTrial = null;
-  const drop = (s) => { try { s?.removeItem(GUEST_HOLD_KEY); } catch { /* blocked */ } };
-  drop(storage);
+  for (const storage of stores) {
+    try { storage?.removeItem(GUEST_HOLD_KEY); } catch { /* blocked */ }
+  }
 }
 
 /* One copy. A longer or later hold wins over a short device copy, so the
@@ -287,10 +288,12 @@ export function mergeGuestIntoBlob(s, guest, { today, now = Date.now(), updateAb
   const lastAttempt = new Map();
   for (const e of scored) lastAttempt.set(String(e.id), e);
   for (const [id, e] of lastAttempt) {
-    if (e.correct) { delete missSchedule[id]; continue; }
     const src = id.replace(/^guest-/, "");
     const prev = guest.missSchedule?.[src] ?? guest.missSchedule?.[Number(src)];
-    missSchedule[id] = prev && typeof prev.due === "string" ? prev : { interval: 1, due: e.day ?? today };
+    /* A corrected miss keeps the review date the trial already scheduled.
+       Deleting it is how the next retrieval disappears. */
+    if (prev && typeof prev.due === "string") missSchedule[id] = prev;
+    else if (!e.correct && !missSchedule[id]) missSchedule[id] = { interval: 1, due: e.day ?? today };
   }
   return {
     blob: { ...s, log: [...s.log, ...logged], xp: s.xp + (guest.xp ?? 0), bestRun: Math.max(s.bestRun ?? 0, guest.bestRun ?? 0), ability, streak, rewards, daily, missSchedule },

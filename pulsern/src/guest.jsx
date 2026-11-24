@@ -60,6 +60,10 @@ export default function GuestTrial({ onSignUp, onSignIn }) {
     return out;
   };
 
+  const leaveForAuth = (go) => {
+    holdGuestTrial(guest, window.sessionStorage);
+    go?.();
+  };
   const answered = guest.log.length;
 
   return (
@@ -74,7 +78,7 @@ export default function GuestTrial({ onSignUp, onSignIn }) {
           <span className="brand-name">PULSE<em>RN</em></span>
         </a>
         <div className="top-stats">
-          <button type="button" className="theme-btn guest-signin" onClick={onSignIn}>Sign in</button>
+          <button type="button" className="theme-btn guest-signin" onClick={() => leaveForAuth(onSignIn)}>Sign in</button>
         </div>
       </header>
       <main className="body">
@@ -89,10 +93,10 @@ export default function GuestTrial({ onSignUp, onSignIn }) {
               </div>
             </div>
             <QBank record={record} log={guest.log} questions={pool} ability={ability} calibration={{}} missSchedule={guest.missSchedule ?? {}}
-              auto autoLimit={limit} onDone={() => setStage("save")} guest onGuestSignIn={onSignUp} />
+              auto autoLimit={limit} onDone={() => setStage("save")} guest onGuestSignIn={() => leaveForAuth(onSignUp)} />
           </div>
         ) : (
-          <SaveProgress guest={guest} onSignUp={() => { holdGuestTrial(guest, window.sessionStorage); onSignUp(); }} onSignIn={() => { holdGuestTrial(guest, window.sessionStorage); onSignIn(); }} motion={motion} deviceSaved={deviceSaved} />
+          <SaveProgress guest={guest} onSignUp={() => leaveForAuth(onSignUp)} onSignIn={() => leaveForAuth(onSignIn)} motion={motion} deviceSaved={deviceSaved} />
         )}
       </main>
       <footer className="guest-legal">
@@ -100,7 +104,7 @@ export default function GuestTrial({ onSignUp, onSignIn }) {
         <p className="small tip"><a href="/legal/">Terms, Privacy, and Disclaimer</a></p>
       </footer>
       <LabFab hidden={labOpen} open={labOpen} settleKey={stage} onOpen={() => { setSection("labs"); setLabOpen(true); }} />
-      <Toolkit open={labOpen} section={section} onSection={setSection} onClose={() => setLabOpen(false)} provider="deepseek" guest onGuestSignIn={onSignUp} />
+      <Toolkit open={labOpen} section={section} onSection={setSection} onClose={() => setLabOpen(false)} provider="deepseek" guest onGuestSignIn={() => leaveForAuth(onSignUp)} />
     </div>
   );
 }

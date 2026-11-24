@@ -14,7 +14,7 @@ function AppEntry() {
 
   useEffect(() => {
     let active = true;
-    enforceOneTimeAppRelogin({ auth: supabase.auth, storage: window.localStorage, href: window.location.href })
+    enforceOneTimeAppRelogin({ auth: supabase.auth, storage: window.localStorage, holdStorage: window.sessionStorage, href: window.location.href })
       .then(() => { if (active) setState("ready"); })
       .catch(() => { if (active) setState("error"); });
     return () => { active = false; };
