@@ -5,6 +5,7 @@ import "@fontsource/archivo/latin-700.css";
 import "@fontsource/archivo/latin-800.css";
 import "@fontsource/ibm-plex-mono/latin-400.css";
 import "@fontsource/ibm-plex-mono/latin-600.css";
+import "./capture-fonts.css";
 import App from "../src/App.jsx";
 
 /* Internal-only renderer used by capture-product-screenshots.mjs. It imports

@@ -1029,6 +1029,10 @@ describe("product screenshot capture", () => {
     const src = await fs.readFile(new URL("../ops/capture-product-screenshots.mjs", import.meta.url), "utf8");
     expect(src).toMatch(/timezoneId:\s*"UTC"/);
     expect(src).toMatch(/page\.clock\.setFixedTime\(new Date\(CAPTURE_TIME\)\)/);
+    expect(src).toMatch(/animation:none !important/);
+    expect(src).toMatch(/pulsern-labfab-v1/);
+    expect(src).toMatch(/canonicalPng/);
+    expect(src).toMatch(/PulseRN Capture Symbols/);
     expect(src).toMatch(/export const CAPTURE_TIME = "\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"/);
     expect(src).toMatch(/Study toolkit/);
     expect(src).not.toMatch(/Open quick actions: lab values and help/);

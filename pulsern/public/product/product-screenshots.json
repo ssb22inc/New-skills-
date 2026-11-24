@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-11-24T01:14:56.998Z",
-  "sourceCommitSha": "58bfee57888d6251d6a776c6f4d0ab5896a859c2",
+  "capturedAt": "2026-11-24T01:30:54.201Z",
+  "sourceCommitSha": "04d639e4e41236349819ffef04b81abd63cf07bd",
   "renderer": "PulseRN App.jsx deterministic built-in-content harness",
   "browser": "151.0.7922.34",
   "containsLearnerData": false,
@@ -81,8 +81,8 @@
   "images": [
     {
       "file": "pulsern-adaptive-practice.png",
-      "sha256": "8e83a3b2245e8c989121b0994ce9114eb7ddbc904df3b71f1bcbb5831039d4cf",
-      "bytes": 50768,
+      "sha256": "89f1387366b0f35f9472bdc2c91a072451675f997c254f21f9e61dd0581fa9ba",
+      "bytes": 64372,
       "width": 720,
       "height": 620,
       "alt": "PulseRN adaptive NCLEX practice screen with one question, four answer choices, and the control to check the answer",
@@ -90,8 +90,8 @@
     },
     {
       "file": "pulsern-today-dashboard.png",
-      "sha256": "b195a896ae771d4a8915355017a4804d98c741f78ea78dfd592940b2f632e5a2",
-      "bytes": 70115,
+      "sha256": "28604692d937dcba0fe37357305946819d735566beba3439c181cf794efa1d55",
+      "bytes": 85466,
       "width": 720,
       "height": 1000,
       "alt": "PulseRN Today dashboard showing the daily round, candidate monitor, study goal, and progress cards",
@@ -99,8 +99,8 @@
     },
     {
       "file": "pulsern-lab-reference.png",
-      "sha256": "da042cc6687ce4978c9ede94ddc6f2caf00e71e96912c7058acb461a7785bc87",
-      "bytes": 66693,
+      "sha256": "5da3120dbab75faccb56808120969c8b2425bbf11a6cb6429e4c2f11730e6974",
+      "bytes": 73753,
       "width": 430,
       "height": 932,
       "alt": "PulseRN mobile lab-reference drawer open over an adaptive practice question",

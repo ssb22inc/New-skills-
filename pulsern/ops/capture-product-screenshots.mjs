@@ -7,12 +7,22 @@ import process from "node:process";
 import { chromium } from "playwright";
 import react from "@vitejs/plugin-react";
 import { createServer } from "vite";
+import { canonicalPng } from "./png-canonical.mjs";
 
 /* The fixed moment every capture is taken at (UTC). */
 export const CAPTURE_TIME = "2026-10-30T12:00:00Z";
 
 const OUTPUT = path.resolve(process.argv[2] || "reports/seo/product-screenshots");
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+
+/* Applied before the app paints, so a screenshot cannot land on an ECG
+   frame, a FAB intro, a focus ring, or a caret. */
+const CAPTURE_STYLE = `
+  *,*::before,*::after{animation:none !important;transition:none !important;caret-color:transparent !important}
+  .ecg-line{stroke-dashoffset:0 !important;animation:none !important}
+  .pulse-dot,.blink{animation:none !important;opacity:1 !important}
+  :focus,:focus-visible{outline:none !important}
+`;
 
 async function sourceHashes(directory = "src") {
   const files = [];
@@ -28,7 +38,29 @@ async function sourceHashes(directory = "src") {
   return Object.fromEntries(await Promise.all(files.map(async (file) => [file, sha256(await fs.readFile(file))])));
 }
 
+async function settle(page) {
+  await page.evaluate(async () => {
+    if (document.fonts?.ready) await document.fonts.ready;
+    if (document.fonts?.load) await document.fonts.load("16px 'PulseRN Capture Symbols'");
+    const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+    const fabBox = () => {
+      const fab = document.querySelector(".lab-fab");
+      if (!fab) return "";
+      const r = fab.getBoundingClientRect();
+      return `${Math.round(r.x)},${Math.round(r.y)},${Math.round(r.width)},${Math.round(r.height)}`;
+    };
+    let last = fabBox();
+    for (let i = 0; i < 8; i++) {
+      await frame();
+      const next = fabBox();
+      if (i > 1 && next === last) return;
+      last = next;
+    }
+  });
+}
+
 async function screenshot(page, name, expectedText) {
+  await settle(page);
   const file = path.join(OUTPUT, name);
   const bodyText = await page.locator("body").innerText();
   for (const text of expectedText) {
@@ -36,8 +68,9 @@ async function screenshot(page, name, expectedText) {
       throw new Error(`${name} is missing expected product text: ${text}`);
     }
   }
-  await page.screenshot({ path: file, fullPage: false });
-  const buffer = await fs.readFile(file);
+  const raw = await page.screenshot({ type: "png", fullPage: false });
+  const buffer = canonicalPng(Buffer.from(raw));
+  await fs.writeFile(file, buffer);
   const viewport = page.viewportSize();
   return {
     file: name,
@@ -84,11 +117,16 @@ export async function captureProductScreenshots() {
        a running clock gave a different question on a different day. */
     const page = await browser.newPage({ viewport: { width: 720, height: 1000 }, deviceScaleFactor: 1, timezoneId: "UTC" });
     await page.clock.setFixedTime(new Date(CAPTURE_TIME));
-    await page.addInitScript(() => { Math.random = () => 0.125; });
+    await page.addInitScript((css) => {
+      Math.random = () => 0.125;
+      try { localStorage.setItem("pulsern-labfab-v1", JSON.stringify({ side: "right", y: 0.62 })); } catch { /* private mode */ }
+      const style = document.createElement("style");
+      style.textContent = css;
+      document.documentElement.appendChild(style);
+    }, CAPTURE_STYLE);
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("http://127.0.0.1:4174/ops/product-screenshot.html", { waitUntil: "networkidle" });
-    await page.addStyleTag({ content: "*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}" });
-    await page.evaluate(() => document.fonts.ready);
+    await settle(page);
     await page.getByRole("button", { name: "Skip", exact: true }).click();
     try {
       await page.getByRole("button", { name: /Start today's round$/ }).waitFor();
@@ -112,7 +150,6 @@ export async function captureProductScreenshots() {
     await page.getByRole("tab", { name: /Labs/ }).click();
     await page.getByRole("button", { name: "Electrolytes" }).click();
     await page.getByRole("tabpanel", { name: "🧪 Labs & lookup" }).waitFor();
-    await page.waitForTimeout(500);
     images.push(await screenshot(page, "pulsern-lab-reference.png", ["Sodium", "Potassium"]));
 
     const sources = await sourceHashes();
