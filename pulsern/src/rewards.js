@@ -120,12 +120,28 @@ export function minThinkMs(q) {
 }
 
 /* log = the answer log BEFORE this answer. */
+/* Case-study step ids. New ids are stable strings: bank cases use their db
+   id, bundled cases their fixed `key` (never the editable title). Each step
+   also names the numeric id older app versions logged for it, so a step a
+   student already answered is still a repeat (REVIEW-3 N7):
+     bank case:    50000 + dbId * 10 + step
+     bundled case: 100 + index * 10 + step (bundled cases come first) */
+export function caseStepIds({ dbId = null, key = null, title = "", index = 0, step = 0 }) {
+  if (dbId != null) return { id: `case-db${dbId}-${step}`, aliases: [50000 + Number(dbId) * 10 + step] };
+  return { id: `case-${key ?? title}-${step}`, aliases: [100 + index * 10 + step] };
+}
+
 export function answerXp({ q, correct, ms = Infinity, log = [], skipped = false }) {
   if (skipped) return { xp: 0, reason: "skip", base: 0, bonus: 0 };
   const key = String(q.id);
+  /* Legacy aliases count only for rows of the same category: the old
+     bundled-case ids share the 100-125 range with bank questions, and when
+     in doubt this errs toward paying less, never more. */
+  const aliases = new Set((q.aliases ?? []).map(String));
+  const same = (row) => String(row.id) === key || (aliases.has(String(row.id)) && row.cat === q.cat);
   let last = null, everCorrect = false;
   for (let i = log.length - 1; i >= 0; i--) {
-    if (String(log[i].id) !== key) continue;
+    if (!same(log[i])) continue;
     if (!last) last = log[i];
     if (log[i].correct) { everCorrect = true; break; }
   }

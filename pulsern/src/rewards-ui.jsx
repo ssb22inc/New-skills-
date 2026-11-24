@@ -3,7 +3,7 @@
    no clip-art, no new colors. Every animation is CSS and is switched off
    by prefers-reduced-motion or the in-app "Reduce effects" setting
    (the .fx-reduced class on .app). */
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { CAREER, TIERS, SHORT_CAT, RECENT_WINDOW, COVER_EVERY_WEEK, MAX_COVERS, nextMilestone } from "./rewards.js";
 
 const INITIALS = ["SN", "GN", "NG", "RN", "PR", "CN", "NE", "CNS"];
@@ -100,6 +100,24 @@ export const WEEKDAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Fri
 export function comboSpeech(combo, newBest = false) {
   if (!combo && !newBest) return "";
   return combo ? `${combo.n} in a row, ${combo.label}${newBest ? ", personal best" : ""}` : "New personal best run";
+}
+
+/* One persistent polite live region. announce() clears it, then sets the
+   text on the next tick, so the same message twice in a row ("3 in a row")
+   is still read out. Mounted once per screen tree (REVIEW-3 N4). */
+export const ANNOUNCE_DELAY_MS = 80;
+export function useAnnouncer() {
+  const [msg, setMsg] = useState("");
+  const timer = useRef(null);
+  const announce = useCallback((text) => {
+    if (!text) return;
+    clearTimeout(timer.current);
+    setMsg("");
+    timer.current = setTimeout(() => setMsg(text), ANNOUNCE_DELAY_MS);
+  }, []);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const region = <p className="sr-only" role="status" aria-live="polite" aria-atomic="true" data-announcer="">{msg}</p>;
+  return [region, announce];
 }
 
 export function ComboChip({ combo, newBest = false }) {

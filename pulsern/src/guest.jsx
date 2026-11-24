@@ -10,7 +10,7 @@ import { updateMissSchedule } from "./question-review.js";
 import { todayStr } from "./dates.js";
 import { comboFor, CAREER } from "./rewards.js";
 import { rewardBeat, motionAllowed, GUEST_PREFS } from "./effects.js";
-import { RewardsStyle, EcgBeat, Ripple, StreakGlyph } from "./rewards-ui.jsx";
+import { RewardsStyle, EcgBeat, Ripple, StreakGlyph, useAnnouncer, comboSpeech } from "./rewards-ui.jsx";
 import { freePassPlan } from "./free-pass.js";
 import {
   GUEST_LIMIT, guestPool, emptyGuest, loadGuest, saveGuest, guestAnswer, guestRemaining, guestSummary, guestFresh, clearGuest,
@@ -32,6 +32,7 @@ export default function GuestTrial({ onSignUp, onSignIn }) {
   const pool = useMemo(() => guestPool(QUESTIONS), []);
   const ability = guest.ability ?? emptyAbility(CATS);
   const motion = motionAllowed(GUEST_PREFS);
+  const [liveRegion, announce] = useAnnouncer();
 
   useEffect(() => { saveGuest(window.localStorage, guest); }, [guest]);
 
@@ -48,6 +49,7 @@ export default function GuestTrial({ onSignUp, onSignIn }) {
       missSchedule: updateMissSchedule(guest.missSchedule ?? {}, q.id, correct),
     });
     if (out.xp > 0) rewardBeat(out.combo ? "combo" : "correct", GUEST_PREFS);
+    announce(comboSpeech(out.combo, newBest));
     return out;
   };
 
@@ -58,6 +60,7 @@ export default function GuestTrial({ onSignUp, onSignIn }) {
       <Style />
       <RewardsStyle />
       <GuestStyle />
+      {liveRegion}
       <header className="top">
         <a className="brand brand-btn" href="/" aria-label="PulseRN home">
           <span className="pulse-dot" aria-hidden="true" />

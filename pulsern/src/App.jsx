@@ -307,25 +307,23 @@ import { useSessionReport } from "./session-report.js";
 import { tourMark, tourStepAt, tourStepsFor } from "./tour.js";
 import { LeaveDialog, Tour, useTourDismissScroll, useTourPlacement } from "./tour.jsx";
 import {
-  emptyRewards, answerXp, xpNote, comboFor, cardXp, questionsOn, bumpDay, advanceStreak, shiftStatus, weekRounds, maybeGrantCover,
+  emptyRewards, answerXp, xpNote, comboFor, cardXp, questionsOn, caseStepIds, bumpDay, advanceStreak, shiftStatus, weekRounds, maybeGrantCover,
   careerStatus, badgeBoard, detectMoments, markMomentsSeen, sessionRecap, MAX_COVERS,
 } from "./rewards.js";
 import { motionAllowed, rewardBeat } from "./effects.js";
 import {
   RewardsStyle, StreakGlyph, EcgBeat, ComboChip, MomentSheet, streakMoment, ShiftCard, CareerCard,
-  BadgeGrid, RoundsCard, BestsCard, SessionRecap, EffectsCard, comboSpeech,
+  BadgeGrid, RoundsCard, BestsCard, SessionRecap, EffectsCard, comboSpeech, useAnnouncer,
 } from "./rewards-ui.jsx";
 import { loadGuest, mergeGuestIntoBlob, clearGuest, guestSummary } from "./guest.js";
-import { readProgress, guestHandoff } from "./progress-load.js";
+import { signOutAndForgetTrial as signOut } from "./sign-out.js";
+import { readProgress, parseProgress, backupUnreadableProgress, guestHandoff } from "./progress-load.js";
 
 const STORE_KEY = "pulsern-v1";
 
-/* Signing out also forgets any try-before-sign-up answers on this device,
-   so the next person on a shared computer never inherits them. */
-function signOutAndForgetTrial() {
-  try { clearGuest(window.localStorage); } catch { /* storage blocked */ }
-  return supabase.auth.signOut();
-}
+/* Signing out also forgets any try-before-sign-up answers on this device
+   (src/sign-out.js). Every sign-out button uses this. */
+const signOutAndForgetTrial = () => signOut({ auth: supabase.auth, storage: window.localStorage });
 
 /* ---- STORAGE ADAPTER ---------------------------------------------------
    The app touches persistence ONLY through `store`. To migrate platforms,
@@ -497,12 +495,14 @@ export default function App() {
   const rewardsRef = useRef(rewards);
   rewardsRef.current = rewards;
   const [moments, setMoments] = useState([]);       // celebrations waiting for a natural break
-  const [liveMsg, setLiveMsg] = useState("");       // persistent screen-reader live region (combos)
+  const [liveRegion, announce] = useAnnouncer();    // persistent screen-reader live region (combos)
   const [guestNote, setGuestNote] = useState(null); // what a guest trial carried into this account
   const pendingGuestClear = useRef(false);
 
   /* ---- load saved progress (retryable; never treats a failed read as new) ---- */
-  const [loadState, setLoadState] = useState("loading"); // loading | ok | error
+  const [loadState, setLoadState] = useState("loading"); // loading | ok | error | corrupt
+  const [saveBlocked, setSaveBlocked] = useState(false); // saved row could not be opened: study, but never write over it
+  const unreadableRaw = useRef(null);
   const [guestOffer, setGuestOffer] = useState(null);     // trial answers waiting for this account's consent
   const applyBlob = (s) => {
     setTheme(s.theme);
@@ -537,9 +537,20 @@ export default function App() {
     /* Failed read: stay unloaded. Autosave and the trial merge both wait
        for `loaded`, so nothing is written over the real row. */
     if (read.status === "error") { setLoadState("error"); return; }
-    let s = null;
-    try { s = read.raw ? migrateBlob(JSON.parse(read.raw), CATS) : null; } // legacy saves get defaults (§4)
-    catch { setLoadState("error"); return; }
+    const parsed = parseProgress(read.raw, (b) => migrateBlob(b, CATS)); // legacy saves get defaults (§4)
+    if (parsed.status === "corrupt") {
+      /* A row exists but cannot be opened. Keep the server copy untouched,
+         keep a device backup, and never autosave or merge over it. */
+      let userId = null;
+      try { const { data } = await supabase.auth.getSession(); userId = data?.session?.user?.id ?? null; } catch { /* unknown */ }
+      unreadableRaw.current = read.raw;
+      try { backupUnreadableProgress(window.localStorage, { userId, raw: read.raw }); } catch { /* storage blocked */ }
+      setSaveBlocked(true);
+      setLoadState("corrupt");
+      return;
+    }
+    setSaveBlocked(false);
+    let s = parsed.blob;
     /* Try-before-sign-up handoff (src/progress-load.js guestHandoff). */
     let guest = null;
     try { guest = loadGuest(window.localStorage); } catch { /* storage blocked */ }
@@ -584,7 +595,7 @@ export default function App() {
 
   /* ---- autosave on change ---- */
   useEffect(() => {
-    if (!loaded) return;
+    if (!loaded || saveBlocked) return;
     (async () => {
       try {
         await store.set(STORE_KEY, JSON.stringify({ theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips, missSchedule, fcNew, rewards }));
@@ -594,7 +605,18 @@ export default function App() {
         console.error("Save failed", e);
       }
     })();
-  }, [loaded, theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips, missSchedule, fcNew, rewards]);
+  }, [loaded, saveBlocked, theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips, missSchedule, fcNew, rewards]);
+
+  const downloadUnreadable = () => {
+    const raw = unreadableRaw.current;
+    if (raw == null) return;
+    const url = URL.createObjectURL(new Blob([raw], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = "pulsern-saved-progress-backup.json";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const studyWithoutSaving = () => { setLoadState("ok"); setLoaded(true); };
 
   /* One screen, and only once study is actually reachable. Waiting for
      entitlement is what keeps the tour off the expired paywall. */
@@ -889,7 +911,7 @@ export default function App() {
     if (counts) setBestRun((b) => Math.max(b, nextRun));
     setRewards((r) => bumpDay(r, todayStr(), { q: 1, ok: correct ? 1 : 0, xp: res.xp, fixes: res.fix ? 1 : 0 }));
     const combo = counts ? comboFor(nextRun) : null;
-    setLiveMsg(comboSpeech(combo, newBest));
+    announce(comboSpeech(combo, newBest));
     if (res.xp > 0) rewardBeat(combo || newBest ? "combo" : "correct", rewardsRef.current.prefs);
     return { ...res, run: nextRun, combo, newBest };
   };
@@ -1048,9 +1070,29 @@ export default function App() {
         <section className="card rw-load-error" role="alert" aria-labelledby="load-error-title">
           <p className="eyebrow">Saved progress</p>
           <h2 id="load-error-title" className="h2">We couldn't load your progress</h2>
-          <p className="small">Your saved XP, streak and answers are safe. Nothing has been changed, and nothing will be saved until your progress loads. Check your connection and try again.</p>
+          <p className="small">We couldn't reach the server, so your saved XP, streak and answers stay as they are. Nothing will be saved until your progress loads. Check your connection and try again.</p>
           <div className="row">
             <button type="button" className="btn" onClick={loadProgress}>Try again</button>
+            <button type="button" className="btn ghost" onClick={signOutAndForgetTrial}>Sign out</button>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+
+  if (loadState === "corrupt") return (
+    <div className="app" data-theme={theme}>
+      <Style />
+      <RewardsStyle />
+      <main className="body">
+        <section className="card rw-load-error rw-load-corrupt" role="alert" aria-labelledby="load-corrupt-title">
+          <p className="eyebrow">Saved progress</p>
+          <h2 id="load-corrupt-title" className="h2">Your saved progress couldn't be opened</h2>
+          <p className="small">This isn't a connection problem. Your account has saved progress, but it's in a form the app can't read. We haven't changed it, and a copy is kept on this device.</p>
+          <p className="small">You can keep studying now, but nothing will be saved until this is fixed. Email <a href="mailto:sheldon@pulsern.app?subject=PulseRN%20saved%20progress%20won%27t%20open">sheldon@pulsern.app</a> and we'll restore it.</p>
+          <div className="row">
+            <button type="button" className="btn" onClick={studyWithoutSaving}>Study without saving</button>
+            <button type="button" className="btn ghost" onClick={downloadUnreadable}>Download a copy</button>
             <button type="button" className="btn ghost" onClick={signOutAndForgetTrial}>Sign out</button>
           </div>
         </section>
@@ -1147,7 +1189,7 @@ export default function App() {
     <div className={"app" + (shield ? " shield" : "") + (isOwner ? " owner" : "") + (scrolling ? " scrolling" : "") + (sessionLive ? " in-session" : "") + (motion ? "" : " fx-reduced") + " tab-" + tab} data-theme={theme}>
       <Style />
       <RewardsStyle />
-      <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{liveMsg}</p>
+      {liveRegion}
       <header className={"top" + (menuOpen ? " menu-open" : "")}>
         {/* Exam lockdown: while a readiness exam runs, all navigation and
             references disappear — only the exam (and its calculator) exists,
@@ -1226,11 +1268,19 @@ export default function App() {
             <InstallCard />
           </section>
         )}
+        {saveBlocked && loaded && (
+          <section className="card rw-saved rw-not-saving" role="status" aria-labelledby="not-saving-title">
+            <p className="eyebrow">Not saving</p>
+            <h2 id="not-saving-title" className="h2">This session isn't being saved</h2>
+            <p className="small">Your saved progress couldn't be opened, so we're leaving it untouched. Email <a href="mailto:sheldon@pulsern.app?subject=PulseRN%20saved%20progress%20won%27t%20open">sheldon@pulsern.app</a> to restore it.</p>
+            <button type="button" className="btn ghost" onClick={downloadUnreadable}>Download a copy</button>
+          </section>
+        )}
         {guestOffer && loaded && (
           <section className="card rw-saved rw-offer" aria-labelledby="guest-offer-title">
             <p className="eyebrow">Trial answers on this device</p>
             <h2 id="guest-offer-title" className="h2">Add your {guestOffer.summary.n} trial answer{guestOffer.summary.n === 1 ? "" : "s"} to this account?</h2>
-            <p className="small">Someone answered {guestOffer.summary.n} free question{guestOffer.summary.n === 1 ? "" : "s"} on this device before signing in ({guestOffer.summary.ok} correct). Add them only if they were yours. Either way, they are removed from this device.</p>
+            <p className="small">{guestOffer.summary.n} free question{guestOffer.summary.n === 1 ? " was" : "s were"} answered on this device before signing in ({guestOffer.summary.ok} correct). If they were yours, add them. If someone else used this device, discard them. Either way, they're removed from this device.</p>
             <div className="row">
               <button type="button" className="btn ghost" onClick={() => resolveGuestOffer(false)}>Discard</button>
               <button type="button" className="btn" onClick={() => resolveGuestOffer(true)}>Add to my account</button>
@@ -1661,7 +1711,8 @@ function Monitor({ xp, streak, bestRun, log, readiness, readyLabel, catStats, da
             <span className="vital-lab">DAY STREAK</span>
           </div>
           <div className="vital">
-            <span className="vital-num">{daily.answered}</span>
+            {/* Questions only, the same count as the shift's Assessments (REVIEW-3 N8). */}
+            <span className="vital-num">{questionsOn(rewards, todayStr())}</span>
             <span className="vital-lab">Q TODAY</span>
           </div>
           <div className="vital">
@@ -2330,7 +2381,8 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
   const s = cs?.steps[step];
   /* Case-step log ids are strings, so they can never collide with a
      numeric shared-bank question id (repeat detection and XP stay exact). */
-  const stepId = cs ? `case-${cs.dbId ? `db${cs.dbId}` : cs.title}-${step}` : "case-none";
+  const stepIds = cs ? caseStepIds({ dbId: cs.dbId ?? null, key: cs.key ?? null, title: cs.title, index: caseIdx, step }) : { id: "case-none", aliases: [] };
+  const stepId = stepIds.id;
 
   const submit = () => {
     if (currentEntry(nav)?.status === "answered") return;
@@ -2342,7 +2394,7 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
     setCredit(c);
     if (marked.recorded) {
       setStepScores((m) => ({ ...m, [step]: c }));
-      setStepRes(record({ id: stepId, cat: cs.cat, diff: 3, stem: s?.stem }, correct, { schedule: false, ms: Date.now() - stepShownAt.current }) ?? null);
+      setStepRes(record({ id: stepId, aliases: stepIds.aliases, cat: cs.cat, diff: 3, stem: s?.stem }, correct, { schedule: false, ms: Date.now() - stepShownAt.current }) ?? null);
     }
     justScored.current = true;
     setNav(marked.nav);
@@ -2710,6 +2762,7 @@ export function Flashcards({ addXp, onGrade, onUngrade, cards, srsMap, setSrsMap
       onUngrade?.(rec.xp);
       delete undoLog.current[id];
     }
+    flipAt.current = Date.now(); // the answer is shown again: the 1.5 s floor restarts (REVIEW-3 N10)
     setSession((s) => undoGrade(s));
   };
 
