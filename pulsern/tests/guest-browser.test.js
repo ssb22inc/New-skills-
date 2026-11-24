@@ -99,6 +99,17 @@ for (const [name, viewport, touch] of [["phone", { width: 390, height: 844 }, tr
   });
 }
 
+describe("guest labs control", () => {
+  it("opens the toolkit when the question navigation asks for labs", async () => {
+    const { ctx, page } = await open({ width: 390, height: 844 });
+    try {
+      await page.evaluate(() => window.dispatchEvent(new CustomEvent("pulsern:open-labs")));
+      await page.waitForSelector(".toolkit.open");
+      expect(await page.getByRole("tab", { name: /Labs/ }).getAttribute("aria-selected")).toBe("true");
+    } finally { await ctx.close(); }
+  }, 120_000);
+});
+
 describe("reward motion and reduced motion", () => {
   const seed = (n) => JSON.stringify({ v: 1, startedAt: Date.now(), day: null, log: Array.from({ length: n }, (_, i) => ({ id: i + 1, cat: "Pharmacology", diff: 1, correct: true })), xp: 50, run: 5, bestRun: 5, ability: null, missSchedule: {} });
   for (const [mode, expectMotion] of [["reduce", false], ["no-preference", true]]) {

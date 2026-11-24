@@ -5,6 +5,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { QBank, QUESTIONS, CATS, Style, Toolkit } from "./App.jsx";
 import { LabFab } from "./lab-fab.jsx";
+import { OPEN_LABS_EVENT } from "./question-nav.jsx";
 import { emptyAbility, updateAbility } from "./ability-engine.js";
 import { updateMissSchedule } from "./question-review.js";
 import { todayStr } from "./dates.js";
@@ -35,6 +36,11 @@ export default function GuestTrial({ onSignUp, onSignIn }) {
   const [liveRegion, announce] = useAnnouncer();
 
   useEffect(() => { saveGuest(window.localStorage, guest); }, [guest]);
+  useEffect(() => {
+    const open = () => { setSection("labs"); setLabOpen(true); };
+    window.addEventListener(OPEN_LABS_EVENT, open);
+    return () => window.removeEventListener(OPEN_LABS_EVENT, open);
+  }, []);
 
   /* One answer per render, so the guest in this closure is the state
      before this answer. Same XP rules as an account (src/rewards.js). */

@@ -229,6 +229,8 @@ describe("routing", () => {
   it("/app/try opens the guest trial; the other app paths are unchanged", () => {
     expect(authModeFromUrl("https://www.pulsern.app/app/try")).toBe("try");
     expect(authModeFromUrl("https://www.pulsern.app/app/try?utm_source=x")).toBe("try");
+    expect(authModeFromUrl("https://www.pulsern.app/app/try?start=1")).toBe("try");
+    expect(authModeFromUrl("https://www.pulsern.app/app/?start=1")).toBe("signup");
     expect(authModeFromUrl("https://www.pulsern.app/app/sign-up?cohort=clinicals")).toBe("signup");
     expect(authModeFromUrl("https://www.pulsern.app/app/")).toBe("signin");
   });

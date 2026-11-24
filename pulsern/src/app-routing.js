@@ -22,9 +22,12 @@ export function appUrl(pathname = APP_ROOT, origin = window.location.origin) {
 
 export function authModeFromUrl(href = window.location.href) {
   const url = new URL(href);
+  /* /app/try wins over the legacy ?start=1 signup flag. Try questions
+     keeps the current query, so a reload of /app/try?start=1 must stay
+     on the trial. */
+  if (url.pathname === APP_TRY) return "try";
   if (url.pathname === APP_SIGN_UP || url.searchParams.get("start") === "1") return "signup";
   if (url.pathname === APP_RESET) return "reset";
-  if (url.pathname === APP_TRY) return "try";
   return "signin";
 }
 
