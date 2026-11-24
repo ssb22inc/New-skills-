@@ -33,7 +33,7 @@ function insertByTime(log, row) {
    that lands in the middle of the log has to be replayed from the start
    of the category, or a later answer keeps the K it earned too early. */
 function canReplay(log) {
-  return (log ?? []).every((row) => !row || row.unclassified || questionIdentity(row));
+  return (log ?? []).every((row) => row && !row.unclassified && questionIdentity(row));
 }
 
 /* A day that sits immediately before a streak already on the books
@@ -47,12 +47,16 @@ function noteEarlierDay(streak, day) {
   return { ...streak, count: streak.count + 1 };
 }
 
-function adoptRawSchedule(schedule, q) {
+function adoptRawSchedule(schedule, q, log) {
   if (!q?.key) return schedule ?? {};
   const map = { ...(schedule ?? {}) };
   if (map[q.key]) return map;
   const raw = map[q.id] ?? map[String(q.id)];
   if (!raw) return map;
+  const id = String(q.id);
+  const claimed = Object.keys(map).some((key) => key !== q.key && key.endsWith(`:${id}`));
+  const otherSource = (log ?? []).some((row) => String(row?.id) === id && row.source && row.source !== q.source);
+  if (claimed || otherSource) return map;
   map[q.key] = raw;
   delete map[q.id];
   delete map[String(q.id)];
@@ -157,7 +161,7 @@ export function applyAnswer(state, input) {
     rewards = { ...rewards, best: { ...rewards.best, run } };
   }
   const daily = dailyAfter(state.daily, today);
-  const baseSchedule = adoptRawSchedule(state.missSchedule, q);
+  const baseSchedule = adoptRawSchedule(state.missSchedule, q, state.log);
   const missSchedule = input.schedule === false
     ? state.missSchedule
     : (insertedBehind && canReplay(placed)

@@ -299,6 +299,34 @@ describe("review, restore, and import use the canonical key", () => {
     expect(next.missSchedule["bank:42"].due > TODAY).toBe(true);
   });
 
+  it("does not replay ability across an unclassified row", () => {
+    const account = {
+      ...blank(),
+      ability: { ...blank().ability, Pharmacology: { theta: 1450, n: 40 } },
+      log: [
+        { id: 3, cat: "Pharmacology", diff: 2, correct: true, unclassified: true, key: null, at: 5_000 },
+        { id: 8, source: "builtin", key: "builtin:8", cat: "Pharmacology", diff: 2, correct: true, at: 9_000 },
+      ],
+    };
+    const imported = applyAnswer(account, {
+      q: builtin, correct: false, ms: 9000, today: "2026-11-23", at: 1_000, attempt: "older-than-both",
+    }).state;
+    expect(imported.ability.Pharmacology.n).toBe(41);
+    expect(imported.ability.Pharmacology.theta).not.toBe(1200);
+  });
+
+  it("does not move a bank review date onto the built-in question with the same number", () => {
+    const state = {
+      ...blank(),
+      log: [{ id: 7, source: "bank", key: "bank:7", cat: "Pharmacology", diff: 2, correct: false }],
+      missSchedule: { 7: { interval: 1, due: "2026-11-20" }, "bank:7": { interval: 1, due: "2026-11-20" } },
+    };
+    const next = applyAnswer(state, { q: builtin, correct: true, ms: 9000, today: TODAY, attempt: "builtin-correct" }).state;
+    expect(next.missSchedule["builtin:7"]).toBeUndefined();
+    expect(next.missSchedule["bank:7"].due).toBe("2026-11-20");
+    expect(next.missSchedule[7].due).toBe("2026-11-20");
+  });
+
   it("an imported day immediately before the streak lengthens it", () => {
     const account = { ...blank(), streak: { count: 1, lastDay: TODAY, shield: true } };
     const monday = applyAnswer(account, {

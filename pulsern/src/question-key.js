@@ -82,7 +82,15 @@ export function rekeySchedule(schedule, before, after) {
     const next = after?.[i];
     if (!next?.key || row?.key === next.key) return;
     const prev = map[row?.id];
-    if (prev && map[next.key] == null) map[next.key] = prev;
+    if (prev && map[next.key] == null) {
+      map[next.key] = prev;
+      const id = String(row?.id);
+      const stillShared = (after ?? []).some((other, j) => j !== i && String(other?.id) === id && !other?.key);
+      if (!stillShared) {
+        delete map[row.id];
+        delete map[id];
+      }
+    }
   });
   return map;
 }
