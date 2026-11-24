@@ -10,6 +10,8 @@ import { createServer } from "vite";
 import react from "@vitejs/plugin-react";
 import { launchBrowser } from "../ops/browser.mjs";
 import { todayStr } from "../src/dates.js";
+import { QUESTIONS } from "../src/App.jsx";
+import { NGN_SAMPLES, CALC_SAMPLES, COVERAGE_SAMPLES } from "../src/ngn-samples.js";
 
 const STUB = `
 const offline = { data: null, error: { message: "offline" } };
@@ -293,6 +295,28 @@ describe("Today leaves an unresolved due miss and continues", () => {
       await page.getByRole("button", { name: "Check answer" }).waitFor({ timeout: 15_000 });
       expect(await page.getByRole("heading", { name: "Which question was this?" }).count()).toBe(0);
       expect(await page.getByText("Loading a question").count()).toBe(0);
+    } finally { await ctx.close(); }
+  }, 120_000);
+
+  it("Leave unresolved ends the round when no new question remains", async () => {
+    const seen = [...QUESTIONS, ...NGN_SAMPLES, ...CALC_SAMPLES, ...COVERAGE_SAMPLES].map((q) => ({
+      id: q.id, source: "builtin", key: `builtin:${q.id}`, cat: q.cat, diff: q.diff || 1, correct: true,
+    }));
+    const row = {
+      theme: "light", tourSeen: true, xp: 40, bestRun: 1,
+      log: [...seen, { id: 7, unclassified: true, key: null, cat: "Pharmacology", diff: 2, correct: false }],
+      streak: { count: 2, lastDay: "2020-01-01", shield: true },
+      missSchedule: { 7: { interval: 1, due: "2020-01-02" } },
+      fcNew: { day: todayStr(), count: 20 },
+      srsMap: {},
+    };
+    const { ctx, page } = await open({ session: sessionFor(NOW - 90 * 86400000), row });
+    try {
+      await page.getByRole("button", { name: /Start today's round/ }).click({ timeout: 30_000 });
+      await page.getByRole("heading", { name: "Which question was this?" }).waitFor({ timeout: 15_000 });
+      await page.getByRole("button", { name: "Leave unresolved" }).click();
+      await page.getByRole("button", { name: "Back to Today" }).waitFor({ timeout: 15_000 });
+      expect(await page.getByRole("heading", { name: "Which question was this?" }).count()).toBe(0);
     } finally { await ctx.close(); }
   }, 120_000);
 });

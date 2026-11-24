@@ -320,7 +320,7 @@ import {
 } from "./rewards-ui.jsx";
 import { mergeGuestIntoBlob, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, readGuestForHandoff, releaseHeldGuest, waitForFlush } from "./guest.js";
 import { applyAnswer, commitLiveAnswer, stampedQuestion, newAttemptId } from "./answer-apply.js";
-import { classifyLog, rekeySchedule } from "./question-key.js";
+import { classifyLog, rekeySchedule, claimLegacyRow } from "./question-key.js";
 import { stampCatalogQuestion, stampLoadedCatalog } from "./question-identity.js";
 import { signOutAndForgetTrial as signOut } from "./sign-out.js";
 import { readProgress, parseProgress, clearLegacyProgressBackup, guestHandoff, sessionReadDecision, sweepPendingProgress } from "./progress-load.js";
@@ -1013,11 +1013,7 @@ export default function App() {
   };
   const resolveLegacy = (legacyId, chosen) => {
     if (!chosen?.key || !chosen?.source) return;
-    setLog((rows) => rows.map((row) => (
-      row && row.unclassified && String(row.id) === String(legacyId)
-        ? { ...row, source: chosen.source, key: chosen.key, unclassified: false }
-        : row
-    )));
+    setLog((rows) => rows.map((row) => claimLegacyRow(row, legacyId, chosen)));
     setMissSchedule((schedule) => {
       const map = { ...(schedule ?? {}) };
       const raw = map[legacyId] ?? map[String(legacyId)];
@@ -2001,7 +1997,9 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
     });
     if (!pool.length) {
       const fb = fallbackSkip(trail);
-      if (fb) { reveal(fb); return; }
+      const skippedId = fb ? String(currentEntry(fb)?.id ?? "") : "";
+      if (fb && !deferred.includes(skippedId)) { reveal(fb); return; }
+      if (auto) { onDone?.(); return; }
       setNav(trail);
       setPhase("done");
       return;

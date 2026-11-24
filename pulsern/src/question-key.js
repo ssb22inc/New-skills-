@@ -13,9 +13,18 @@
    in none, stays unclassified. */
 import { CASE_STUDIES } from "./case-studies.js";
 import { caseStepIds, legacyCaseAllowlist } from "./rewards.js";
-import { QUESTION_SOURCES, canonicalKey } from "./question-identity.js";
+import { QUESTION_SOURCES, canonicalKey, questionIdentity } from "./question-identity.js";
 
 export { QUESTION_SOURCES, canonicalKey, questionIdentity, stampCatalogQuestion } from "./question-identity.js";
+
+/* A student naming an old number updates the row that has no canonical
+   key yet. A row that already names its source stays as it is. */
+export function claimLegacyRow(row, legacyId, chosen) {
+  if (!row || !chosen?.key || !chosen?.source) return row;
+  if (String(row.id) !== String(legacyId)) return row;
+  if (questionIdentity(row)) return row;
+  return { ...row, source: chosen.source, key: chosen.key, unclassified: false };
+}
 
 export function keyOf(row) {
   if (!row || row.unclassified) return null;

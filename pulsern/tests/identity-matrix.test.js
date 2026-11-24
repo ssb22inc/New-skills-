@@ -4,7 +4,7 @@
 import { describe, it, expect } from "vitest";
 import { applyAnswer, commitLiveAnswer } from "../src/answer-apply.js";
 import { emptyGuest, guestAnswer, mergeGuestIntoBlob, holdGuestTrial, peekHeldGuest, releaseHeldGuest, GUEST_KEY, GUEST_HOLD_KEY } from "../src/guest.js";
-import { classifyLog, resolveLegacyRow, canonicalKey, rekeySchedule } from "../src/question-key.js";
+import { classifyLog, resolveLegacyRow, canonicalKey, rekeySchedule, claimLegacyRow } from "../src/question-key.js";
 import { stampCatalogQuestion, stampLoadedCatalog, questionIdentity } from "../src/question-identity.js";
 import { reviewPools, todayPool, sessionPool, unseenQuestions, questionByIdentity, latestResults, expandTrialQuestions, settledResult, legacyCandidates } from "../src/question-review.js";
 import { emptyNav, appendQuestion, goBack, present } from "../src/question-nav.js";
@@ -316,6 +316,17 @@ describe("review, restore, and import use the canonical key", () => {
     expect(ambiguous[7]).toEqual(schedule[7]);
     expect(ambiguous["builtin:7"]).toBeUndefined();
     expect(ambiguous["bank:7"]).toBeUndefined();
+  });
+
+  it("naming an unscoped legacy miss gives it a key and a later correction pays the fix bonus", () => {
+    const unscoped = { id: 7, cat: "Pharmacology", diff: 2, correct: false };
+    const claimed = claimLegacyRow(unscoped, 7, { source: "builtin", key: "builtin:7" });
+    expect(claimed).toMatchObject({ source: "builtin", key: "builtin:7", unclassified: false });
+    expect(claimLegacyRow({ id: 7, source: "bank", key: "bank:7", correct: true }, 7, { source: "builtin", key: "builtin:7" }).key).toBe("bank:7");
+    const state = { ...blank(), log: [claimed], missSchedule: { "builtin:7": { interval: 1, due: TODAY } } };
+    const next = applyAnswer(state, { q: builtin, correct: true, ms: 9000, today: TODAY, attempt: "fix-claimed" });
+    expect(next.result.xp).toBe(REVIEW_FIX_BONUS);
+    expect(reviewPools([builtin], next.state.log, next.state.missSchedule, TODAY).review.some((item) => item.unresolved)).toBe(false);
   });
 
   it("a correct review moves a legacy numeric schedule onto the canonical key", () => {

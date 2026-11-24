@@ -223,7 +223,7 @@ export function AuthScreen({ initialMode = "signin", onBack, cohort = null, onTr
           <aside className="auth-trial" aria-label="Your saved trial">
             <p className="auth-trial-kicker">Your trial is saved on this device</p>
             <p className="auth-trial-stats">{trial.ok} of {trial.n} correct · +{trial.xp} XP · Day 1 streak</p>
-            <p className="auth-trial-line">{mode === "signup" ? "Create your account below to keep it." : "Sign in to add it to your account."}</p>
+            <p className="auth-trial-line">{mode === "signup" ? "Create your account below to keep it." : "Sign in. This practice is added only when the account has no answers yet."}</p>
           </aside>
         )}
         {!trial && !clinical && onTry && mode !== "forgot" && (
