@@ -52,8 +52,8 @@ describe("review()", () => {
   /* DeepSeek is text-only. Images go to the vision reviewer on OpenRouter. */
   it("sends images to the vision reviewer, not the text reviewer", async () => {
     await review("look at this", 8000, { images: [Buffer.from([137, 80, 78, 71])] });
-    expect(sent[0].model).toBe("openai/gpt-6.1-sol");
-    expect(lastReviewModel()).toBe("openai/gpt-6.1-sol");
+    expect(sent[0].model).toBe("deepseek/deepseek-v4-flash-vision-exp");
+    expect(lastReviewModel()).toBe("deepseek/deepseek-v4-flash-vision-exp");
     const content = sent[0].messages[0].content;
     expect(content[0]).toEqual({ type: "text", text: "look at this" });
     expect(content[1].type).toBe("image_url");

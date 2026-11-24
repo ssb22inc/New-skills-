@@ -379,31 +379,41 @@ describe("digests", () => {
         const outDir = mkdtempSync(join(tmpdir(), "astra-out-"));
         const { report } = await runReview({ base: "b", head: "HEAD", outDir, rulesPath: "CLAUDE.md", cwd: dir });
         expect(report.error, report.error).toBeNull();
-        expect(report.model).toBe("openai/gpt-6.1-sol");
+        expect(report.model).toContain("deepseek/deepseek-v4-pro-0813");
+        expect(report.model).toContain("deepseek/deepseek-v4-flash-vision-exp");
       } finally {
         globalThis.fetch = realFetch;
         if (realKey === undefined) delete process.env.OPENROUTER_API_KEY; else process.env.OPENROUTER_API_KEY = realKey;
         rmSync(dir, { recursive: true, force: true });
       }
-      expect(sent).toHaveLength(1);
-      expect(sent[0].model).toBe("openai/gpt-6.1-sol");
-      const content = sent[0].messages[0].content;
+      expect(sent).toHaveLength(2);
+      expect(sent[0].model).toBe("deepseek/deepseek-v4-pro-0813");
+      expect(JSON.stringify(sent[0].messages)).not.toContain("image_url");
+      expect(sent[1].model).toBe("deepseek/deepseek-v4-flash-vision-exp");
+      const content = sent[1].messages[0].content;
       expect(Array.isArray(content)).toBe(true);
       const urls = content.filter((c) => c.type === "image_url").map((c) => c.image_url.url);
       expect(urls).toEqual([`data:image/png;base64,${PNG(10).toString("base64")}`, `data:image/png;base64,${PNG(200).toString("base64")}`]);
+      const note = content.filter((c) => c.type === "text").map((c) => c.text).join("\n");
+      expect(note).toContain("pulsern/public/diagram.png");
+      expect(note).not.toContain("-----");
     });
 
     it("names Sol in the checkpoint while an image review is still unpaid", async () => {
       const path = "pulsern/public/diagram.png";
       const dir = repoWith([[path, PNG(10), PNG(200)]]);
       const outDir = mkdtempSync(join(tmpdir(), "astra-out-"));
-      let release;
-      const pending = runReview({ base: "b", head: "HEAD", outDir, rulesPath: "CLAUDE.md", cwd: dir, now: () => new Date("2026-10-08T21:00:00Z") }, { callModel: () => new Promise((r) => { release = r; }) });
+      const releases = [];
+      const done = (model) => ({ text: JSON.stringify({ assessment: "ok", findings: [] }), finishReason: "stop", usage: { costUsd: 0.01 }, model });
+      const pending = runReview({ base: "b", head: "HEAD", outDir, rulesPath: "CLAUDE.md", cwd: dir, now: () => new Date("2026-10-08T21:00:00Z") }, { callModel: () => new Promise((r) => releases.push(r)) });
+      const read = () => readdirSync(outDir).filter((f) => f.endsWith(".md")).map((f) => readFileSync(join(outDir, f), "utf8")).join("\n");
       await new Promise((r) => setTimeout(r, 30));
-      const md = readdirSync(outDir).filter((f) => f.endsWith(".md")).map((f) => readFileSync(join(outDir, f), "utf8")).join("\n");
-      expect(md).toContain("openai/gpt-6.1-sol");
-      expect(md).toContain("did not finish");
-      release({ text: JSON.stringify({ assessment: "ok", findings: [] }), finishReason: "stop", usage: {}, model: "openai/gpt-6.1-sol" });
+      expect(read()).toContain("deepseek/deepseek-v4-pro-0813");
+      releases[0](done("deepseek/deepseek-v4-pro-0813"));
+      await new Promise((r) => setTimeout(r, 30));
+      expect(read()).toContain("deepseek/deepseek-v4-flash-vision-exp");
+      expect(read()).toContain("did not finish");
+      releases[1](done("deepseek/deepseek-v4-flash-vision-exp"));
       await pending;
       rmSync(dir, { recursive: true, force: true });
     });
@@ -896,11 +906,21 @@ describe("running a review end to end (Astra finding #5)", () => {
     run("add", "-A"); run("commit", "-qm", "b"); run("tag", "b");
     writeFileSync(join(dir, "pulsern/public/dot.png"), encodeCanonicalPng({ width: 1, height: 1, colour: 0, pixels: [0] }));
     run("add", "-A"); run("commit", "-qm", "h");
-    let called = null;
-    const { code, report } = await runReview({ base: "b", head: "HEAD", outDir: mkdtempSync(join(tmpdir(), "astra-out-")), rulesPath: "CLAUDE.md", cwd: dir }, { callModel: async (req) => { called = req.model; return { text: JSON.stringify({ assessment: "ok", findings: [] }), finishReason: "stop", usage: {}, model: req.model }; } });
-    expect(called).toBe("openai/gpt-6.1-sol");
-    expect(code).toBe(0);
-    expect(report.model).toBe("openai/gpt-6.1-sol");
+    const calls = [];
+    const { code, report } = await runReview({ base: "b", head: "HEAD", outDir: mkdtempSync(join(tmpdir(), "astra-out-")), rulesPath: "CLAUDE.md", cwd: dir }, { callModel: async (req) => {
+      calls.push(req);
+      const findings = req.model.includes("flash-vision") ? [finding("blocker", { file: "pulsern/public/dot.png", title: "wrong label" })] : [];
+      return { text: JSON.stringify({ assessment: req.model, findings }), finishReason: "stop", usage: { costUsd: 0.1, promptTokens: 10, completionTokens: 2 }, model: req.model };
+    } });
+    expect(calls.map((c) => c.model)).toEqual(["deepseek/deepseek-v4-pro-0813", "deepseek/deepseek-v4-flash-vision-exp"]);
+    expect(JSON.stringify(calls[0].messages)).not.toContain("image_url");
+    expect(calls[1].prompt).toContain("pulsern/public/dot.png");
+    expect(calls[1].prompt).not.toContain("-----");
+    expect(code).toBe(1);
+    expect(report.verdict).toBe("FAIL");
+    expect(report.usage.costUsd).toBeCloseTo(0.2);
+    expect(report.model).toContain("deepseek/deepseek-v4-pro-0813");
+    expect(report.model).toContain("deepseek/deepseek-v4-flash-vision-exp");
     rmSync(dir, { recursive: true, force: true });
   });
 

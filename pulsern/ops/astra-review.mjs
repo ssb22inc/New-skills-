@@ -48,7 +48,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { llmCall } from "./llm.mjs";
 import { isCanonicalPng } from "./png-canonical.mjs";
-import { REVIEW_MODEL, REVIEWER_NAME, reviewerFor, assertCrossFamily } from "./models.mjs";
+import { REVIEW_MODEL, IMAGE_REVIEW_MODEL, REVIEWER_NAME, assertCrossFamily } from "./models.mjs";
 
 /* The author of the code under review, so the cross-family check is real. */
 export const AUTHOR_MODEL_FAMILY_PROBE = "anthropic/claude";
@@ -378,6 +378,14 @@ export function collectChanges(base, head, { cwd = process.cwd() } = {}) {
   return { files, skipped, images };
 }
 
+/* The image pass sees the pictures and their names, not the source diff. */
+export function imageReviewPrompt(images) {
+  const lines = images.map((img, i) => `${i + 1}. ${img.path} — ${img.side} the change · sha256 ${img.sha256}`);
+  return `You are reviewing only the changed images for PulseRN, an NCLEX-RN study app. The source diff is not in this request. Judge what a student would see in these pictures: a wrong clinical detail, a wrong label, or a claim the picture does not show. If an image is fine, return no findings for it.
+
+${lines.join("\n")}`;
+}
+
 /* The request: the text prompt, then each image labelled with its path,
    side and hash, so Astra reviews exactly the bytes that will ship. */
 export function buildMessages(prompt, images = []) {
@@ -537,7 +545,10 @@ export function renderMarkdown(r) {
   lines.push("");
   lines.push(`| | |`);
   lines.push(`|---|---|`);
-  lines.push(`| Reviewer | \`${r.model}\`${r.mode ? ` · ${r.mode === "trusted" ? "run from the base branch; the change was read as data" : r.mode}` : ""} |`);
+  const who = r.passes?.length
+    ? r.passes.map((p) => `${p.role} \`${p.model}\``).join("; ")
+    : `\`${r.model}\``;
+  lines.push(`| Reviewer | ${who}${r.mode ? ` · ${r.mode === "trusted" ? "run from the base branch; the change was read as data" : r.mode}` : ""} |`);
   lines.push(`| Change | \`${r.meta.base.slice(0, 12)}..${r.meta.head.slice(0, 12)}\`${r.meta.pr ? ` · PR #${r.meta.pr}` : ""} |`);
   lines.push(`| Reviewed at | ${r.reviewedAt} |`);
   lines.push(`| Files | ${r.filesReviewed.length} reviewed${r.skipped?.length ? `, ${r.skipped.length} not sent` : ""} |`);
@@ -638,43 +649,61 @@ export async function runReview({ base, head, pr = null, outDir, rulesPath, cwd 
       return { code: 1, report };
     }
 
-    /* Checkpoint BEFORE spending. The model is chosen first, so a run that
-       dies during the call still names the model that was about to be paid. */
-    const prompt = buildPrompt({ rules, files: plan.files, skipped, meta });
+    /* The text diff always goes to the text model, with no images attached.
+       Changed images are a second, short call. Either pass blocking, or
+       either pass failing to finish, fails the review. */
+    const prompt = buildPrompt({ rules, files: plan.files, skipped, meta })
+      + (images.length ? `\n\nChanged images are not attached to this request. They are reviewed separately. Do not treat their absence as a missing file.` : "");
     const maxTokens = reviewMaxTokens();
-    const model = reviewerFor({ images: images.length > 0 });
-    assertCrossFamily(AUTHOR_MODEL_FAMILY_PROBE, model);
-    report.model = model;
-    report.error = `The review was started but did not finish: the run was stopped while waiting for ${model}. Recorded as a failure.`;
+    const textModel = REVIEW_MODEL;
+    assertCrossFamily(AUTHOR_MODEL_FAMILY_PROBE, textModel);
+    report.model = textModel;
+    report.passes = [{ role: "text", model: textModel }];
+    report.error = `The review was started but did not finish: the run was stopped while waiting for ${textModel}. Recorded as a failure.`;
     report.verdict = "FAIL";
     save();
-    const res = await callModel({ model, prompt, messages: buildMessages(prompt, images), maxTokens, reasoningEffort: "high", responseFormat: FINDINGS_SCHEMA });
-    report.usage = res.usage;
-    report.model = res.model || REVIEW_MODEL;
-    /* A truncated answer can still look like JSON. It is not a finished
-       review, so it cannot pass. */
-    if (res.finishReason === "length") {
-      report.error = `The review output was truncated at the ${maxTokens}-token cap (finish_reason: length). Recorded as a failure, not a pass.`;
-      report.rawAnswer = res.text;
+
+    const textRes = await callModel({ model: textModel, prompt, messages: buildMessages(prompt), maxTokens, reasoningEffort: "high", responseFormat: FINDINGS_SCHEMA });
+    const textRead = readPass(textRes, maxTokens, "The text review");
+    report.passes[0] = { role: "text", model: textRes.model || textModel, usage: textRes.usage };
+    report.usage = sumUsage(report.passes.map((p) => p.usage));
+    if (textRead.error) {
+      report.error = textRead.error;
+      report.rawAnswer = textRead.raw;
       report.verdict = "FAIL";
       save();
       return { code: 2, report };
     }
 
-    let parsed;
-    try { parsed = parseReviewText(res.text); }
-    catch (e) {
-      report.error = `Astra's answer could not be read as a review (${e.message}). The raw answer is kept in the .raw.json report.`;
-      report.rawAnswer = res.text;
+    const parts = [textRead.parsed];
+    if (images.length) {
+      const imageModel = IMAGE_REVIEW_MODEL;
+      assertCrossFamily(AUTHOR_MODEL_FAMILY_PROBE, imageModel);
+      report.model = imageModel;
+      report.passes.push({ role: "images", model: imageModel });
+      report.error = `The review was started but did not finish: the text review completed and the run was stopped while waiting for ${imageModel}. Recorded as a failure.`;
       report.verdict = "FAIL";
       save();
-      return { code: 2, report };
+      const imagePrompt = imageReviewPrompt(images);
+      const imageRes = await callModel({ model: imageModel, prompt: imagePrompt, messages: buildMessages(imagePrompt, images), maxTokens, reasoningEffort: "high", responseFormat: FINDINGS_SCHEMA });
+      const imageRead = readPass(imageRes, maxTokens, "The image review");
+      report.passes[report.passes.length - 1] = { role: "images", model: imageRes.model || imageModel, usage: imageRes.usage };
+      report.usage = sumUsage(report.passes.map((p) => p.usage));
+      if (imageRead.error) {
+        report.error = imageRead.error;
+        report.rawAnswer = imageRead.raw;
+        report.verdict = "FAIL";
+        save();
+        return { code: 2, report };
+      }
+      parts.push(imageRead.parsed);
     }
 
+    report.model = report.passes.map((p) => p.model).join(" + ");
     report.error = null;
-    report.assessment = parsed.assessment;
-    report.findings = parsed.findings;
-    Object.assign(report, verdictFor(parsed.findings));
+    report.assessment = parts.map((p) => p.assessment).filter(Boolean).join("\n\n");
+    report.findings = parts.flatMap((p) => p.findings);
+    Object.assign(report, verdictFor(report.findings));
     save();
     return { code: report.verdict === "PASS" ? 0 : 1, report };
   } catch (e) {
@@ -688,6 +717,26 @@ export async function runReview({ base, head, pr = null, outDir, rulesPath, cwd 
 /* Empty keeps the standing 64000 cap. DeepSeek V4 Pro's listed completion
    max is 943718, so 64000 is inside it. A dispatch can set a lower cap
    when the OpenRouter balance cannot reserve the standing one. */
+function sumUsage(parts) {
+  let cost = 0, known = true, promptTokens = 0, completionTokens = 0, any = false;
+  for (const u of parts) {
+    if (!u) continue;
+    any = true;
+    if (u.costUsd == null) known = false;
+    else cost += u.costUsd;
+    promptTokens += u.promptTokens ?? 0;
+    completionTokens += u.completionTokens ?? 0;
+  }
+  if (!any) return null;
+  return { costUsd: known ? cost : null, promptTokens, completionTokens };
+}
+
+function readPass(res, maxTokens, label) {
+  if (res?.finishReason === "length") return { error: `${label} output was truncated at the ${maxTokens}-token cap (finish_reason: length). Recorded as a failure, not a pass.`, raw: res.text };
+  try { return { parsed: parseReviewText(res?.text) }; }
+  catch (e) { return { error: `${label} could not be read as a review (${e.message}). The raw answer is kept in the .raw.json report.`, raw: res?.text }; }
+}
+
 export function reviewMaxTokens() {
   const raw = process.env.ASTRA_REVIEW_MAX_TOKENS;
   if (raw == null || String(raw).trim() === "") return 64000;
