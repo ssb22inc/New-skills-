@@ -307,7 +307,7 @@ import { useSessionReport } from "./session-report.js";
 import { tourMark, tourStepAt, tourStepsFor } from "./tour.js";
 import { LeaveDialog, Tour, useTourDismissScroll, useTourPlacement } from "./tour.jsx";
 import {
-  emptyRewards, answerXp, xpNote, comboFor, cardXp, questionsOn, caseStepIds, bumpDay, advanceStreak, shiftStatus, weekRounds, maybeGrantCover,
+  emptyRewards, answerXp, xpNote, comboFor, cardXp, questionsOn, caseStepIds, bumpDay, advanceStreak, streakDayCounted, shiftStatus, weekRounds, maybeGrantCover,
   careerStatus, badgeBoard, detectMoments, markMomentsSeen, sessionRecap, MAX_COVERS,
 } from "./rewards.js";
 import { motionAllowed, rewardBeat } from "./effects.js";
@@ -315,7 +315,7 @@ import {
   RewardsStyle, StreakGlyph, EcgBeat, ComboChip, MomentSheet, streakMoment, ShiftCard, CareerCard,
   BadgeGrid, RoundsCard, BestsCard, SessionRecap, EffectsCard, comboSpeech, useAnnouncer,
 } from "./rewards-ui.jsx";
-import { loadGuest, mergeGuestIntoBlob, clearGuest, guestSummary } from "./guest.js";
+import { loadGuest, mergeGuestIntoBlob, clearGuest, guestSummary, guestClearOnSave } from "./guest.js";
 import { signOutAndForgetTrial as signOut } from "./sign-out.js";
 import { readProgress, parseProgress, clearLegacyProgressBackup, guestHandoff } from "./progress-load.js";
 
@@ -595,11 +595,12 @@ export default function App() {
   /* ---- autosave on change ---- */
   useEffect(() => {
     if (!loaded || saveBlocked) return;
+    const pendingAtStart = pendingGuestClear.current === true;
     (async () => {
       try {
         await store.set(STORE_KEY, JSON.stringify({ theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips, missSchedule, fcNew, rewards }));
-        /* The guest copy is removed only after the account copy is saved. */
-        if (pendingGuestClear.current) { pendingGuestClear.current = false; clearGuest(window.localStorage); }
+        /* Only the save that already held the merged answers may drop the device copy. */
+        if (guestClearOnSave(pendingAtStart)) { pendingGuestClear.current = false; clearGuest(window.localStorage); }
       } catch (e) {
         console.error("Save failed", e);
       }
@@ -864,7 +865,7 @@ export default function App() {
   const touchDay = () => {
     setDaily((d) => d.day === todayStr() ? { ...d, answered: d.answered + 1 } : { day: todayStr(), answered: 1 });
     const today = todayStr();
-    if (streak.lastDay === today || touchedDay.current === today) return;
+    if (streakDayCounted(streak, touchedDay.current, today)) return;
     touchedDay.current = today;
     const adv = advanceStreak(streak, rewardsRef.current, today);
     setStreak(adv.streak);
@@ -1025,6 +1026,7 @@ export default function App() {
     if (saveBlocked) return;
     try { await store.delete(STORE_KEY); } catch (e) { /* nothing saved */ }
     setXp(0); setRun(0); setBestRun(0); setLog([]); setFlagged([]); setCustomQs([]);
+    touchedDay.current = null;
     setStreak({ count: 0, lastDay: null, shield: true }); setDaily({ day: todayStr(), answered: 0 });
     setSrs(freshCards()); setSrsMap({}); setFcNew({ day: null, count: 0 }); setMissSchedule({}); setExamResults({}); setAbility(emptyAbility(CATS)); setPlan(null); setExamDate(null); setTab("today");
     setRewards((r) => ({ ...emptyRewards(), rankHigh: 0, prefs: r.prefs })); setMoments([]);

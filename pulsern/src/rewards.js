@@ -257,6 +257,13 @@ export function maybeGrantCover(rewards, today) {
      - missed days: the shield covers one, then banked shift covers cover
        the rest; if they can't cover every missed day, the streak restarts
    Returns the new streak, the new rewards, and what happened. */
+/* This calendar day has already moved the streak when the saved last day
+   is today, or this session already counted today. Reset clears the
+   session mark so the first answer after a reset can start day one. */
+export function streakDayCounted(streak, markedDay, today) {
+  return streak?.lastDay === today || markedDay === today;
+}
+
 export function advanceStreak(streak, rewards, today) {
   const s = { count: 0, lastDay: null, shield: true, ...(streak ?? {}) };
   if (s.lastDay === today) return { streak: s, rewards, event: "same", milestone: null };

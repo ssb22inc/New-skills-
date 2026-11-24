@@ -3,7 +3,7 @@
    collision-free handoff into the account blob. */
 import { describe, it, expect } from "vitest";
 import {
-  GUEST_KEY, GUEST_LIMIT, guestPool, emptyGuest, guestAnswer, guestRemaining, mergeGuestIntoBlob, loadGuest, saveGuest, clearGuest, guestFresh, guestSummary,
+  GUEST_KEY, GUEST_LIMIT, guestPool, emptyGuest, guestAnswer, guestRemaining, mergeGuestIntoBlob, loadGuest, saveGuest, clearGuest, guestClearOnSave, guestFresh, guestSummary,
 } from "../src/guest.js";
 import { migrateBlob } from "../src/state.js";
 import { emptyAbility, updateAbility } from "../src/ability-engine.js";
@@ -39,6 +39,22 @@ describe("guest XP uses the same rules as an account", () => {
   it("a too-fast tap earns no XP and does not build a run", () => {
     const r = guestAnswer(emptyGuest(NOW, TODAY), mk(1), true, { ms: 300, today: TODAY });
     expect(r.res).toMatchObject({ xp: 0, reason: "too-fast", run: 0 });
+  });
+  it("keeps a too-fast trial answer at 0 XP when it is added to an account", () => {
+    const answered = guestAnswer(emptyGuest(NOW, TODAY), mk(1), true, { ms: 100, today: TODAY });
+    expect(answered.guest.xp).toBe(0);
+    expect(answered.guest.log[0].ms).toBe(100);
+    const merged = mergeGuestIntoBlob(migrateBlob({}, CATS), answered.guest, { today: TODAY, now: NOW });
+    expect(merged.summary.xp).toBe(0);
+    expect(merged.blob.xp).toBe(0);
+    expect(merged.blob.log[0]).toEqual({ id: "guest-1", cat: "Pharmacology", diff: 2, correct: true });
+  });
+  it("a save that started before Add does not clear the guest copy", () => {
+    let pending = false;
+    const earlierSave = pending;
+    pending = true;
+    expect(guestClearOnSave(earlierSave)).toBe(false);
+    expect(guestClearOnSave(pending)).toBe(true);
   });
   it("a considered correct answer earns 10 × difficulty", () => {
     const r = guestAnswer(emptyGuest(NOW, TODAY), mk(1), true, { ms: 9000, today: TODAY });

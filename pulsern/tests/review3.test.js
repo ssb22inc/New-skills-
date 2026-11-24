@@ -16,6 +16,17 @@ const mem = (init = {}) => {
 };
 const app = fs.readFileSync("src/App.jsx", "utf8");
 
+describe("Codex P2 wiring", () => {
+  it("reset clears the same-day streak mark, and guest cleanup is tied to the save that started with it", () => {
+    const reset = app.slice(app.indexOf("const resetAll"), app.indexOf("const resetAll") + 700);
+    expect(reset).toContain("touchedDay.current = null");
+    const save = app.slice(app.indexOf("autosave on change"), app.indexOf("autosave on change") + 900);
+    expect(save.indexOf("const pendingAtStart = pendingGuestClear.current === true")).toBeGreaterThan(-1);
+    expect(save.indexOf("const pendingAtStart")).toBeLessThan(save.indexOf("await store.set"));
+    expect(save).toContain("guestClearOnSave(pendingAtStart)");
+  });
+});
+
 describe("N1: unreadable saved progress", () => {
   const migrate = (b) => ({ ...b, migrated: true });
   it("separates no row, a good row and a row the app cannot open", () => {

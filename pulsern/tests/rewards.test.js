@@ -3,7 +3,7 @@
    covers protect missed days; milestones fire once. */
 import { describe, it, expect } from "vitest";
 import {
-  answerXp, minThinkMs, xpNote, comboFor, bumpDay, shiftStatus, weekRounds, maybeGrantCover, advanceStreak,
+  answerXp, minThinkMs, xpNote, comboFor, bumpDay, shiftStatus, weekRounds, maybeGrantCover, advanceStreak, streakDayCounted,
   categoryMastery, badgeBoard, careerStatus, legacyRankIndex, detectMoments, markMomentsSeen, sessionRecap,
   emptyRewards, migrateRewards, daysBetween, shiftDay, mondayOf, TIERS, CAREER, REVIEW_FIX_BONUS, MAX_COVERS, TEST_PLAN,
 } from "../src/rewards.js";
@@ -12,6 +12,15 @@ const CATS = ["Management of Care", "Safety & Infection Control", "Health Promot
 const q = { id: 7, cat: "Pharmacology", diff: 2, stem: "A client receiving digoxin reports nausea and yellow vision. Which action should the nurse take first?" };
 // evenly spread, so any recent window has the same accuracy as the whole
 const acc = (cat, n, pct) => Array.from({ length: n }, (_, i) => ({ id: `${cat}-${i}`, cat, diff: 2, correct: Math.floor(((i + 1) * pct) / 100) > Math.floor((i * pct) / 100) }));
+
+describe("streak day", () => {
+  it("lets the same calendar day count again once the session mark is cleared", () => {
+    const today = "2026-11-24";
+    expect(streakDayCounted({ lastDay: today }, today, today)).toBe(true);
+    expect(streakDayCounted({ lastDay: null }, today, today)).toBe(true);
+    expect(streakDayCounted({ lastDay: null }, null, today)).toBe(false);
+  });
+});
 
 describe("answer XP", () => {
   it("pays 10 × difficulty for a considered first correct answer", () => {

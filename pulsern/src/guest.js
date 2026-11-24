@@ -47,6 +47,13 @@ export function clearGuest(storage) {
   try { storage?.removeItem(GUEST_KEY); } catch { /* private mode */ }
 }
 
+/* The device copy is removed only by the save that was already carrying
+   the merged answers when it started. A save that began earlier must not
+   delete the copy if Add flips the mark while that save is still in flight. */
+export function guestClearOnSave(pendingAtStart) {
+  return pendingAtStart === true;
+}
+
 /* Kept for GUEST_TTL_DAYS after the LAST answer (the save screen says so),
    so answers the student just gave are never the ones that expire. */
 export function guestFresh(guest, now = Date.now()) {
@@ -62,7 +69,13 @@ export function guestAnswer(guest, q, correct, { ms = Infinity, today } = {}) {
   if (guestRemaining(guest) === 0) return { guest, res: { xp: 0, reason: "limit" }, accepted: false };
   const res = answerXp({ q, correct, ms, log: guest.log });
   const run = correct && res.reason !== "too-fast" ? guest.run + 1 : 0;
-  const entry = { id: q.id, cat: q.cat, diff: q.diff, correct, ...(q.population ? { pop: q.population } : {}) };
+  const words = String(q?.stem ?? "").trim().split(/\s+/).filter(Boolean).length;
+  const entry = {
+    id: q.id, cat: q.cat, diff: q.diff, correct,
+    ...(Number.isFinite(ms) ? { ms } : {}),
+    ...(words ? { words } : {}),
+    ...(q.population ? { pop: q.population } : {}),
+  };
   /* The trial clock and its study day start at the FIRST answer, not when
      the page was opened (an idle trial tab must not age out the work). */
   const first = guest.log.length === 0;
@@ -90,13 +103,26 @@ export function mergeGuestIntoBlob(s, guest, { today, now = Date.now(), updateAb
   const valid = guest.log
     .filter((l) => l && (typeof l.id === "number" || typeof l.id === "string") && typeof l.cat === "string" && typeof l.correct === "boolean")
     .slice(0, GUEST_LIMIT)
-    .map((l) => ({ id: l.id, cat: l.cat, diff: Math.max(1, Math.min(3, Number(l.diff) || 1)), correct: l.correct, ...(l.pop ? { pop: l.pop } : {}) }));
+    .map((l) => ({
+      id: l.id, cat: l.cat, diff: Math.max(1, Math.min(3, Number(l.diff) || 1)), correct: l.correct,
+      ...(l.pop ? { pop: l.pop } : {}),
+      ...(Number.isFinite(l.ms) ? { ms: l.ms } : {}),
+      ...(Number.isFinite(l.words) && l.words > 0 ? { words: l.words } : {}),
+    }));
   const entries = valid
     .map((l) => ({ ...l, id: `guest-${l.id}` }))
     .filter((l) => !have.has(String(l.id)));
   if (!entries.length) return { blob: s, summary: null };
   let gxp = 0;
-  { const seen = []; for (const e of entries) { gxp += answerXp({ q: { id: e.id, diff: e.diff }, correct: e.correct, log: seen }).xp; seen.push(e); } }
+  {
+    const seen = [];
+    for (const e of entries) {
+      const stem = e.words ? Array.from({ length: e.words }, () => "w").join(" ") : "";
+      gxp += answerXp({ q: { id: e.id, diff: e.diff, stem }, correct: e.correct, ms: Number.isFinite(e.ms) ? e.ms : Infinity, log: seen }).xp;
+      seen.push(e);
+    }
+  }
+  const logged = entries.map(({ ms, words, ...row }) => row);
   guest = { ...guest, xp: gxp, bestRun: Math.min(guest.bestRun ?? 0, entries.length) };
   const ok = entries.filter((e) => e.correct).length;
   let ability = s.ability;
@@ -117,7 +143,7 @@ export function mergeGuestIntoBlob(s, guest, { today, now = Date.now(), updateAb
     ? (s.daily?.day === today ? { ...s.daily, answered: s.daily.answered + entries.length } : { day: today, answered: entries.length })
     : s.daily;
   return {
-    blob: { ...s, log: [...s.log, ...entries], xp: s.xp + (guest.xp ?? 0), bestRun: Math.max(s.bestRun ?? 0, guest.bestRun ?? 0), ability, streak, rewards, daily },
+    blob: { ...s, log: [...s.log, ...logged], xp: s.xp + (guest.xp ?? 0), bestRun: Math.max(s.bestRun ?? 0, guest.bestRun ?? 0), ability, streak, rewards, daily },
     summary: { answers: entries.length, correct: ok, xp: guest.xp ?? 0, streak: streak.count, streakStarted },
   };
 }
