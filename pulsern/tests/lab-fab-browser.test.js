@@ -140,6 +140,18 @@ describe("floating 🧪 study toolkit", () => {
     await ctx.close();
   }, 120_000);
 
+  it("never covers a clinical diagram, image, or table", async () => {
+    const { ctx, page } = await open({ width: 390, height: 844 });
+    for (const selector of [".exh-wrap", ".exh-svg", "figure", "img", "table"]) {
+      const region = await page.locator(selector).first().boundingBox();
+      expect(region, selector).toBeTruthy();
+      await mouseDrag(page, { x: region.x + Math.min(region.width / 2, 40), y: region.y + region.height / 2 });
+      const button = await fab(page).boundingBox();
+      expect(overlaps(button, region), selector).toBe(false);
+    }
+    await ctx.close();
+  }, 120_000);
+
   it("never covers the stem, rationale, or chart after a drag or a snap", async () => {
     const { ctx, page } = await open({ width: 390, height: 844 });
     const reading = async () => {

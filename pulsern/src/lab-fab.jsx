@@ -34,7 +34,9 @@ const TARGETS = [
   "button", "a[href]", "input", "select", "textarea", "summary", "label",
   "[role=radio]", "[role=checkbox]", "[role=button]", "[role=tab]", "[tabindex]:not([tabindex='-1'])",
   ".flashcard", ".grades", ".q-nav-wrap", ".bigbtn", ".fchip",
-  ".stem", ".rationale", ".exhibit", ".exhibit-body", ".chart", ".case-chart", ".note", ".fc-text",
+  ".stem", ".rationale", ".exhibit", ".exhibit-body", ".exhibit-tab", ".chart", ".case-chart", ".note", ".fc-text",
+  ".exh-wrap", ".exh-svg", ".dg-wrap", ".dg-svg", ".fc-scale",
+  "figure", "img", "svg", "table", "canvas", "video",
   "p", "li", "td", "th", "h1", "h2", "h3",
 ].join(",");
 
@@ -129,7 +131,7 @@ export function LabFab({ onOpen, hidden = false, open = false, settleKey = "", b
     let ro = null;
     const watch = () => {
       ro?.observe(root);
-      root.querySelectorAll(".stem, .rationale, .chart, .opts, .case-chart, .case-chart-bar, .case-chart-body, .flashcard, .card, .grades").forEach((el) => ro?.observe(el));
+      root.querySelectorAll(".stem, .rationale, .chart, .opts, .case-chart, .case-chart-bar, .case-chart-body, .flashcard, .card, .grades, .exh-wrap, .exh-svg, .dg-wrap, figure, table").forEach((el) => ro?.observe(el));
     };
     const soon = () => {
       if (raf) return;

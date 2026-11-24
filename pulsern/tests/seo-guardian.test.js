@@ -1030,6 +1030,7 @@ describe("product screenshot capture", () => {
     expect(src).toMatch(/timezoneId:\s*"UTC"/);
     expect(src).toMatch(/page\.clock\.setFixedTime\(new Date\(CAPTURE_TIME\)\)/);
     expect(src).toMatch(/animation:none !important/);
+    expect(src).toMatch(/\.top\{position:relative !important\}/);
     expect(src).toMatch(/pulsern-labfab-v1/);
     expect(src).toMatch(/canonicalPng/);
     expect(src).toMatch(/MutationObserver/);

@@ -26,6 +26,15 @@ function Screen() {
         <FocusBar open={focusOpen} setOpen={setFocusOpen} groups={[{ label: "Category", options: [["pharm", "Pharmacology"]], selected: [], onToggle() {} }]} />
         <section className="card stack study-col">
           <p className="stem">{stemText}</p>
+          <div className="exh-wrap">
+            <svg className="exh-svg" viewBox="0 0 340 80" role="img" aria-label="ECG strip">
+              <path d="M0,40 L80,40 L90,20 L100,60 L110,40 L340,40" fill="none" stroke="currentColor" strokeWidth="2" />
+            </svg>
+          </div>
+          <figure>
+            <img alt="Medication label" width="160" height="48" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='48'%3E%3Crect width='160' height='48' fill='%23e7f3ef'/%3E%3Ctext x='80' y='28' text-anchor='middle' font-size='14'%3EDrug 2 mg/mL%3C/text%3E%3C/svg%3E" />
+          </figure>
+          <table><tbody><tr><td>Na 140</td><td>K 4.0</td></tr></tbody></table>
           {crowded && OPTIONS.map((o, i) => (
             <button key={o} type="button" role="radio" aria-checked={pick === i} className={pick === i ? "opt picked" : "opt"} onClick={() => setPick(i)}>{o}</button>
           ))}

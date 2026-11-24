@@ -16,12 +16,15 @@ const OUTPUT = path.resolve(process.argv[2] || "reports/seo/product-screenshots"
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
 /* Applied before the app paints, so a screenshot cannot land on an ECG
-   frame, a FAB intro, a focus ring, or a caret. */
+   frame, a FAB intro, a focus ring, or a caret. The sticky header is laid out
+   in place (it sits at the top either way): as its own composited layer its
+   rounded chip edges rasterized ±1 level differently between runs. */
 const CAPTURE_STYLE = `
   *,*::before,*::after{animation:none !important;transition:none !important;caret-color:transparent !important}
   .ecg-line{stroke-dashoffset:0 !important;animation:none !important}
   .pulse-dot,.blink{animation:none !important;opacity:1 !important}
   :focus,:focus-visible{outline:none !important}
+  .top{position:relative !important}
 `;
 
 /* The init script can run before the parser has created <html>. Appending
