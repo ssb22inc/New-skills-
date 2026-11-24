@@ -1,0 +1,105 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "da6c612a142b75910987b47f8e9e542896e96a3f",
+    "head": "e259e668984ab0121d79bfe2391b6f4a21437188",
+    "pr": "183"
+  },
+  "reviewedAt": "2026-11-24T00:32:12.453Z",
+  "filesReviewed": [
+    "pulsern/app/index.html",
+    "pulsern/ops/test-signup-flow.mjs",
+    "pulsern/src/App.jsx",
+    "pulsern/src/auth.jsx",
+    "pulsern/src/card-nav.js",
+    "pulsern/src/choice-state.js",
+    "pulsern/src/clinical-welcome.jsx",
+    "pulsern/src/first-answer.js",
+    "pulsern/src/float-pos.js",
+    "pulsern/src/focus-sheet.jsx",
+    "pulsern/src/lab-fab.jsx",
+    "pulsern/src/lab-lookup.js",
+    "pulsern/src/lab-panel.jsx",
+    "pulsern/src/question-nav.jsx",
+    "pulsern/src/study-keys.js",
+    "pulsern/src/tab-icons.jsx",
+    "pulsern/src/tour.js",
+    "pulsern/src/tour.jsx",
+    "pulsern/tests/browser/lab-fab-harness.jsx",
+    "pulsern/tests/browser/lab-fab.html",
+    "pulsern/tests/fixtures/lab-ai-prompt.txt",
+    "pulsern/tests/flagship-ux.test.js",
+    "pulsern/tests/float-pos.test.js",
+    "pulsern/tests/lab-fab-browser.test.js",
+    "pulsern/tests/lab-lookup.test.js",
+    "pulsern/tests/question-nav-browser.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/src/App.jsx",
+      "line": 2384,
+      "title": "Undo can charge the same new card against the daily allowance repeatedly",
+      "problem": "Undo deletes a previously unseen card's srsMap entry but leaves its fcNew charge intact. countedNew prevents another charge only while this Flashcards instance remains mounted. After reopening the deck, the card looks unseen again and consumes another unit of the same day's allowance.",
+      "failure_scenario": "Grade a new card, go Back, undo its grade, then leave and reopen Cards. Grading that same card increments the new-card count again. Repeating this can exhaust the daily allowance without introducing the allowed number of distinct cards.",
+      "fix": "Make first-introduction accounting survive schedule rollback and remounts, or reverse and reapply the allowance charge consistently during undo/regrade. Add an integration test covering grade, undo, remount, and regrade with the persisted fcNew state.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/card-nav.js",
+      "line": 251,
+      "title": "An undone historical card can disappear from the unfinished-card queue",
+      "problem": "undoGrade clears the grade and removes the card from queue without marking the visit as unfinished/skipped. When the student presses Next from this historical entry, goForward only restores the next historical card. The undone card is then absent from both queue and skippedCount.",
+      "failure_scenario": "Start cards A, B, and C. Grade A, go Back from B, undo A, and press Next without regrading. Finish B and C. The sitting reports a clear queue and 'Nothing due today', although A is ungraded and its restored schedule is still due or absent.",
+      "fix": "Keep an undone card represented as pending until it is regraded or explicitly skipped. Ensure navigation through history cannot discard that pending state. Test undo followed by Next and completion of the remaining queue.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/lab-fab.jsx",
+      "line": 72,
+      "title": "The floating button still covers controls when no clear position exists",
+      "problem": "findClearSpot explicitly returns clear=false when both edges are occupied, but LabFab ignores that result and renders at the obstructed coordinates. The drag and keyboard placement paths do the same. The unit test acknowledges this state, but no component test checks its handling.",
+      "failure_scenario": "On a short or landscape phone viewport, scroll into long answer options that occupy both edges throughout the usable band, with gaps smaller than the button. No clear position exists, so the toolkit button settles over an answer or navigation control and intercepts taps.",
+      "fix": "Handle clear=false explicitly: reserve layout space, provide a non-overlapping dock, or use another reachable toolkit trigger rather than placing the button over a target. Add a browser test with the entire usable band occupied.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/focus-sheet.jsx",
+      "line": 47,
+      "title": "Keyboard focus can escape both new modal sheets",
+      "problem": "FocusBar declares aria-modal=true but neither traps focus nor makes the background inert. Toolkit in App.jsx also has an escape route: it initially focuses its tabindex=-1 heading, while its trap handles only focus on the first or last listed control. Shift+Tab from that heading therefore reaches the underlying app.",
+      "failure_scenario": "Open Focus while reviewing cards and press Shift+Tab from the initially focused Close button; focus moves to the background Focus trigger. Likewise, open Study toolkit and immediately press Shift+Tab from its heading. Background navigation and study controls become keyboard-accessible while the modal remains open.",
+      "fix": "Use complete modal focus management for both sheets, including inert background content and wrapping from non-control initial focus targets. Add browser tests for Shift+Tab immediately after opening and Tab past the final control.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/App.jsx",
+      "line": 1004,
+      "title": "Moving the theme toggle removes it during exams and locked access",
+      "problem": "The only light/dim toggle now lives inside the menu's !locked block, and the menu itself is unavailable during examLock. Previously the header theme control remained available in both states. This weakens the protected light/dim feature rather than merely relocating it.",
+      "failure_scenario": "Start a readiness exam in light mode and later need dim mode during the long sitting, or return with expired access in dim mode and need light mode to read the paywall. Neither state now offers a theme switch.",
+      "fix": "Keep a theme-only control available during readiness exams and locked access, without exposing navigation or references during exam lockdown.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 116747,
+    "completionTokens": 10396,
+    "reasoningTokens": 9243,
+    "costUsd": 0.395826
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Request changes. The new undo path breaks daily-card accounting and can silently omit an ungraded card from the sitting. The floating toolkit and modal sheets also have reachable interaction failures. This review is based on the supplied diff; I did not execute the tests.",
+  "counts": {
+    "blocker": 0,
+    "major": 5,
+    "minor": 0
+  }
+}
