@@ -1,0 +1,44 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "9f43c95a300abc5b2bb99c03161eaf16e0145674",
+    "head": "b256cd6d36613180b9e7960af9de6ce017c7a7f4",
+    "pr": "187"
+  },
+  "reviewedAt": "2026-11-24T21:48:08.494Z",
+  "filesReviewed": [
+    "pulsern/ops/astra-review.mjs",
+    "pulsern/ops/models.mjs",
+    "pulsern/tests/astra-review.test.js",
+    "pulsern/tests/content-gate.test.js",
+    "pulsern/tests/llm-client.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/ops/astra-review.mjs",
+      "line": 96,
+      "title": "The enlarged character allowance can exceed the token context",
+      "problem": "Four characters per token is an average, not a safe bound for source files. planContext now accepts requests approaching 2,000,000 characters without counting tokens or reserving the requested 64,000 output tokens. Token-dense changes can therefore exceed the stated 1,050,000-token context even though planning succeeds.",
+      "failure_scenario": "An added JSON fixture containing 750,000 single-digit array entries is approximately 1.5 million characters and passes the new allowance. With standard OpenAI numeric tokenization, digits and separating commas consume approximately 1.5 million tokens, causing the review request to fail at the API. The new repeated-'d' test passes without detecting this. The precise new-model tokenizer could not be verified from the supplied files.",
+      "fix": "Budget the final request using the selected model's tokenizer or a conservative bound, including output-token headroom and image costs. Shed optional whole-file context first, then refuse an oversized diff before calling the model. Add a token-dense fixture test rather than testing only repeated characters.",
+      "confidence": "medium"
+    }
+  ],
+  "usage": {
+    "promptTokens": 38918,
+    "completionTokens": 2756,
+    "reasoningTokens": 2402,
+    "costUsd": 0.1248535
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "The reviewer-model update and temperature handling are consistent. One defect remains in the enlarged prompt allowance: the new test verifies a character threshold, not whether accepted requests fit the model's context. No tests or live API calls were available during this review.",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0
+  }
+}
