@@ -39,6 +39,9 @@ export const emptyAbility = (cats) =>
 /* Item rating: a calibrated bank row uses its own rating. A built-in
    or a case step that happens to share the numeric id does not. */
 export const itemRating = (q, calibration = {}) => {
+  /* A stored rating is the one this answer was scored with. A later
+     calibration must not rewrite it when the log is replayed. */
+  if (q && Number.isFinite(q.rating)) return q.rating;
   const bankRating = q && q.source !== "builtin" && q.source !== "case" ? calibration[q.id]?.rating : undefined;
   return bankRating ?? SEED[q?.diff] ?? 1300;
 };

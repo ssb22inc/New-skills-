@@ -1,8 +1,8 @@
 /* One answer, whether it was just tapped or folded in from a trial.
    Ability, the day's XP ledger, the streak, and the review date all
    move here. Import does not keep a second copy of these rules. */
-import { answerXp, answerCountsForRun, bumpDay, advanceStreak, streakDayCounted, sameAnswer, shiftDay } from "./rewards.js";
-import { emptyAbility, updateAbility } from "./ability-engine.js";
+import { answerXp, answerCountsForRun, bumpDay, advanceStreak, streakDayCounted, sameAnswer, shiftDay, STREAK_MILESTONES } from "./rewards.js";
+import { updateAbility, itemRating } from "./ability-engine.js";
 import { updateMissSchedule } from "./question-review.js";
 import { canonicalKey, questionIdentity } from "./question-identity.js";
 
@@ -29,22 +29,46 @@ function insertByTime(log, row) {
   return next;
 }
 
-/* Elo's K depends on how many answers came before this one. An import
-   that lands in the middle of the log has to be replayed from the start
-   of the category, or a later answer keeps the K it earned too early. */
-function canReplay(log) {
-  return (log ?? []).every((row) => row && !row.unclassified && questionIdentity(row));
+/* Replay one category from its stored ratings. A row without a rating,
+   or one that was left unclassified, contributed to the saved theta in
+   a way this replay cannot rebuild, so the caller keeps that theta. */
+function replayCategory(log, cat) {
+  const rows = [];
+  for (const row of log ?? []) {
+    if (!row || row.cat !== cat) continue;
+    if (row.unclassified || !questionIdentity(row) || !Number.isFinite(row.rating)) return null;
+    rows.push(row);
+  }
+  if (!rows.length) return null;
+  let ability = { [cat]: { theta: 1200, n: 0 } };
+  for (const row of rows) ability = updateAbility(ability, row, !!row.correct, {}).ability;
+  return ability[cat];
 }
 
-/* A day that sits immediately before a streak already on the books
-   lengthens that streak. The live helper refuses any day before
-   lastDay, which is right for a clock change and wrong for an import. */
-function noteEarlierDay(streak, day) {
-  if (!day || !streak?.lastDay || day >= streak.lastDay || !(streak.count > 0)) return streak;
-  const start = shiftDay(streak.lastDay, 1 - streak.count);
-  if (day >= start) return streak;
-  if (day !== shiftDay(start, -1)) return streak;
-  return { ...streak, count: streak.count + 1 };
+/* The streak is the run of studied days ending at lastDay. Importing
+   several earlier days extends that run across the whole set, including
+   a day that only becomes adjacent after a later import fills the gap.
+   Days already inside the streak, including a shielded gap, stay. */
+function reconcileStreak(streak, log) {
+  if (!streak?.lastDay || !(streak.count > 0)) return streak;
+  const studied = new Set();
+  for (const row of log ?? []) if (typeof row?.day === "string") studied.add(row.day);
+  let count = streak.count;
+  let start = shiftDay(streak.lastDay, 1 - count);
+  while (studied.has(shiftDay(start, -1))) {
+    count += 1;
+    start = shiftDay(start, -1);
+    if (count > 10000) break;
+  }
+  if (count === streak.count) return streak;
+  let shield = streak.shield;
+  for (let n = streak.count + 1; n <= count; n += 1) if (n % 7 === 0) shield = true;
+  return { ...streak, count, shield };
+}
+
+function crossedMilestones(rewards, count) {
+  const had = new Set(rewards?.milestones ?? []);
+  return STREAK_MILESTONES.filter((m) => m <= count && !had.has(m));
 }
 
 function adoptRawSchedule(schedule, q, log) {
@@ -63,21 +87,15 @@ function adoptRawSchedule(schedule, q, log) {
   return map;
 }
 
-function replayAbility(log, ability, calibration) {
-  let next = emptyAbility(Object.keys(ability ?? {}));
-  for (const row of log) {
-    if (!questionIdentity(row) || row.unclassified) continue;
-    if (row.cat && !next[row.cat]) next = { ...next, [row.cat]: { theta: 1200, n: 0 } };
-    next = updateAbility(next, row, !!row.correct, calibration).ability;
-  }
-  return next;
-}
-
+/* One question's review date, in log order. Rows that are not this
+   question, including unkeyed and unclassified ones, are skipped.
+   They do not stop the keyed answers from being replayed. */
 function replayKeySchedule(log, key, schedule) {
   let next = { ...(schedule ?? {}) };
   delete next[key];
-  for (const row of log) {
+  for (const row of log ?? []) {
     if (questionIdentity(row) !== key || row.unclassified) continue;
+    if (typeof row.day !== "string") continue;
     next = updateMissSchedule(next, key, !!row.correct, row.day);
   }
   return next;
@@ -115,6 +133,8 @@ export function applyAnswer(state, input) {
   const correct = !!input.correct;
   const historical = Number.isFinite(input.at);
   const at = historical ? input.at : Date.now();
+  const calibration = input.calibration ?? {};
+  const rating = q.unclassified ? null : itemRating(q, calibration);
   const res = q.unclassified
     ? { xp: 0, reason: "unclassified", base: 0, bonus: 0, fix: false }
     : answerXp({ q, correct, ms, log });
@@ -130,6 +150,7 @@ export function applyAnswer(state, input) {
     ...(input.attempt != null ? { attempt: String(input.attempt) } : {}),
     ...(today ? { day: today } : {}),
     ...(q.population ? { pop: q.population } : {}),
+    ...(Number.isFinite(rating) ? { rating } : {}),
     at,
     origin: "recorded",
   };
@@ -145,17 +166,19 @@ export function applyAnswer(state, input) {
     };
   }
   const prior = [...log].reverse().find((r) => sameAnswer(q, r));
-  const calibration = input.calibration ?? {};
-  const ability = insertedBehind && canReplay(placed)
-    ? replayAbility(placed, state.ability, calibration)
-    : updateAbility(state.ability, q, correct, calibration).ability;
+  const replayed = insertedBehind ? replayCategory(placed, q.cat) : null;
+  const ability = replayed
+    ? { ...(state.ability ?? {}), [q.cat]: replayed }
+    : updateAbility(state.ability, { ...q, rating }, correct, calibration).ability;
   let rewards = bumpDay(state.rewards, today, { q: 1, ok: correct ? 1 : 0, xp: res.xp, fixes: correct && prior && prior.correct === false ? 1 : 0 });
   let streak = state.streak;
   let streakNote = null;
   if (!streakDayCounted(streak, null, today)) {
     const adv = advanceStreak(streak, rewards, today);
-    streak = noteEarlierDay(adv.streak, today);
+    streak = reconcileStreak(adv.streak, placed);
     rewards = { ...adv.rewards, best: { ...adv.rewards.best, streak: Math.max(adv.rewards.best?.streak ?? 0, streak.count), run: Math.max(adv.rewards.best?.run ?? 0, run) } };
+    const crossed = crossedMilestones(rewards, streak.count);
+    if (crossed.length) rewards = { ...rewards, milestones: [...(rewards.milestones ?? []), ...crossed] };
     streakNote = adv;
   } else if (run > (rewards.best?.run ?? 0)) {
     rewards = { ...rewards, best: { ...rewards.best, run } };
@@ -164,7 +187,7 @@ export function applyAnswer(state, input) {
   const baseSchedule = adoptRawSchedule(state.missSchedule, q, state.log);
   const missSchedule = input.schedule === false
     ? state.missSchedule
-    : (insertedBehind && canReplay(placed)
+    : (insertedBehind
       ? replayKeySchedule(placed, q.key, baseSchedule)
       : updateMissSchedule(baseSchedule, q.key, correct, today));
   return {

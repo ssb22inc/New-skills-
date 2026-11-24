@@ -334,6 +334,67 @@ describe("review, restore, and import use the canonical key", () => {
     }).state;
     expect(monday.streak).toMatchObject({ count: 2, lastDay: TODAY });
   });
+
+  it("replays a saved answer with the rating it was scored with, not today's calibration", () => {
+    const bank = { id: 5, source: "bank", cat: "Physiological Adaptation", diff: 1, stem: "Which lab does the nurse report?" };
+    const other = { id: 4, source: "builtin", cat: "Pharmacology", diff: 2, stem: STEM };
+    const saved = applyAnswer(blank(), {
+      q: bank, correct: true, ms: 9000, today: TODAY, at: 5_000,
+      calibration: { 5: { rating: 1600 } }, attempt: "bank-then",
+    }).state;
+    expect(saved.log[0].rating).toBe(1600);
+    const theta = saved.ability["Physiological Adaptation"].theta;
+    const after = applyAnswer(saved, {
+      q: other, correct: false, ms: 9000, today: "2026-11-23", at: 1_000,
+      calibration: {}, attempt: "earlier-other",
+    }).state;
+    expect(after.ability["Physiological Adaptation"]).toEqual(saved.ability["Physiological Adaptation"]);
+    expect(after.ability["Physiological Adaptation"].theta).toBe(theta);
+    const earlierSame = { ...other, id: 4, cat: "Physiological Adaptation" };
+    const chrono = applyAnswer(applyAnswer(blank(), {
+      q: earlierSame, correct: false, ms: 9000, today: "2026-11-23", at: 1_000, attempt: "chrono-other",
+    }).state, {
+      q: bank, correct: true, ms: 9000, today: TODAY, at: 5_000,
+      calibration: { 5: { rating: 1600 } }, attempt: "chrono-bank",
+    }).state;
+    const rewritten = applyAnswer(saved, {
+      q: earlierSame, correct: false, ms: 9000, today: "2026-11-23", at: 1_000,
+      calibration: { 5: { rating: 900 } }, attempt: "same-cat-earlier",
+    }).state;
+    expect(rewritten.ability["Physiological Adaptation"].theta).toBe(chrono.ability["Physiological Adaptation"].theta);
+    expect(rewritten.log.find((row) => row.key === "bank:5").rating).toBe(1600);
+  });
+
+  it("replays a question's review date when an unrelated row has no key", () => {
+    const account = {
+      ...blank(),
+      log: [
+        { id: 99, cat: "Pharmacology", correct: true, unclassified: true, key: null },
+        { id: 7, source: "builtin", key: "builtin:7", cat: "Pharmacology", diff: 2, correct: true, day: "2026-11-24", at: 9_000, rating: 1300 },
+      ],
+    };
+    const imported = applyAnswer(account, {
+      q: builtin, correct: false, ms: 9000, today: "2026-11-23", at: 1_000, attempt: "monday-miss",
+    }).state;
+    expect(imported.missSchedule["builtin:7"].interval).toBe(3);
+    expect(imported.missSchedule["builtin:7"].due).toBe("2026-11-27");
+  });
+
+  it("counts every consecutive imported day in front of the streak", () => {
+    const sunday = new Date(2026, 10, 22, 9).getTime();
+    const monday = new Date(2026, 10, 23, 9).getTime();
+    const account = { ...blank(), streak: { count: 1, lastDay: "2026-11-24", shield: true } };
+    const guest = {
+      ...emptyGuest(sunday, "2026-11-22"),
+      lastAt: Date.now(),
+      log: [
+        { id: 1, key: "builtin:1", source: "builtin", cat: "Pharmacology", diff: 2, correct: true, day: "2026-11-22", attempt: `${sunday}:0`, at: sunday },
+        { id: 2, key: "builtin:2", source: "builtin", cat: "Pharmacology", diff: 2, correct: true, day: "2026-11-23", attempt: `${monday}:1`, at: monday },
+      ],
+    };
+    const merged = mergeGuestIntoBlob(account, guest, { today: "2026-11-24", now: Date.now() }).blob;
+    expect(merged.streak).toMatchObject({ count: 3, lastDay: "2026-11-24" });
+  });
 });
 
 function trialOf(q, outcomes) {
