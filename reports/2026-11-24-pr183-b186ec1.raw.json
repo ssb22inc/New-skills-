@@ -1,0 +1,16 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "da6c612a142b75910987b47f8e9e542896e96a3f",
+    "head": "b186ec1cc6908b924771bab5dd88bc07152bc419",
+    "pr": "183"
+  },
+  "reviewedAt": "2026-11-24T01:32:14.887Z",
+  "filesReviewed": [],
+  "skipped": [],
+  "findings": [],
+  "usage": null,
+  "error": "The review could not be completed: cannot put these changes in front of the reviewer, so the change cannot pass: pulsern/ops/fonts/capture-dejavu-rewind.woff2, pulsern/ops/fonts/capture-noto-sans.woff2, pulsern/ops/fonts/capture-noto-symbols.woff2, pulsern/ops/fonts/capture-noto-symbols2.woff2 (not valid UTF-8 text, and not a canonical PNG under 4 MB — run \"node pulsern/ops/png-canonical.mjs <file>\" on an 8-bit grey/RGB(A) PNG to make one)",
+  "verdict": "FAIL"
+}
