@@ -75,10 +75,13 @@ export function settledResult(question, log, questions = null, index = null, pee
   const id = answerIdentity(question);
   if (id != null && Object.prototype.hasOwnProperty.call(idx.latest, id)) return { state: "known", correct: !!idx.latest[id] };
   const num = question?.id != null ? String(question.id) : null;
-  /* An unscoped number counts only when this catalog has exactly one
-     question with it. An unclassified row is deliberately neither, so
-     it is not painted onto a bank or bundled question that shares the number. */
-  if (num && idx.unscoped.has(num) && (counts.get(num) ?? 0) === 1) return { state: "known", correct: idx.unscoped.get(num) };
+  /* A catalog question already has a canonical key. An old row that
+     only has the number is not that question until classifyLog names it.
+     Serving it now would score a different identity than the XP rules. */
+  if (questionIdentity(question) && num && idx.unscoped.has(num)) return { state: "pending" };
+  /* An unkeyed fixture still groups by the raw number when this list
+     has exactly one question with it. */
+  if (!questionIdentity(question) && num && idx.unscoped.has(num) && (counts.get(num) ?? 0) === 1) return { state: "known", correct: idx.unscoped.get(num) };
   return { state: "none" };
 }
 
@@ -96,15 +99,17 @@ export function scheduleEntry(question, schedule, questions = null, log = null, 
   const idx = index ?? historyIndex(log);
   if (idx.unresolved.has(String(question.id))) return null;
   /* A date left under the old number belongs to the latest classified
-     row with that number. It is not a review for a different question
-     that happens to be the only one on screen. */
+     row with that number. An unnamed row is not a review yet. */
   let owner = null;
+  let unnamed = false;
   for (const row of log ?? []) {
     if (!row || String(row.id) !== String(question.id)) continue;
     const key = questionIdentity(row);
     if (key) owner = key;
+    else unnamed = true;
   }
   if (owner && owner !== id) return null;
+  if (!owner && unnamed) return null;
   return raw;
 }
 
@@ -149,7 +154,6 @@ export function legacyCandidates(questions, log, registry = []) {
   const index = historyIndex(log);
   const wanted = new Set();
   for (const [num, correct] of index.unresolved) if (correct === false) wanted.add(String(num));
-  for (const [num, correct] of index.unscoped) if (correct === false) wanted.add(String(num));
   const list = [...(questions ?? [])];
   if (!wanted.size) return list;
   const have = new Set(list.map((q) => String(answerIdentity(q) ?? q?.id ?? "")));
@@ -171,10 +175,11 @@ export function unseenQuestions(questions, log) {
   for (const [num, correct] of index.unresolved) {
     if (correct === false && (peers.get(num) ?? 0) > 1) blocked.add(num);
   }
-  for (const [num, correct] of index.unscoped) {
-    if (correct === false && (peers.get(num) ?? 0) > 1) blocked.add(num);
-  }
-  return (questions ?? []).filter((q) => q && !blocked.has(String(q.id)) && settledResult(q, log, questions, index, peers).state === "none");
+  return (questions ?? []).filter((q) => {
+    if (!q || blocked.has(String(q.id))) return false;
+    const settled = settledResult(q, log, questions, index, peers);
+    return settled.state === "none";
+  });
 }
 
 /* A merged trial answer keeps the built-in stem. Its navigation id is
@@ -206,7 +211,7 @@ export function expandTrialQuestions(questions, log, registry = null, schedule =
 
 /* A legacy number that still belongs to more than one question. The miss
    stays reviewable here, and neither catalog question inherits it. */
-function unresolvedCards(log, questions, index, peers) {
+function unresolvedCards(log, questions, index) {
   const cards = [];
   const seen = new Set();
   const add = (num) => {
@@ -228,9 +233,6 @@ function unresolvedCards(log, questions, index, peers) {
     });
   };
   for (const [num, correct] of index.unresolved) if (correct === false) add(num);
-  for (const [num, correct] of index.unscoped) {
-    if (correct === false && (peers.get(num) ?? 0) > 1) add(num);
-  }
   return cards;
 }
 
@@ -245,7 +247,7 @@ export function reviewPools(questions, log, schedule, today = todayStr()) {
     }
     return scheduleEntry(q, schedule, questions, log, index, peers);
   };
-  const cards = unresolvedCards(log, questions, index, peers);
+  const cards = unresolvedCards(log, questions, index);
   const pool = [...(questions ?? []).filter((q) => q && !q.unresolved), ...cards];
   const due = pool.filter((q) => {
     const entry = dueOf(q);

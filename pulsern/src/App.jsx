@@ -318,7 +318,7 @@ import {
   RewardsStyle, StreakGlyph, EcgBeat, ComboChip, MomentSheet, streakMoment, ShiftCard, CareerCard,
   BadgeGrid, RoundsCard, BestsCard, SessionRecap, EffectsCard, comboSpeech, useAnnouncer,
 } from "./rewards-ui.jsx";
-import { mergeGuestIntoBlob, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, readGuestForHandoff, releaseHeldGuest, waitForFlush } from "./guest.js";
+import { mergeGuestIntoBlob, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, readGuestForHandoff, releaseHeldGuest, waitForFlush, accountHasAnswers } from "./guest.js";
 import { applyAnswer, commitLiveAnswer, stampedQuestion, newAttemptId } from "./answer-apply.js";
 import { classifyLog, rekeySchedule, claimLegacyRow } from "./question-key.js";
 import { stampCatalogQuestion, stampLoadedCatalog } from "./question-identity.js";
@@ -606,15 +606,13 @@ export default function App() {
     /* Try-before-sign-up handoff (src/progress-load.js guestHandoff). */
     let guest = null;
     try { guest = readGuestForHandoff(window.localStorage, window.sessionStorage); } catch { /* storage blocked */ }
-    let createdAt = null;
-    try { const { data } = await supabase.auth.getSession(); createdAt = data?.session?.user?.created_at ?? null; accountId.current = data?.session?.user?.id ?? null; } catch { /* unknown = ask */ }
-    const handoff = guestHandoff({ guest, accountCreatedAt: createdAt, hasSavedProgress: !!read.raw });
+    try { const { data } = await supabase.auth.getSession(); accountId.current = data?.session?.user?.id ?? null; } catch { /* unknown account */ }
+    const handoff = guestHandoff({ guest, hasAnswers: accountHasAnswers(s?.log) });
     if (handoff === "merge") {
       const merged = mergeGuestIntoBlob(s ?? migrateBlob({}, CATS), guest, { today: todayStr(), calibration });
       if (merged.summary) { s = merged.blob; pendingHandoff.current = merged.summary; }
       pendingGuestClear.current = true;
-    } else if (handoff === "ask") {
-      try { clearGuest(window.localStorage); releaseHeldGuest(window.sessionStorage); } catch { /* storage blocked */ }
+    } else if (handoff === "keep") {
       setGuestNote({ skipped: true });
     } else if (handoff === "expired") {
       try { clearGuest(window.localStorage); releaseHeldGuest(window.sessionStorage); } catch { /* storage blocked */ }
@@ -1402,14 +1400,20 @@ export default function App() {
             <button type="button" className="btn" onClick={() => setSaveAttempt((n) => n + 1)}>Try again</button>
           </section>
         )}
-        {guestNote && !guestSaveError && !locked && (
+        {guestNote?.skipped && !guestSaveError && !locked && (
+          <section className="card rw-saved" role="status">
+            <p className="small">This account already has progress, so your practice answers weren't added.</p>
+            <button type="button" className="btn ghost" onClick={() => {
+              try { clearGuest(window.localStorage); releaseHeldGuest(window.sessionStorage); } catch { /* storage blocked */ }
+              setGuestNote(null);
+            }}>Discard practice answers</button>
+          </section>
+        )}
+        {guestNote && !guestNote.skipped && !guestSaveError && !locked && (
           <section className="card rw-saved" role="status">
             <p className="eyebrow">Progress saved</p>
-            <h2 className="h2">{guestNote.skipped ? "Welcome back." : "Your trial answers are in your account"}</h2>
-            <p className="small">{guestNote.skipped
-              ? "Your account already has progress, so the practice answers weren't added."
-              : `${guestNote.answers} answer${guestNote.answers === 1 ? "" : "s"}, ${guestNote.correct} correct, +${guestNote.xp} XP${guestNote.streakStarted ? `, and day ${guestNote.streak} of your streak` : ""}. They count toward your stats, badges, and readiness estimate.`}
-            </p>
+            <h2 className="h2">Your trial answers are in your account</h2>
+            <p className="small">{guestNote.answers} answer{guestNote.answers === 1 ? "" : "s"}, {guestNote.correct} correct, +{guestNote.xp} XP{guestNote.streakStarted ? `, and day ${guestNote.streak} of your streak` : ""}. They count toward your stats, badges, and readiness estimate.</p>
             <button type="button" className="btn ghost" onClick={() => setGuestNote(null)}>Got it</button>
           </section>
         )}
@@ -2075,7 +2079,20 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
     setPhase("feedback");
   };
 
-  const endSession = () => { setPhase("pick"); setNav(emptyNav()); setQ(null); setSel([]); setOrder([]); };
+  const endSession = () => {
+    resolvedLegacy.current = new Set();
+    setPhase("pick");
+    setNav(emptyNav());
+    setQ(null);
+    setSel([]);
+    setOrder([]);
+  };
+  const beginSitting = (poolMode) => {
+    resolvedLegacy.current = new Set();
+    onBegin?.();
+    setMode(poolMode);
+    pickFrom(emptyNav(), poolMode);
+  };
 
   // autopilot: start immediately: due reviews first, then new questions
   useEffect(() => {
@@ -2144,8 +2161,8 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
         />
         <p className="small mono">{freshPool.length} new · {reviewPool.length} to review ({duePool.length} due today) · difficulty target {diffTarget}/3</p>
         <div className={"row" + tourMark(tourFocus, "qbank-review")} data-tour="qbank-review">
-          <button className="btn" onClick={() => { onBegin?.(); setMode("new"); pickFrom(emptyNav(), "new"); }} disabled={!freshPool.length}>{freshPool.length ? "New questions" : "All questions seen"}</button>
-          <button className="btn ghost" onClick={() => { onBegin?.(); setMode("review"); pickFrom(emptyNav(), "review"); }} disabled={!reviewPool.length}>Review misses ({reviewPool.length})</button>
+          <button className="btn" onClick={() => beginSitting("new")} disabled={!freshPool.length}>{freshPool.length ? "New questions" : "All questions seen"}</button>
+          <button className="btn ghost" onClick={() => beginSitting("review")} disabled={!reviewPool.length}>Review misses ({reviewPool.length})</button>
         </div>
         {addQuestions && isOwner && <Generator provider={provider} addQuestions={addQuestions} log={log} questions={catalog} lowOnNew={freshPool.length < 5} />}
 

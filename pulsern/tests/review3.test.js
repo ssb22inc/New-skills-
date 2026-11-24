@@ -40,7 +40,8 @@ describe("Codex P2 wiring", () => {
     expect(signOut.indexOf("saved.timedOut")).toBeLessThan(signOut.indexOf("return"));
     expect(app).toContain("Still saving your progress.");
     expect(app).toContain("Sign out anyway");
-    expect(app).toContain("Welcome back.");
+    expect(app).toContain("This account already has progress, so your practice answers weren't added.");
+    expect(app).toContain("Discard practice answers");
     expect(app).toContain("setRewards((r) => maybeGrantCover(r, today).rewards)");
     expect(app).not.toContain("setRewards(g.rewards)");
     expect(app).toContain("stampedQuestion(");
@@ -184,7 +185,7 @@ describe("N8-N10 quick fixes", () => {
   });
   it("N9: a returning account is told the trial was not added, and is not called 'someone'", () => {
     expect(app).not.toContain("Someone answered");
-    expect(app).toContain("Your account already has progress, so the practice answers weren't added.");
+    expect(app).toContain("This account already has progress, so your practice answers weren't added.");
   });
   it("N10: undo restarts the card-XP time floor", () => {
     expect(app).toMatch(/flipAt\.current = Date\.now\(\);[^\n]*\n\s*setSession\(\(s\) => undoGrade\(s\)\);/);

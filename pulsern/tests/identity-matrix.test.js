@@ -227,29 +227,32 @@ describe("review, restore, and import use the canonical key", () => {
     expect(merged.blob.xp).toBe(account.xp);
   });
 
-  it("a legacy numeric miss still reaches Review Misses when the catalog has one question with that number", () => {
+  it("a legacy miss waits for classification, then a correction pays 5 and a repeat pays nothing", () => {
     const q = stampCatalogQuestion({ id: 42, cat: "Pharmacology", diff: 2, stem: "Loaded bank stem." }, []);
     const log = [{ id: 42, cat: "Pharmacology", diff: 2, correct: false }];
     const schedule = { 42: { interval: 1, due: "2026-01-16" } };
-    expect(settledResult(q, log, [q])).toEqual({ state: "known", correct: false });
-    expect(reviewPools([q], log, schedule, "2026-01-16").review.map(questionIdentity)).toEqual(["bank:42"]);
-    expect(todayPool([q], log, schedule, [], "2026-01-16").map(questionIdentity)).toEqual(["bank:42"]);
+    expect(settledResult(q, log, [q]).state).toBe("pending");
+    expect(reviewPools([q], log, schedule, "2026-01-16").review).toEqual([]);
+    expect(unseenQuestions([q], log)).toEqual([]);
+    expect(schedule[42]).toEqual({ interval: 1, due: "2026-01-16" });
+    expect(schedule["bank:42"]).toBeUndefined();
+    const catalogs = { bankKnown: true, builtinIds: [], bankIds: [42], bankCats: { 42: "Pharmacology" }, dbCases: [] };
+    const named = classifyLog(log, catalogs);
+    expect(named[0].key).toBe("bank:42");
+    const moved = rekeySchedule(schedule, log, named);
+    expect(moved["bank:42"]).toEqual(schedule[42]);
+    expect(moved[42]).toBeUndefined();
+    const fixed = applyAnswer({ ...blank(), log: named, missSchedule: moved, ability: emptyAbility(["Pharmacology"]) }, {
+      q, correct: true, ms: 9000, today: "2026-01-16", attempt: "fix-42",
+    });
+    expect(fixed.result.xp).toBe(REVIEW_FIX_BONUS);
+    const again = applyAnswer(fixed.state, { q, correct: true, ms: 9000, today: "2026-01-16", attempt: "repeat-42" });
+    expect(again.result.xp).toBe(0);
     const caseRow = { id: 101, source: "case", key: "case:case-sepsis-1", cat: "Physiological Adaptation", correct: false };
     const bank101 = stampCatalogQuestion({ id: 101, stem: "Bank 101.", cat: "Pharmacology", diff: 2 }, []);
     const caseSchedule = { 101: { interval: 1, due: "2026-01-16" } };
     expect(scheduleEntry(bank101, caseSchedule, [bank101], [caseRow])).toBeNull();
     expect(reviewPools([bank101], [caseRow], caseSchedule, "2026-01-16").review).toEqual([]);
-    expect(unseenQuestions([q], log)).toEqual([]);
-    const bundled = stampCatalogQuestion({ id: 7, stem: "Bundled stem.", cat: "Pharmacology", diff: 2 }, [{ id: 7, stem: "Bundled stem." }]);
-    const bankQ = stampCatalogQuestion({ id: 7, stem: "Bank stem.", cat: "Pharmacology", diff: 2 }, [{ id: 7, stem: "Bundled stem." }]);
-    const ambiguous = [{ id: 7, correct: false }];
-    expect(settledResult(bankQ, ambiguous, [bankQ, bundled]).state).toBe("none");
-    const ambiguousReview = reviewPools([bankQ, bundled], ambiguous, { 7: { interval: 1, due: "2026-01-16" } }, "2026-01-16").review;
-    expect(ambiguousReview.map((item) => item.id)).toEqual(["unresolved:7"]);
-    expect(ambiguousReview[0].candidates.map(questionIdentity)).toEqual(["bank:7", "builtin:7"]);
-    expect(unseenQuestions([bankQ, bundled], ambiguous)).toEqual([]);
-    const bankOnly = legacyCandidates([bankQ], ambiguous, [bundled]);
-    expect(reviewPools(bankOnly, ambiguous, { 7: { interval: 1, due: "2026-01-16" } }, "2026-01-16").review[0].candidates.map(questionIdentity)).toEqual(["bank:7", "builtin:7"]);
   });
 
   it("does not rebuild ability over legacy rows that have no key", () => {

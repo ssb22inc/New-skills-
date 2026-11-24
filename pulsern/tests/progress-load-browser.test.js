@@ -85,42 +85,42 @@ describe("M6: a failed progress read never overwrites the account", () => {
       expect(await page.evaluate(() => localStorage.getItem("pulsern-guest-v1"))).not.toBeNull();
       await page.evaluate(() => { window.__readError = false; });
       await page.getByRole("button", { name: "Try again" }).click();
-      await page.getByRole("heading", { name: "Welcome back." }).waitFor({ timeout: 15_000 });
-      await page.getByText("the practice answers weren't added").waitFor();
+      await page.getByText("This account already has progress, so your practice answers weren't added.").waitFor({ timeout: 15_000 });
+      expect(await page.evaluate(() => localStorage.getItem("pulsern-guest-v1"))).not.toBeNull();
       await page.waitForTimeout(800);
       const saved = await page.evaluate(() => window.__upserts.at(-1));
       expect(saved.xp).toBe(500);
       expect(saved.log).toHaveLength(30);
-      expect(await page.evaluate(() => localStorage.getItem("pulsern-guest-v1"))).toBeNull();
       expect(errors).toEqual([]);
     } finally { await ctx.close(); }
   }, 120_000);
 });
 
 describe("M2: trial answers and an existing account", () => {
-  it("a returning account does not import the trial and clears the device copy", async () => {
+  it("a returning account keeps the trial until Discard practice answers", async () => {
     const { ctx, page } = await open({ session: sessionFor(NOW - 90 * 86400000), row: existingRow, guestData: guest(NOW - 3600_000) });
     try {
-      await page.getByRole("heading", { name: "Welcome back." }).waitFor({ timeout: 30_000 });
-      await page.getByText("the practice answers weren't added").waitFor();
-      expect(await page.evaluate(() => localStorage.getItem("pulsern-guest-v1"))).toBeNull();
+      await page.getByText("This account already has progress, so your practice answers weren't added.").waitFor({ timeout: 30_000 });
+      expect(await page.evaluate(() => localStorage.getItem("pulsern-guest-v1"))).not.toBeNull();
       const saved = await page.evaluate(() => window.__upserts.at(-1));
       expect(saved.log).toHaveLength(30);
       expect(saved.xp).toBe(500);
       expect(saved.streak.count).toBe(20);
+      await page.getByRole("button", { name: "Discard practice answers" }).click();
+      await page.waitForFunction(() => localStorage.getItem("pulsern-guest-v1") === null);
     } finally { await ctx.close(); }
   }, 120_000);
 
   it("a returning account keeps its rows and does not add trial XP", async () => {
     const { ctx, page } = await open({ session: sessionFor(NOW - 90 * 86400000), row: existingRow, guestData: guest(NOW - 3600_000) });
     try {
-      await page.getByRole("heading", { name: "Welcome back." }).waitFor({ timeout: 30_000 });
+      await page.getByText("This account already has progress, so your practice answers weren't added.").waitFor({ timeout: 30_000 });
       await page.waitForTimeout(800);
       const saved = await page.evaluate(() => window.__upserts.at(-1));
       expect(saved.log).toHaveLength(30);
       expect(saved.xp).toBe(500);
       expect(saved.missSchedule?.["builtin:2"]).toBeUndefined();
-      expect(await page.evaluate(() => localStorage.getItem("pulsern-guest-v1"))).toBeNull();
+      expect(await page.evaluate(() => localStorage.getItem("pulsern-guest-v1"))).not.toBeNull();
     } finally { await ctx.close(); }
   }, 120_000);
 
@@ -130,6 +130,19 @@ describe("M2: trial answers and an existing account", () => {
     try {
       await page.getByText("Your trial answers are in your account").waitFor({ timeout: 30_000 });
       expect(await page.getByRole("heading", { name: /trial answers to this account\?/ }).count()).toBe(0);
+      await page.waitForTimeout(800);
+      const saved = await page.evaluate(() => window.__upserts.at(-1));
+      expect(saved.log.map((l) => l.key)).toEqual(["builtin:1", "builtin:2"]);
+    } finally { await ctx.close(); }
+  }, 120_000);
+
+  it("an older account with no saved answers still imports the trial", async () => {
+    const started = NOW - 600_000;
+    const row = { theme: "light", tourSeen: true, xp: 0, bestRun: 0, log: [], streak: { count: 0, lastDay: null, shield: true } };
+    const { ctx, page } = await open({ session: sessionFor(NOW - 90 * 86400000), row, guestData: guest(started) });
+    try {
+      await page.getByText("Your trial answers are in your account").waitFor({ timeout: 30_000 });
+      expect(await page.getByText("This account already has progress").count()).toBe(0);
       await page.waitForTimeout(800);
       const saved = await page.evaluate(() => window.__upserts.at(-1));
       expect(saved.log.map((l) => l.key)).toEqual(["builtin:1", "builtin:2"]);
@@ -203,8 +216,8 @@ describe("N2: every sign-out path forgets the trial on this device", () => {
   it("from the menu", async () => {
     const { ctx, page } = await open({ session: sessionFor(NOW - 90 * 86400000), row: existingRow, guestData: guest(NOW - 3600_000) });
     try {
-      await page.getByRole("heading", { name: "Welcome back." }).waitFor({ timeout: 30_000 });
-      expect(await trialKey(page)).toBeNull();
+      await page.getByText("This account already has progress, so your practice answers weren't added.").waitFor({ timeout: 30_000 });
+      expect(await trialKey(page)).not.toBeNull();
       await page.locator("header .menu-btn").click();
       await page.getByRole("button", { name: /Sign out/ }).first().click();
       await page.waitForFunction(() => (window.__signOuts || 0) === 1);
@@ -215,7 +228,8 @@ describe("N2: every sign-out path forgets the trial on this device", () => {
   it("from Stats", async () => {
     const { ctx, page } = await open({ session: sessionFor(NOW - 90 * 86400000), row: existingRow, guestData: guest(NOW - 3600_000) });
     try {
-      await page.getByRole("heading", { name: "Welcome back." }).waitFor({ timeout: 30_000 });
+      await page.getByText("This account already has progress, so your practice answers weren't added.").waitFor({ timeout: 30_000 });
+      expect(await trialKey(page)).not.toBeNull();
       await page.getByRole("button", { name: "Stats", exact: true }).click();
       await page.getByRole("button", { name: "Sign out", exact: true }).click();
       await page.waitForFunction(() => (window.__signOuts || 0) === 1);
@@ -317,6 +331,31 @@ describe("Today leaves an unresolved due miss and continues", () => {
       await page.getByRole("button", { name: "Leave unresolved" }).click();
       await page.getByRole("button", { name: "Back to Today" }).waitFor({ timeout: 15_000 });
       expect(await page.getByRole("heading", { name: "Which question was this?" }).count()).toBe(0);
+    } finally { await ctx.close(); }
+  }, 120_000);
+});
+
+describe("Review misses can open an unresolved card again in the same screen", () => {
+  it("Leave unresolved does not hide the card from the next Review misses sitting", async () => {
+    const row = {
+      theme: "light", tourSeen: true, xp: 40, bestRun: 1,
+      log: [
+        { id: 7, unclassified: true, key: null, cat: "Pharmacology", diff: 2, correct: false },
+        { id: 1001, source: "bank", key: "bank:1001", cat: "Pharmacology", diff: 1, correct: true },
+      ],
+      streak: { count: 2, lastDay: "2020-01-01", shield: true },
+      missSchedule: { 7: { interval: 1, due: "2020-01-02" } },
+      fcNew: { day: todayStr(), count: 20 },
+      srsMap: {},
+    };
+    const { ctx, page } = await open({ session: sessionFor(NOW - 90 * 86400000), row });
+    try {
+      await page.getByRole("button", { name: "Practice", exact: true }).click({ timeout: 30_000 });
+      await page.getByRole("button", { name: /Review misses/ }).click();
+      await page.getByRole("heading", { name: "Which question was this?" }).waitFor({ timeout: 15_000 });
+      await page.getByRole("button", { name: "Leave unresolved" }).click();
+      await page.getByRole("button", { name: /Review misses/ }).click();
+      await page.getByRole("heading", { name: "Which question was this?" }).waitFor({ timeout: 15_000 });
     } finally { await ctx.close(); }
   }, 120_000);
 });

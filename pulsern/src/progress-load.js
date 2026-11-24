@@ -80,16 +80,13 @@ export function clearLegacyProgressBackup(storage) {
   try { storage.removeItem(LEGACY_PROGRESS_BACKUP_KEY); } catch { /* storage blocked */ }
 }
 
-/* Slack for clock skew between this device and the auth server. */
-export const NEW_ACCOUNT_SKEW_MS = 5 * 60 * 1000;
-
-/* "none" | "expired" | "merge" | "ask" */
-export function guestHandoff({ guest, accountCreatedAt = null, hasSavedProgress = false, now = Date.now() }) {
+/* "none" | "expired" | "merge" | "keep"
+   The decision is the account's saved answer history. Creation date is
+   not used. No saved answers: import through the live answer function.
+   Any saved answer: leave the trial on the device and let the student
+   discard it. Nothing is deleted just because the account is old. */
+export function guestHandoff({ guest, hasAnswers = false, now = Date.now() } = {}) {
   if (!guest || !Array.isArray(guest.log) || guest.log.length === 0) return "none";
   if (!guestFresh(guest, now)) return "expired";
-  const created = accountCreatedAt ? Date.parse(accountCreatedAt) : NaN;
-  const startedAt = Number(guest.startedAt);
-  const brandNew = !hasSavedProgress && Number.isFinite(created) && Number.isFinite(startedAt)
-    && created >= startedAt - NEW_ACCOUNT_SKEW_MS;
-  return brandNew ? "merge" : "ask";
+  return hasAnswers ? "keep" : "merge";
 }

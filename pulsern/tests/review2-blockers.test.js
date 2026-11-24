@@ -8,7 +8,7 @@ import {
   cardXp, CARD_MIN_GRADE_MS, advanceStreak, comboFor, SHORT_CAT,
 } from "../src/rewards.js";
 import { emptyGuest, guestAnswer, guestFresh, GUEST_TTL_DAYS } from "../src/guest.js";
-import { readProgress, guestHandoff, NEW_ACCOUNT_SKEW_MS, sessionReadDecision } from "../src/progress-load.js";
+import { readProgress, guestHandoff, sessionReadDecision } from "../src/progress-load.js";
 import { migrateBlob } from "../src/state.js";
 import { hapticsAllowed, GUEST_PREFS, buzz } from "../src/effects.js";
 
@@ -52,15 +52,11 @@ describe("M2: trial answers never merge silently into an existing account", () =
   const started = Date.parse("2026-11-23T15:00:00Z");
   const g = { ...emptyGuest(started, "2026-11-23"), startedAt: started, lastAt: started + 60_000, log: [{ id: 1, cat: "Pharmacology", diff: 1, correct: true }] };
   const now = started + 3600_000;
-  it("merges automatically only for a brand-new account created from the trial", () => {
-    expect(guestHandoff({ guest: g, accountCreatedAt: new Date(started + 120_000).toISOString(), hasSavedProgress: false, now })).toBe("merge");
-    expect(guestHandoff({ guest: g, accountCreatedAt: new Date(started - NEW_ACCOUNT_SKEW_MS + 1000).toISOString(), hasSavedProgress: false, now })).toBe("merge");
+  it("imports whenever the account has no saved answers, including an older account", () => {
+    expect(guestHandoff({ guest: g, hasAnswers: false, now })).toBe("merge");
   });
-  it("asks an existing account (older account, or any saved progress, or unknown age)", () => {
-    expect(guestHandoff({ guest: g, accountCreatedAt: "2025-01-01T00:00:00Z", hasSavedProgress: true, now })).toBe("ask");
-    expect(guestHandoff({ guest: g, accountCreatedAt: "2025-01-01T00:00:00Z", hasSavedProgress: false, now })).toBe("ask");
-    expect(guestHandoff({ guest: g, accountCreatedAt: new Date(started + 120_000).toISOString(), hasSavedProgress: true, now })).toBe("ask");
-    expect(guestHandoff({ guest: g, accountCreatedAt: null, hasSavedProgress: false, now })).toBe("ask");
+  it("keeps the trial when the account already has answer history", () => {
+    expect(guestHandoff({ guest: g, hasAnswers: true, now })).toBe("keep");
   });
   it("does nothing without trial answers, and drops an expired trial", () => {
     expect(guestHandoff({ guest: null, now })).toBe("none");
