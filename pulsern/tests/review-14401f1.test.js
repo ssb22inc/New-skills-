@@ -553,6 +553,16 @@ describe("a revision conflict keeps both devices' answers", () => {
     expect(merged.streak).toMatchObject({ count: 3, lastDay: "2026-11-25" });
   });
 
+  it("does not carry yesterday's new-card count into today", () => {
+    const baseline = { log: [], xp: 0, rewards: emptyRewards(), fcNew: { day: "2026-11-23", count: 20 } };
+    const server = { ...baseline, fcNew: { day: "2026-11-24", count: 1, ids: ["cA"] } };
+    const local = { ...baseline, fcNew: { day: "2026-11-24", count: 1, ids: ["cB"] } };
+    const merged = blobForSave(server, local, baseline);
+    expect(merged.fcNew.day).toBe("2026-11-24");
+    expect(merged.fcNew.ids.sort()).toEqual(["cA", "cB"]);
+    expect(merged.fcNew.count).toBe(2);
+  });
+
   it("keeps a legacy new-card count that has no ids when each device adds a different card", () => {
     const today = "2026-11-24";
     const baseline = { log: [], xp: 0, rewards: emptyRewards(), fcNew: { day: today, count: 12 } };

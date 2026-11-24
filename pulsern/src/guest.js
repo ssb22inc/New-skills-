@@ -296,10 +296,11 @@ function mergeFcNew(base, server, local) {
     return l.day === day ? l : s;
   }
   const listed = (value) => (Array.isArray(value) ? value.filter((id) => id != null) : null);
-  const baseIds = listed(b.ids) ?? [];
+  const sameDay = b.day === s.day;
+  const baseIds = sameDay ? (listed(b.ids) ?? []) : [];
   const serverIds = listed(s.ids);
   const localIds = listed(l.ids);
-  const anonymous = Math.max(0, (Number(b.count) || 0) - baseIds.length);
+  const anonymous = sameDay ? Math.max(0, (Number(b.count) || 0) - baseIds.length) : 0;
   const added = [];
   const pushNew = (id) => {
     if (!baseIds.includes(id) && !added.includes(id)) added.push(id);

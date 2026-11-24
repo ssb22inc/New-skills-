@@ -653,13 +653,20 @@ export default function App() {
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, []);
-  const finishSignOut = () => {
+  const finishSignOut = async () => {
     saveQueue.current.invalidate();
+    setMenuOpen(false);
+    let result;
+    try {
+      result = await signOut({ auth: supabase.auth, storage: storageOrNull(() => window.localStorage), holdStorage: storageOrNull(() => window.sessionStorage) });
+    } catch {
+      setSaveFailed(true);
+      return;
+    }
+    if (result?.error) { setSaveFailed(true); return; }
     store.releaseAccount();
     accountId.current = null;
     setSaveStall(false);
-    setMenuOpen(false);
-    signOut({ auth: supabase.auth, storage: storageOrNull(() => window.localStorage), holdStorage: storageOrNull(() => window.sessionStorage) });
   };
   const signOutAndForgetTrial = async () => {
     const saved = await waitForFlush(() => saveQueue.current.flush());
@@ -674,13 +681,13 @@ export default function App() {
         : "Your trial answers are not in this account yet. Sign out anyway? They will be removed from this device.";
       if (typeof window.confirm === "function" && !window.confirm(message)) return;
     }
-    finishSignOut();
+    await finishSignOut();
   };
   const retrySignOut = async () => {
     const saved = await waitForFlush(() => saveQueue.current.flush());
     if (saved.timedOut) return;
     if (!saved.ok && typeof window.confirm === "function" && !window.confirm("The latest answers have not saved. Sign out anyway? They will be lost.")) return;
-    finishSignOut();
+    await finishSignOut();
   };
 
   /* ---- load saved progress (retryable; never treats a failed read as new) ---- */
