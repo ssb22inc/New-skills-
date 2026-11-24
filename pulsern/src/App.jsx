@@ -1366,7 +1366,7 @@ export default function App() {
             cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} addXp={(n) => setXp((x) => x + n)}
             needsFirstAnswer={activating} quizKick={quizKick} appliedQuizKick={appliedQuizKick} accessPending={accessPending}
             homeEpoch={homeEpoch} tourHold={tourStep != null} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} onSession={onSession}
-            rewards={rewards} shift={shift} career={career} beginSession={beginSession} recapProps={recapProps} onGrade={noteCard} onUngrade={unnoteCard} />}
+            rewards={rewards} shift={shift} career={career} missesOpen={missesOpen} beginSession={beginSession} recapProps={recapProps} onGrade={noteCard} onUngrade={unnoteCard} />}
           {tab === "qbank" && <QBank key={sectionEpoch} record={record} log={log} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} missSchedule={missSchedule} isOwner={isOwner} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus}
             onBegin={beginSession} renderBreak={({ onMore, onEnd }) => <RecapPanel {...recapProps} doneLabel="End session" onDone={onEnd} onMore={onMore} moreLabel="One more block →" />} />}
           {tab === "case" && <CaseStudy key={sectionEpoch} record={record} provider={provider} cases={allCases} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
@@ -1743,7 +1743,7 @@ function GuestAiNote({ onSignIn }) {
 
 /* ================= MONITOR (dashboard) ================= */
 
-function Monitor({ xp, streak, bestRun, log, readiness, readyLabel, catStats, daily, dueCount, go, tourFocus, rewards, shift, career }) {
+function Monitor({ xp, streak, bestRun, log, readiness, readyLabel, catStats, daily, dueCount, go, tourFocus, rewards, shift, career, missesOpen = 0 }) {
   const lvl = levelFor(xp);
   const weakest = catStats.filter((c) => c.pct != null).sort((a, b) => a.pct - b.pct)[0];
   const qToday = todayQuestionCount({ rewards, daily, today: todayStr() });

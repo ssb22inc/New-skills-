@@ -156,6 +156,8 @@ describe("N5: toolkit button avoid list", () => {
 
 describe("N8-N10 quick fixes", () => {
   it("N8: the monitor's Q TODAY counts questions only, like the shift", () => {
+    expect(app).toContain("missesOpen={missesOpen}");
+    expect(app).toMatch(/function Monitor\(\{[^}]*missesOpen/);
     expect(app).toContain("todayQuestionCount({ rewards, daily, today: todayStr() })");
     expect(app).toContain('qToday.known ? qToday.count : "—"');
     expect(app).toMatch(/vital-lab">Q TODAY/);
