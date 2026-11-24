@@ -115,18 +115,20 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
-          names=""
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch -q --depth=1 origin "${{ github.event.pull_request.base.sha }}"
-            names=$(git diff --name-only FETCH_HEAD HEAD)
+            git diff --name-only -z FETCH_HEAD HEAD | node ops/seo-page-change.mjs --nul
           elif [ "${{ github.event_name }}" = "push" ]; then
             before="${{ github.event.before }}"
             if [ -n "$before" ] && [ "$before" != "0000000000000000000000000000000000000000" ]; then
               git fetch -q --depth=1 origin "$before"
-              names=$(git diff --name-only FETCH_HEAD HEAD)
+              git diff --name-only -z FETCH_HEAD HEAD | node ops/seo-page-change.mjs --nul
+            else
+              node ops/seo-page-change.mjs --nul </dev/null
             fi
+          else
+            node ops/seo-page-change.mjs --nul </dev/null
           fi
-          printf '%s\n' "$names" | node ops/seo-page-change.mjs
       - name: Adversarial model review (advisory, owner decision 2026-10-29)
         id: adversary
         if: always() && steps.pages.outputs.changed == 'true'

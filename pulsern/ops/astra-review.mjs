@@ -498,15 +498,20 @@ export function parseReviewText(text) {
   if (typeof text !== "string" || !text.trim()) throw new Error("review result is empty");
   const stripped = text.replace(/^\uFEFF/, "").trim();
   const unfenced = stripped.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-  const fenced = [...stripped.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)].map((m) => m[1].trim());
-  const attempts = [unfenced, ...fenced, ...jsonObjectSpans(unfenced).reverse()];
-  let last = null;
-  for (const candidate of attempts) {
+  const candidates = [unfenced];
+  for (const m of stripped.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)) candidates.push(m[1].trim());
+  candidates.push(...jsonObjectSpans(stripped));
+  const verdicts = new Map();
+  for (const candidate of candidates) {
     if (!candidate) continue;
-    try { return validateResult(JSON.parse(candidate)); }
-    catch (e) { last = e; }
+    try {
+      const parsed = validateResult(JSON.parse(candidate));
+      verdicts.set(JSON.stringify(parsed), parsed);
+    } catch { /* a thought, a fence, or prose is not a second verdict */ }
   }
-  throw new Error(last?.message ?? "review result is not JSON");
+  if (verdicts.size === 0) throw new Error("review result is not JSON");
+  if (verdicts.size > 1) throw new Error("review result contains more than one verdict");
+  return [...verdicts.values()][0];
 }
 
 /* Top-level {...} spans, ignoring braces that sit inside strings. */
