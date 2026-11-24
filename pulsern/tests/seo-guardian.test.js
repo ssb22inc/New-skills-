@@ -879,6 +879,12 @@ describe("SEO guardian", () => {
       throw new Error("missing");
     });
     expect(indexed.has("pulsern/src/marketing-banner/index.jsx")).toBe(true);
+    const queried = collectSources(["pulsern/src/landing.jsx"], (file) => {
+      if (file === "pulsern/src/landing.jsx") return 'import copy from"./marketing-copy.html?raw";\n';
+      if (file === "pulsern/src/marketing-copy.html") return "<p>copy</p>";
+      throw new Error("missing");
+    });
+    expect(queried.has("pulsern/src/marketing-copy.html")).toBe(true);
     expect(sources.has("pulsern/src/grading-note.js")).toBe(true);
     expect(parseReview(JSON.stringify(skippedReview())).verdict).toBe("PASS");
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-page-names-"));

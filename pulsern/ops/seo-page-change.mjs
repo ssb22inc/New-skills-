@@ -13,7 +13,7 @@ const ROOTS = [
   "pulsern/ops/build-public-pages.mjs",
   "pulsern/src/landing.jsx",
 ];
-const IMPORT_RE = /(?:from\s+|import\s*\(\s*|import\s+)["'](\.[^"']+)["']|new URL\(\s*["'](\.[^"']+)["']/g;
+const IMPORT_RE = /(?:from\s*|import\s*\(\s*|import\s+)["'](\.[^"']+)["']|new URL\(\s*["'](\.[^"']+)["']/g;
 
 function repoPath(rel) {
   return join(REPO, rel);
@@ -28,8 +28,8 @@ export function collectSources(roots, read) {
     try { text = read(file); } catch { continue; }
     const dir = dirname(file);
     for (const match of text.matchAll(IMPORT_RE)) {
-      const spec = match[1] || match[2];
-      if (!spec?.startsWith(".")) continue;
+      const spec = (match[1] || match[2] || "").replace(/[?#].*$/, "");
+      if (!spec.startsWith(".")) continue;
       const base = normalize(join(dir, spec)).replace(/\\/g, "/");
       if (!base.startsWith("pulsern/")) continue;
       const candidates = /\.[a-z0-9]+$/i.test(base)
