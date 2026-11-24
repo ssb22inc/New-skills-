@@ -1,0 +1,70 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "9f43c95a300abc5b2bb99c03161eaf16e0145674",
+    "head": "ef8cf45fa7b6b9717fee4a9e571bb6e12aff5caf",
+    "pr": "187"
+  },
+  "reviewedAt": "2026-11-24T22:08:52.661Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-astra-review.yml",
+    ".github/workflows/pulsern-seo-guardian.yml",
+    "pulsern/CLAUDE.md",
+    "pulsern/ops/astra-review.mjs",
+    "pulsern/ops/llm.mjs",
+    "pulsern/ops/models.mjs",
+    "pulsern/ops/seo-page-change.mjs",
+    "pulsern/tests/astra-review.test.js",
+    "pulsern/tests/content-gate.test.js",
+    "pulsern/tests/llm-client.test.js",
+    "pulsern/tests/seo-guardian.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/ops/astra-review.mjs",
+      "line": 503,
+      "title": "Selecting the first parseable review can discard blocking findings",
+      "problem": "parseReviewText accepts a schema-valid object found anywhere in the response without checking for competing reviews. In particular, fenced objects are tried before an unfenced final verdict. A quoted example with empty findings can therefore override the actual review containing blockers, and runReview posts success.",
+      "failure_scenario": "The model returns a fenced example containing {\"assessment\":\"Example\",\"findings\":[]}, followed by its actual unfenced review containing a valid blocker finding. Parsing the whole response fails, the example is accepted, and the blocker is discarded. None of the added tests exercises conflicting review objects.",
+      "fix": "Allow only an unambiguous review result. Preserve support for a single optional fence or preamble, but reject responses containing multiple schema-valid review objects rather than selecting one. Add end-to-end negative tests with a fenced empty example followed by a blocking final review.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/seo-page-change.mjs",
+      "line": 19,
+      "title": "Marketing-page source changes are missing from the selector",
+      "problem": "PAGE_SOURCES omits actual public-page inputs, including src/landing.jsx and the learn-content modules such as ops/learn-clinical.mjs and ops/learn-exam.mjs. Changes to these files can alter published marketing pages while marketingPagesChanged returns false. Even under the proposed narrowed policy, these changes require review.",
+      "failure_scenario": "A PR changes only homepage copy in pulsern/src/landing.jsx or article content in pulsern/ops/learn-clinical.mjs. The build produces changed public content, but the selector compares committed filenames, not generated working-tree changes. Both seo:adversary and report enforcement are skipped.",
+      "fix": "Cover the actual public-page dependency graph, including homepage sources and all imported article-content modules. Add regression tests for changes confined to these inputs, without requiring generated HTML to be committed in the same change.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": ".github/workflows/pulsern-seo-guardian.yml",
+      "line": 121,
+      "title": "Git-quoted filenames silently bypass page-change detection",
+      "problem": "git diff --name-only emits quoted, escaped filenames for non-ASCII characters and control characters. The new script treats those display strings as literal paths, so they no longer start with pulsern/public/ and are classified as unrelated changes. The push comparison has the same defect.",
+      "failure_scenario": "A PR changes only pulsern/public/révision.html. With Git's default quoting, the emitted filename is surrounded by quotes and contains escaped UTF-8 bytes. The selector returns changed=false, allowing the search gate to finish without the required page review or report.",
+      "fix": "Read filenames using git diff --name-only -z and parse NUL-delimited paths verbatim. Pipe or store that output without passing NUL bytes through a Bash variable. Add a test using real Git output for an accented public-page filename and a filename containing a tab or newline.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 64524,
+    "completionTokens": 7005,
+    "reasoningTokens": 6214,
+    "costUsd": 0.2313585
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Do not merge yet. The new response parser can discard blocking findings and publish a PASS. The search-review selector also silently misses legitimate marketing-page changes through both incomplete source coverage and Git filename quoting.",
+  "counts": {
+    "blocker": 1,
+    "major": 2,
+    "minor": 0
+  }
+}
