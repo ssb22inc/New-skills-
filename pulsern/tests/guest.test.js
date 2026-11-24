@@ -9,6 +9,7 @@ import {
 import { QUESTIONS } from "../src/App.jsx";
 import { migrateBlob } from "../src/state.js";
 import { answerXp, REVIEW_FIX_BONUS } from "../src/rewards.js";
+import { newAttemptId, applyAnswer } from "../src/answer-apply.js";
 import { emptyAbility, updateAbility } from "../src/ability-engine.js";
 import { authModeFromUrl } from "../src/app-routing.js";
 
@@ -110,6 +111,19 @@ describe("guest XP uses the same rules as an account", () => {
     const again = applyUnsavedAnswers(restored, pending.answers, { today: TODAY });
     expect(again.log).toHaveLength(2);
     expect(await readPendingProgress(storage, "u1", Date.now() + PENDING_PROGRESS_TTL_MS + 1)).toBeNull();
+    const first = newAttemptId();
+    const second = newAttemptId();
+    expect(first).not.toBe(second);
+    expect(first).not.toContain("u1");
+    const stem = Array.from({ length: 80 }, () => "word").join(" ");
+    const q = { id: 9, source: "bank", key: "bank:9", cat: "Pharmacology", diff: 2, stem };
+    const base = migrateBlob({}, CATS);
+    const live = applyAnswer(base, { q, correct: true, ms: 4000, today: TODAY, attempt: "bank-9", calibration: { 9: { rating: 1800 } }, words: 80, rating: 1800 }).state;
+    const journal = unsavedAnswers([], live.log);
+    const recovered = applyUnsavedAnswers(base, journal, { today: TODAY });
+    expect(recovered.xp).toBe(live.xp);
+    expect(recovered.xp).toBe(0);
+    expect(recovered.ability.Pharmacology.theta).toBe(live.ability.Pharmacology.theta);
     release();
   });
   it("flush finishes the newest queued save before sign-out can drop it", async () => {

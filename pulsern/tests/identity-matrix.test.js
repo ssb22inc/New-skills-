@@ -6,7 +6,7 @@ import { applyAnswer, commitLiveAnswer } from "../src/answer-apply.js";
 import { emptyGuest, guestAnswer, mergeGuestIntoBlob, holdGuestTrial, peekHeldGuest, releaseHeldGuest, GUEST_KEY, GUEST_HOLD_KEY } from "../src/guest.js";
 import { classifyLog, resolveLegacyRow, canonicalKey } from "../src/question-key.js";
 import { stampCatalogQuestion, stampLoadedCatalog, questionIdentity } from "../src/question-identity.js";
-import { reviewPools, todayPool, sessionPool, unseenQuestions, questionByIdentity, latestResults, expandTrialQuestions, settledResult } from "../src/question-review.js";
+import { reviewPools, todayPool, sessionPool, unseenQuestions, questionByIdentity, latestResults, expandTrialQuestions, settledResult, legacyCandidates } from "../src/question-review.js";
 import { emptyNav, appendQuestion, goBack, present } from "../src/question-nav.js";
 import { itemRating } from "../src/ability-engine.js";
 import { emptyRewards, REVIEW_FIX_BONUS, caseStepIds } from "../src/rewards.js";
@@ -232,6 +232,15 @@ describe("review, restore, and import use the canonical key", () => {
     const again = mergeGuestIntoBlob(merged, guest, { today: TODAY, now: Date.now() });
     expect(again.summary).toBeNull();
     expect(again.blob.xp).toBe(merged.xp);
+    const secondTrial = {
+      ...guest,
+      startedAt: Date.now() - 1000,
+      log: guest.log.map((row, index) => ({ ...row, attempt: `again-${index}` })),
+    };
+    const repeated = mergeGuestIntoBlob(merged, secondTrial, { today: TODAY, now: Date.now() });
+    expect(repeated.summary).toBeNull();
+    expect(repeated.blob.xp).toBe(merged.xp);
+    expect(repeated.blob.log).toEqual(merged.log);
   });
 
   it("a legacy numeric miss still reaches Review Misses when the catalog has one question with that number", () => {
@@ -250,6 +259,8 @@ describe("review, restore, and import use the canonical key", () => {
     expect(ambiguousReview.map((item) => item.id)).toEqual(["unresolved:7"]);
     expect(ambiguousReview[0].candidates.map(questionIdentity)).toEqual(["bank:7", "builtin:7"]);
     expect(unseenQuestions([bankQ, bundled], ambiguous)).toEqual([]);
+    const bankOnly = legacyCandidates([bankQ], ambiguous, [bundled]);
+    expect(reviewPools(bankOnly, ambiguous, { 7: { interval: 1, due: "2026-01-16" } }, "2026-01-16").review[0].candidates.map(questionIdentity)).toEqual(["bank:7", "builtin:7"]);
   });
 
   it("does not rebuild ability over legacy rows that have no key", () => {

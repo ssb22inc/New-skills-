@@ -270,7 +270,7 @@ import {
   sessionProgress as cardProgress, canUndoGrade, undoGrade,
 } from "./card-nav.js";
 import { pickCategory, seededRandom, seedFrom, STARVE_WINDOW } from "./weak-spots.js";
-import { updateMissSchedule, reviewPools, sessionPool, expandTrialQuestions, unseenQuestions, questionByIdentity, answerIdentity } from "./question-review.js";
+import { updateMissSchedule, reviewPools, sessionPool, expandTrialQuestions, unseenQuestions, questionByIdentity, answerIdentity, legacyCandidates } from "./question-review.js";
 import {
   emptyNav, appendQuestion, saveDraft, markAnswered, canGoBack, goBack, present,
   forward, fallbackSkip, jumpToSkipped, skippedCount, currentEntry, nextUnvisited,
@@ -319,11 +319,11 @@ import {
   BadgeGrid, RoundsCard, BestsCard, SessionRecap, EffectsCard, comboSpeech, useAnnouncer,
 } from "./rewards-ui.jsx";
 import { loadGuest, mergeGuestIntoBlob, clearGuest, guestSummary, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, readGuestForHandoff, releaseHeldGuest, waitForFlush } from "./guest.js";
-import { applyAnswer, commitLiveAnswer, stampedQuestion } from "./answer-apply.js";
+import { applyAnswer, commitLiveAnswer, stampedQuestion, newAttemptId } from "./answer-apply.js";
 import { classifyLog, rekeySchedule } from "./question-key.js";
 import { stampCatalogQuestion, stampLoadedCatalog } from "./question-identity.js";
 import { signOutAndForgetTrial as signOut } from "./sign-out.js";
-import { readProgress, parseProgress, clearLegacyProgressBackup, guestHandoff, sessionReadDecision, stashPendingProgress, readPendingProgress, clearPendingProgress, clearPlainPending, unsavedAnswers, applyUnsavedAnswers } from "./progress-load.js";
+import { readProgress, parseProgress, clearLegacyProgressBackup, guestHandoff, sessionReadDecision, stashPendingProgress, readPendingProgress, clearPendingProgress, clearPlainPending, sweepExpiredPending, unsavedAnswers, applyUnsavedAnswers } from "./progress-load.js";
 
 const STORE_KEY = "pulsern-v1";
 
@@ -528,6 +528,7 @@ export default function App() {
     const userId = accountId.current;
     if (saved.timedOut) {
       const answers = unsavedAnswers(confirmedLogRef.current, log);
+      sweepExpiredPending(window.localStorage);
       clearPlainPending(window.localStorage, userId);
       await stashPendingProgress(window.localStorage, { userId, answers });
       saveQueue.current.invalidate();
@@ -552,7 +553,6 @@ export default function App() {
   const unreadableRaw = useRef(null);
   const confirmedLogRef = useRef(null);
   const pendingRestore = useRef(false);
-  const liveAttempt = useRef(0);
   const [guestOffer, setGuestOffer] = useState(null);     // trial answers waiting for this account's consent
   const applyBlob = (s) => {
     setTheme(s.theme);
@@ -583,7 +583,7 @@ export default function App() {
   };
   const loadProgress = useCallback(async () => {
     setLoadState("loading");
-    try { clearLegacyProgressBackup(window.localStorage); } catch { /* storage blocked */ }
+    try { clearLegacyProgressBackup(window.localStorage); sweepExpiredPending(window.localStorage); } catch { /* storage blocked */ }
     const read = await readProgress(() => store.get(STORE_KEY));
     /* Failed read: stay unloaded. Autosave and the trial merge both wait
        for `loaded`, so nothing is written over the real row. */
@@ -990,12 +990,14 @@ export default function App() {
       : (String(q.id).startsWith("case-") ? "case" : (BUNDLED_QUESTIONS.some((item) => item.id === q.id && item.stem === q.stem) ? "builtin" : "bank"));
     const item = stampedQuestion({ ...q, source });
     const beforeAbility = progressRef.current.ability;
+    const words = String(item.stem ?? "").trim().split(/\s+/).filter(Boolean).length;
     const applied = commitLiveAnswer(progressRef, {
       q: item, correct, ms: opts.ms ?? Infinity, today: todayStr(), schedule: opts.schedule !== false, calibration,
-      attempt: opts.attempt ?? `live:${accountId.current ?? "local"}:${liveAttempt.current += 1}`,
+      attempt: opts.attempt ?? newAttemptId(),
+      words, rating: itemRating(item, calibration),
     });
     const next = applied.state;
-    const res = applied.result;
+    const res = applied.result ?? { xp: 0, reason: "duplicate", base: 0, bonus: 0, fix: false, run: next.run };
     setLog(next.log);
     setMissSchedule(next.missSchedule);
     setDaily(next.daily);
@@ -1091,7 +1093,7 @@ export default function App() {
   const today = todayStr();
   const board = useMemo(() => badgeBoard(log, CATS, rewards.badgesSeen), [log, rewards.badgesSeen]);
   const career = useMemo(() => careerStatus({ xp, log, cats: CATS, rankHigh: rewards.rankHigh }), [xp, log, rewards.rankHigh]);
-  const missesOpen = useMemo(() => reviewPools(expandTrialQuestions(allQuestions, log, BUNDLED_QUESTIONS, missSchedule), log, missSchedule, today).review.length, [allQuestions, log, missSchedule, today]);
+  const missesOpen = useMemo(() => reviewPools(expandTrialQuestions(legacyCandidates(allQuestions, log, BUNDLED_QUESTIONS), log, BUNDLED_QUESTIONS, missSchedule), log, missSchedule, today).review.length, [allQuestions, log, missSchedule, today]);
   const qToday = todayQuestionCount({ rewards, daily, today });
   const shift = shiftStatus({ day: rewards.days[today], answeredToday: qToday.known ? qToday.count : 0, questionsKnown: qToday.known, dueCount, missesOpen });
   const week = weekRounds(rewards, today);
@@ -1969,8 +1971,9 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
     (!popFilter.length || popFilter.includes(x.population));
   const toggleIn = (arr, set) => (v) => set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
 
-  const freshPool = unseenQuestions(catalog, log).filter(inFocus);
-  const reviewQuestions = expandTrialQuestions(catalog, log, BUNDLED_QUESTIONS, missSchedule);
+  const withLegacy = legacyCandidates(catalog, log, BUNDLED_QUESTIONS);
+  const freshPool = unseenQuestions(withLegacy, log).filter(inFocus);
+  const reviewQuestions = expandTrialQuestions(withLegacy, log, BUNDLED_QUESTIONS, missSchedule);
   const resolvedLegacy = useRef(new Set());
   /* Missed questions run on a spaced-review schedule (question-review.js):
      duePool = scheduled reviews whose LOCAL date has arrived; reviewPool =
@@ -2203,10 +2206,16 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
   );
 
   if (q.unresolved) {
+    const resume = () => {
+      if (!auto) { endSession(); return; }
+      const moved = forward(nav, { skipIfOpen: true });
+      if (moved.effect.type !== "need-question") { reveal(moved.nav); return; }
+      pickFrom(moved.nav);
+    };
     const choose = (candidate) => {
       resolvedLegacy.current.add(String(q.legacyId));
       onResolveLegacy?.(q.legacyId, candidate);
-      endSession();
+      resume();
     };
     return (
       <section className="card">
@@ -2219,7 +2228,7 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
               {candidate.source === "bank" ? "Bank question" : candidate.source === "builtin" ? "Built-in question" : "Question"}: {candidate.stem}
             </button>
           ))}
-          <button type="button" className="btn ghost" onClick={endSession}>Leave unresolved</button>
+          <button type="button" className="btn ghost" onClick={() => { resolvedLegacy.current.add(String(q.legacyId)); resume(); }}>Leave unresolved</button>
         </div>
       </section>
     );

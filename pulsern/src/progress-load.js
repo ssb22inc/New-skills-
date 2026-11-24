@@ -104,6 +104,9 @@ function pendingAnswer(row) {
     ...(row.attempt != null ? { attempt: String(row.attempt) } : {}),
     ...(row.day ? { day: row.day } : {}),
     ...(Number.isFinite(row.ms) ? { ms: row.ms } : {}),
+    ...(Number.isFinite(row.words) ? { words: row.words } : {}),
+    ...(Number.isFinite(row.rating) ? { rating: row.rating } : {}),
+    ...(row.schedule === false ? { schedule: false } : {}),
     ...(row.pop ? { pop: row.pop } : {}),
   };
 }
@@ -114,13 +117,18 @@ function pendingAnswer(row) {
 export function applyUnsavedAnswers(blob, answers, { today, calibration = {} } = {}) {
   let state = blob ?? {};
   for (const row of answers ?? []) {
+    const stem = Number.isFinite(row.words) && row.words > 0 ? Array.from({ length: row.words }, () => "w").join(" ") : "";
+    const ownCalibration = Number.isFinite(row.rating) ? { [row.id]: { rating: row.rating } } : {};
     const applied = applyAnswer(state, {
-      q: { id: row.id, key: row.key, source: row.source, cat: row.cat, diff: row.diff, population: row.pop },
+      q: { id: row.id, key: row.key, source: row.source, cat: row.cat, diff: row.diff, stem, population: row.pop },
       correct: !!row.correct,
       ms: Number.isFinite(row.ms) ? row.ms : Infinity,
       today: row.day ?? today,
       attempt: row.attempt,
-      calibration,
+      schedule: row.schedule !== false,
+      words: row.words,
+      rating: row.rating,
+      calibration: { ...calibration, ...ownCalibration },
     });
     if (!applied.duplicate) state = applied.state;
   }
@@ -161,6 +169,24 @@ export async function clearPendingProgress(storage, userId) {
 
 /* The previous recovery key held the whole account blob and named the
    account in the key. Drop that copy when this account signs in or out. */
+/* Drop journals whose week is up, whoever is using the device. A
+   journal is only read for its own account, so this is what actually
+   removes an abandoned one. */
+export function sweepExpiredPending(storage, now = Date.now()) {
+  if (!storage || typeof storage.length !== "number" || typeof storage.key !== "function") return;
+  const keys = [];
+  for (let i = 0; i < storage.length; i += 1) {
+    const key = storage.key(i);
+    if (typeof key === "string" && key.startsWith(PENDING_PROGRESS_KEY)) keys.push(key);
+  }
+  for (const key of keys) {
+    try {
+      const parsed = JSON.parse(storage.getItem(key) ?? "null");
+      if (!parsed || parsed.v !== 2 || !Number.isFinite(parsed.expiresAt) || parsed.expiresAt <= now) storage.removeItem(key);
+    } catch { storage.removeItem(key); }
+  }
+}
+
 export function clearPlainPending(storage, userId) {
   try {
     storage?.removeItem(PENDING_PROGRESS_KEY);

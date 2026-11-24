@@ -39,6 +39,14 @@ export function stampedQuestion(q) {
   return { ...q, source, key, unclassified: false };
 }
 
+/* A new id on every answer. The counter used to restart at 1 after a
+   reload and collide with answers already saved. The id is not the
+   account id. */
+export function newAttemptId() {
+  const nonce = globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  return `live:${nonce}`;
+}
+
 /* `state` is the plain progress object (log, xp, ability, streak,
    rewards, daily, missSchedule, run, bestRun). A repeated attempt id
    is ignored. An unclassified question is stored and then left out of
@@ -70,6 +78,9 @@ export function applyAnswer(state, input) {
     ...(today ? { day: today } : {}),
     ...(q.population ? { pop: q.population } : {}),
     ...(Number.isFinite(ms) ? { ms } : {}),
+    ...(Number.isFinite(input.words) ? { words: input.words } : {}),
+    ...(Number.isFinite(input.rating) ? { rating: input.rating } : {}),
+    ...(input.schedule === false ? { schedule: false } : {}),
     origin: "recorded",
   };
   if (q.unclassified) {

@@ -264,6 +264,7 @@ export function guestImportIdentity(entry) {
 }
 
 const TRIAL_ATTEMPTS = "__trialAttempts";
+const TRIAL_REWARDED = "__trialRewarded";
 
 function rememberedAttempts(s) {
   const have = new Set();
@@ -341,12 +342,19 @@ function importTrialLive(s, entries, { today, calibration }) {
   };
 }
 
-function importTrialOntoHistory(s, entries, today) {
-  const known = new Set();
+function rewardedKeys(s) {
+  const keys = new Set();
   for (const row of s.log ?? []) {
     const key = questionIdentity(row);
-    if (key) known.add(key);
+    if (key) keys.add(key);
   }
+  const marked = s.missSchedule?.[TRIAL_REWARDED];
+  if (Array.isArray(marked)) for (const key of marked) keys.add(String(key));
+  return keys;
+}
+
+function importTrialOntoHistory(s, entries, today) {
+  const known = rewardedKeys(s);
   const attempts = rememberedAttempts(s);
   for (const e of entries) attempts.add(e.attempt);
   const latest = new Map();
@@ -354,7 +362,11 @@ function importTrialOntoHistory(s, entries, today) {
     if (!e.key || known.has(e.key)) continue;
     latest.set(e.key, e);
   }
-  const schedule = { ...(s.missSchedule ?? {}), [TRIAL_ATTEMPTS]: [...attempts] };
+  const schedule = {
+    ...(s.missSchedule ?? {}),
+    [TRIAL_ATTEMPTS]: [...attempts],
+    [TRIAL_REWARDED]: [...known, ...latest.keys()],
+  };
   if (!latest.size) {
     const changed = JSON.stringify(schedule[TRIAL_ATTEMPTS]) !== JSON.stringify(s.missSchedule?.[TRIAL_ATTEMPTS] ?? []);
     return changed ? { blob: { ...s, missSchedule: schedule }, summary: null } : { blob: s, summary: null };

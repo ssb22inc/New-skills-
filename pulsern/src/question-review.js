@@ -132,6 +132,28 @@ export function questionByIdentity(questions, id) {
    A number that is a miss in more than one catalog is not offered as
    new: the miss stays in the unresolved review until the student says
    which question it was. A single unrelated question stays new. */
+/* The active bank list drops bundled questions. A legacy miss whose
+   number is also a built-in still needs that built-in as a candidate,
+   or the student can only assign the miss to the bank question. */
+export function legacyCandidates(questions, log, registry = []) {
+  const index = historyIndex(log);
+  const wanted = new Set();
+  for (const [num, correct] of index.unresolved) if (correct === false) wanted.add(String(num));
+  for (const [num, correct] of index.unscoped) if (correct === false) wanted.add(String(num));
+  const list = [...(questions ?? [])];
+  if (!wanted.size) return list;
+  const have = new Set(list.map((q) => String(answerIdentity(q) ?? q?.id ?? "")));
+  for (const item of registry ?? []) {
+    if (!item || !wanted.has(String(item.id))) continue;
+    const stamped = item.source && item.key ? item : { ...item, source: "builtin", key: `builtin:${item.id}` };
+    const ident = String(answerIdentity(stamped) ?? stamped.id);
+    if (have.has(ident)) continue;
+    have.add(ident);
+    list.push(stamped);
+  }
+  return list;
+}
+
 export function unseenQuestions(questions, log) {
   const index = historyIndex(log);
   const peers = peerCounts(questions);
