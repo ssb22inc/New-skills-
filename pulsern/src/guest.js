@@ -12,7 +12,7 @@
    account that already has answer history does not take the trial.
    Each trial answer is stored as builtin:<id>. A shared-bank question
    with the same number is bank:<id> and is a different question. */
-import { answerXp, answerCountsForRun, emptyRewards } from "./rewards.js";
+import { answerXp, answerCountsForRun } from "./rewards.js";
 import { applyAnswer, stampedQuestion } from "./answer-apply.js";
 import { canonicalKey } from "./question-key.js";
 
@@ -43,7 +43,8 @@ export function loadGuest(storage) {
 }
 
 export function saveGuest(storage, guest) {
-  try { storage?.setItem(GUEST_KEY, JSON.stringify(guest)); return true; } catch { return false; }
+  if (!storage || typeof storage.setItem !== "function") return false;
+  try { storage.setItem(GUEST_KEY, JSON.stringify(guest)); return true; } catch { return false; }
 }
 
 export function clearGuest(storage) {
@@ -60,7 +61,8 @@ let heldTrial = null;
 export function holdGuestTrial(guest, storage) {
   heldTrial = guest && Array.isArray(guest.log) ? guest : null;
   if (!heldTrial) return false;
-  try { storage?.setItem(GUEST_HOLD_KEY, JSON.stringify(heldTrial)); return true; }
+  if (!storage || typeof storage.setItem !== "function") return false;
+  try { storage.setItem(GUEST_HOLD_KEY, JSON.stringify(heldTrial)); return true; }
   catch { return false; }
 }
 
@@ -139,82 +141,64 @@ export function applyProgressWrite(rows, { userId, key, blob, expectedRevision }
 function progressRowKey(row) {
   if (!row || typeof row !== "object") return "";
   if (row.attempt != null && row.attempt !== "") return `a:${row.attempt}`;
-  return `r:${row.key ?? ""}:${row.id ?? ""}:${row.correct}:${row.day ?? ""}:${row.at ?? ""}`;
+  return `h:${row.id}:${row.correct}:${row.day ?? ""}:${row.at ?? ""}:${row.ms ?? ""}`;
 }
 
-const ANSWER_FIELDS = new Set(["log", "xp", "ability", "streak", "rewards", "daily", "missSchedule", "run", "bestRun"]);
-
-function stemForReplay(row) {
-  if (typeof row?.stem === "string" && row.stem.trim()) return row.stem;
-  const words = Number(row?.words);
-  if (Number.isFinite(words) && words > 0) return Array.from({ length: words }, () => "w").join(" ");
-  return "";
+function mergeLogs(serverLog, localLog) {
+  const localBy = new Map();
+  for (const row of localLog ?? []) if (row) localBy.set(progressRowKey(row), row);
+  const seen = new Set();
+  const out = [];
+  for (const row of serverLog ?? []) {
+    if (!row) continue;
+    const id = progressRowKey(row);
+    seen.add(id);
+    out.push(localBy.get(id) ?? row);
+  }
+  for (const row of localLog ?? []) {
+    if (!row || seen.has(progressRowKey(row))) continue;
+    out.push(row);
+  }
+  return out;
 }
 
-/* The server row wins for answers already stored. Answers that exist only
-   on this device are replayed with the original word count and item rating.
-   A field this device changed since the shared baseline is kept. */
+function addDelta(base, server, local, key) {
+  const b = Number(base?.[key]) || 0;
+  return b + ((Number(server?.[key]) || 0) - b) + ((Number(local?.[key]) || 0) - b);
+}
+
+/* Rows already stored stay rows. A legacy identity correction updates the
+   matching row. New attempts are copied, not scored again. XP from both
+   sides is added from the shared baseline. Fields this device changed are kept. */
 export function reconcileProgress(serverBlob, localBlob, baselineBlob = null) {
   const server = serverBlob && typeof serverBlob === "object" && !Array.isArray(serverBlob) ? serverBlob : {};
   const local = localBlob && typeof localBlob === "object" && !Array.isArray(localBlob) ? localBlob : {};
   const base = baselineBlob && typeof baselineBlob === "object" && !Array.isArray(baselineBlob) ? baselineBlob : server;
-  const serverLog = Array.isArray(server.log) ? server.log : [];
-  const localLog = Array.isArray(local.log) ? local.log : [];
-  const seen = new Set(serverLog.map(progressRowKey));
-  const pending = localLog.filter((row) => row && !seen.has(progressRowKey(row)));
-  let state = {
-    log: serverLog,
-    xp: server.xp ?? 0,
-    ability: server.ability ?? {},
-    streak: server.streak,
-    rewards: server.rewards ?? emptyRewards(),
-    daily: server.daily,
-    missSchedule: server.missSchedule,
-    run: server.run ?? 0,
-    bestRun: server.bestRun ?? 0,
-  };
-  for (const row of pending) {
-    const rating = Number(row.rating);
-    const applied = applyAnswer(state, {
-      q: {
-        id: row.id, key: row.key, source: row.source, cat: row.cat, diff: row.diff,
-        stem: stemForReplay(row), population: row.pop, unclassified: row.unclassified,
-      },
-      correct: !!row.correct,
-      ms: Number.isFinite(row.ms) ? row.ms : Infinity,
-      today: row.day || "2026-11-24",
-      attempt: row.attempt,
-      words: row.words,
-      rating: Number.isFinite(rating) ? rating : undefined,
-      calibration: Number.isFinite(rating) ? { [row.id]: { rating } } : {},
-      schedule: row.schedule !== false,
-    });
-    if (!applied.duplicate) state = applied.state;
+  const log = mergeLogs(server.log, local.log);
+  const merged = { ...local, log };
+  if (server.ability && JSON.stringify(local.ability) === JSON.stringify(base.ability)) merged.ability = server.ability;
+  for (const key of ["xp", "bestRun"]) {
+    const next = addDelta(base, server, local, key);
+    if (next !== (Number(local[key]) || 0)) merged[key] = next;
   }
-  const merged = {
-    ...server,
-    log: state.log,
-    xp: state.xp,
-    ability: state.ability,
-    streak: state.streak,
-    rewards: state.rewards,
-    daily: state.daily,
-    missSchedule: state.missSchedule,
-    run: state.run,
-    bestRun: state.bestRun,
-  };
-  for (const key of new Set([...Object.keys(server), ...Object.keys(local), ...Object.keys(base)])) {
-    if (ANSWER_FIELDS.has(key)) continue;
-    if (JSON.stringify(local[key]) !== JSON.stringify(base[key])) merged[key] = local[key];
+  for (const key of new Set([...Object.keys(server), ...Object.keys(base)])) {
+    if (key === "log" || key === "xp" || key === "bestRun" || key === "ability") continue;
+    if (JSON.stringify(local[key]) === JSON.stringify(base[key]) && JSON.stringify(server[key]) !== JSON.stringify(base[key])) merged[key] = server[key];
   }
   return merged;
 }
 
-/* Fold the last accepted server blob into a later local snapshot so a
-   stale autosave cannot delete the other device's answers. */
-export function blobForSave(accepted, local) {
-  if (!accepted) return local;
-  return reconcileProgress(accepted, local, accepted);
+export function blobForSave(accepted, local, baseline = null) {
+  if (!accepted || !local) return local;
+  const merged = reconcileProgress(accepted, local, baseline ?? accepted);
+  if (JSON.stringify(merged) === JSON.stringify(local)) return local;
+  return merged;
+}
+
+/* A late read for account A must not replace account B's loaded progress. */
+export function noteAccountRead(state, read) {
+  if (state?.user && read?.user && state.user !== read.user) return state;
+  return { user: read?.user ?? null, blob: read?.blob ?? null, revision: Number(read?.revision) || 0 };
 }
 
 /* knownRevision matches: this device still owns the row, so its blob lands.

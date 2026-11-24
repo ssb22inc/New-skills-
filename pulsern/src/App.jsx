@@ -317,7 +317,7 @@ import {
   RewardsStyle, StreakGlyph, EcgBeat, ComboChip, MomentSheet, streakMoment, ShiftCard, CareerCard,
   BadgeGrid, RoundsCard, BestsCard, SessionRecap, EffectsCard, comboSpeech, useAnnouncer,
 } from "./rewards-ui.jsx";
-import { mergeGuestIntoBlob, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, readGuestForHandoff, releaseHeldGuest, waitForFlush, accountHasAnswers, reconcileProgress, blobForSave, createProgressEpoch, storageOrNull } from "./guest.js";
+import { mergeGuestIntoBlob, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, readGuestForHandoff, releaseHeldGuest, waitForFlush, accountHasAnswers, reconcileProgress, blobForSave, createProgressEpoch, storageOrNull, noteAccountRead } from "./guest.js";
 import { applyAnswer, commitLiveAnswer, stampedQuestion, newAttemptId } from "./answer-apply.js";
 import { claimLegacyAt, claimLegacySchedule } from "./question-key.js";
 import { stampCatalogQuestion, stampLoadedCatalog } from "./question-identity.js";
@@ -340,6 +340,8 @@ const STORE_KEY = "pulsern-v1";
 ------------------------------------------------------------------------ */
 const progressGate = createProgressEpoch();
 let acceptedBlob = null;
+let loadedBaseline = null;
+let accountRead = { user: null, blob: null, revision: 0 };
 const store = {
   async get(key) {
     const result = await supabase.auth.getSession();
@@ -355,9 +357,15 @@ const store = {
     /* A read error must never look like "no saved progress": the caller
        would treat the account as new and autosave defaults over it. */
     if (error) throw new Error(error.message || "Could not read saved progress");
-    acceptedBlob = data ? data.blob : null;
+    const next = noteAccountRead(accountRead, { user: session.user.id, blob: data?.blob ?? null, revision: data?.revision ?? 0 });
+    if (next === accountRead && accountRead.user && accountRead.user !== session.user.id) {
+      return data ? JSON.stringify(data.blob) : null;
+    }
+    accountRead = next;
+    acceptedBlob = next.blob;
+    loadedBaseline = next.blob;
     if (!data) { progressGate.note(0, progressGate.epoch()); return null; }
-    progressGate.note(Number(data.revision) || 0, progressGate.epoch());
+    progressGate.note(next.revision, progressGate.epoch());
     return JSON.stringify(data.blob);
   },
   async set(key, value, expectedUserId, ctx = {}) {
@@ -379,7 +387,7 @@ const store = {
       throw err;
     }
     const raw = JSON.parse(value);
-    const blob = blobForSave(acceptedBlob, raw);
+    const blob = blobForSave(acceptedBlob, raw, loadedBaseline);
     const writeAt = (expected, payload) => {
       const patch = { blob: payload, revision: expected + 1, updated_at: new Date().toISOString() };
       return supabase.from("progress").update(patch)
@@ -410,7 +418,7 @@ const store = {
       if (!fresh) {
         try { revision = await finish(insertAt(blob)); } catch { revision = null; }
       } else {
-        const merged = reconcileProgress(fresh.blob, raw, acceptedBlob);
+        const merged = reconcileProgress(fresh.blob, raw, loadedBaseline);
         const unchanged = JSON.stringify(merged) === JSON.stringify(fresh.blob);
         if (unchanged) {
           progressGate.note(Number(fresh.revision) || 0, epoch);
@@ -435,6 +443,8 @@ const store = {
   async delete(key) {
     progressGate.abandon();
     acceptedBlob = null;
+    loadedBaseline = null;
+    accountRead = { user: null, blob: null, revision: 0 };
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     await supabase.from("progress").delete().eq("user_id", session.user.id).eq("key", key);
