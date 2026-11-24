@@ -800,6 +800,25 @@ describe("running a review end to end (Astra finding #5)", () => {
     expect(existsSync(dir)).toBe(true);
   });
 
+  it("does not pass a truncated answer that still parses as an empty review", async () => {
+    const dir = out();
+    const text = JSON.stringify({ assessment: "clean", findings: [] });
+    const { code, report } = await runReview(opts(dir), { callModel: async () => ({ text, finishReason: "length", usage: {}, model: "m" }) });
+    expect(code).toBe(2);
+    expect(report.verdict).toBe("FAIL");
+    expect(report.rawAnswer).toBe(text);
+    expect(report.error).toMatch(/truncated/i);
+    const [md] = readdirSync(dir).filter((f) => f.endsWith(".md"));
+    expect(readFileSync(join(dir, md), "utf8")).toContain("# Sol review — FAIL");
+  });
+
+  it("passes the same empty findings when the model actually finished", async () => {
+    const dir = out();
+    const { code, report } = await runReview(opts(dir), { callModel: async () => ({ text: JSON.stringify({ assessment: "clean", findings: [] }), finishReason: "stop", usage: {}, model: "m" }) });
+    expect(code).toBe(0);
+    expect(report.verdict).toBe("PASS");
+  });
+
   it("fails on findings regardless of a cheerful assessment", async () => {
     const dir = out();
     const { code } = await runReview(opts(dir), { callModel: async () => ({ text: JSON.stringify({ assessment: "Looks great!", findings: [finding("major")] }), usage: {}, model: "m" }) });

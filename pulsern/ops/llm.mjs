@@ -141,6 +141,7 @@ export async function llmCall({
         text,
         model: data?.model ?? model,
         id: data?.id ?? null,
+        finishReason: data?.choices?.[0]?.finish_reason ?? null,
         usage: {
           promptTokens: u.prompt_tokens ?? null,
           completionTokens: u.completion_tokens ?? null,
