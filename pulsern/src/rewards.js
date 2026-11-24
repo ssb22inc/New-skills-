@@ -177,15 +177,23 @@ export function tagLegacyCaseRows(log, questionIds = []) {
   return log.map((row) => (legacyCaseMatch(row, questionIds) ? { ...row, source: "case" } : row));
 }
 
-/* A log row is this question. Namespaced case aliases never match a bank
-   id. A bare legacy number matches only after migrateBlob has tagged that
-   allowlisted id as a case. Difficulty never decides it. */
+/* A log row is this question only when both sides carry the same
+   canonical key (`builtin:7` is not `bank:7`). An unclassified row,
+   or a row with no source, is not a match. */
+function canonicalOf(row) {
+  if (!row || row.unclassified) return null;
+  if (typeof row.key === "string" && row.key) return row.key;
+  if (row.source === "builtin" || row.source === "bank" || row.source === "case") {
+    if (row.id == null || row.id === "") return null;
+    return `${row.source}:${row.id}`;
+  }
+  return null;
+}
+
 export function sameAnswer(q, row) {
-  if (!q || !row) return false;
-  if (String(row.id) === String(q.id)) return true;
-  const id = String(row.id);
-  if ((q.aliases ?? []).map(String).includes(id)) return true;
-  return (q.legacyAliases ?? []).map(String).includes(id) && row.source === "case" && row.cat === q.cat;
+  const a = canonicalOf(q);
+  const b = canonicalOf(row);
+  return !!a && a === b;
 }
 
 export function answerXp({ q, correct, ms = Infinity, log = [], skipped = false }) {

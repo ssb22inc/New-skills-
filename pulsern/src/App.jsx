@@ -258,7 +258,8 @@ import { migrateBlob } from "./state.js";
 import { ngnExt, fourFn, validQ, scoreItem, scoreCaseStep, isFullCredit, sumScores } from "./ngn.js";
 import { NGN_SAMPLES, CALC_SAMPLES, COVERAGE_SAMPLES } from "./ngn-samples.js";
 
-const BUNDLED_QUESTION_IDS = [...QUESTIONS, ...NGN_SAMPLES, ...CALC_SAMPLES, ...COVERAGE_SAMPLES].map((q) => q.id);
+const BUNDLED_QUESTIONS = [...QUESTIONS, ...NGN_SAMPLES, ...CALC_SAMPLES, ...COVERAGE_SAMPLES];
+const BUNDLED_QUESTION_IDS = BUNDLED_QUESTIONS.map((q) => q.id);
 import { CASE_STUDIES } from "./case-studies.js";
 import { dueQueue, nextSchedule, migrateLegacySrs, NEW_PER_DAY, newCardAllowance, noteNewCard, refundNewCard } from "./srs.js";
 import {
@@ -318,6 +319,8 @@ import {
   BadgeGrid, RoundsCard, BestsCard, SessionRecap, EffectsCard, comboSpeech, useAnnouncer,
 } from "./rewards-ui.jsx";
 import { loadGuest, mergeGuestIntoBlob, clearGuest, guestSummary, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, linkBuiltInGuest, readGuestForHandoff, releaseHeldGuest } from "./guest.js";
+import { applyAnswer, stampedQuestion } from "./answer-apply.js";
+import { classifyLog, rekeySchedule } from "./question-key.js";
 import { signOutAndForgetTrial as signOut } from "./sign-out.js";
 import { readProgress, parseProgress, clearLegacyProgressBackup, guestHandoff, sessionReadDecision } from "./progress-load.js";
 
@@ -570,7 +573,7 @@ export default function App() {
     /* Failed read: stay unloaded. Autosave and the trial merge both wait
        for `loaded`, so nothing is written over the real row. */
     if (read.status === "error") { setLoadState("error"); return; }
-    const parsed = parseProgress(read.raw, (b) => migrateBlob(b, CATS, BUNDLED_QUESTION_IDS)); // legacy saves get defaults (§4)
+    const parsed = parseProgress(read.raw, (b) => migrateBlob(b, CATS)); // legacy saves get defaults (§4)
     if (parsed.status === "corrupt") {
       /* A row exists but cannot be opened. Keep the server copy untouched
          and never autosave, merge or delete over it. The raw row stays in
@@ -589,7 +592,7 @@ export default function App() {
     try { const { data } = await supabase.auth.getSession(); createdAt = data?.session?.user?.created_at ?? null; accountId.current = data?.session?.user?.id ?? null; } catch { /* unknown = ask */ }
     const handoff = guestHandoff({ guest, accountCreatedAt: createdAt, hasSavedProgress: !!read.raw });
     if (handoff === "merge") {
-      const merged = mergeGuestIntoBlob(s ?? migrateBlob({}, CATS), guest, { today: todayStr(), updateAbility, builtIns: QUESTIONS });
+      const merged = mergeGuestIntoBlob(s ?? migrateBlob({}, CATS), guest, { today: todayStr(), calibration });
       if (merged.summary) { s = merged.blob; pendingHandoff.current = merged.summary; }
       pendingGuestClear.current = true;
     } else if (handoff === "ask") {
@@ -612,7 +615,7 @@ export default function App() {
     setGuestOffer(null);
     if (!offer) return;
     if (add && loaded) {
-      const merged = mergeGuestIntoBlob({ log, xp, bestRun, ability, streak, rewards, daily, missSchedule }, offer.guest, { today: todayStr(), updateAbility, calibration, builtIns: QUESTIONS });
+      const merged = mergeGuestIntoBlob({ log, xp, bestRun, ability, streak, rewards, daily, missSchedule }, offer.guest, { today: todayStr(), calibration });
       if (merged.summary) {
         const b = merged.blob;
         setLog(b.log); setXp(b.xp); setBestRun(b.bestRun); setAbility(b.ability); setStreak(b.streak); setRewards(b.rewards); setDaily(b.daily); setMissSchedule(b.missSchedule ?? {});
@@ -846,20 +849,23 @@ export default function App() {
      and re-runs when access opens. On any failure the built-in local array
      stays in place as the offline fallback. */
   const bankOpen = (isOwner || !!ent) && !locked;
+  const [catalog, setCatalog] = useState(null);
   useEffect(() => {
     if (!bankOpen) return;
     (async () => {
       // paginate: the practice bank is way past Supabase's 1,000-row cap
       const data = [];
+      let failed = false;
       for (let from = 0; ; from += 1000) {
         const { data: page, error } = await supabase.from("questions")
           .select("id, cat, diff, type, stem, options, extra, answer, rationale, ai, elo_rating, population")
           .eq("approved", true).is("exam_form", null) // exam items stay quarantined
           .order("id").range(from, from + 999);
-        if (error || !Array.isArray(page)) break;
+        if (error || !Array.isArray(page)) { failed = !!error; break; }
         data.push(...page);
         if (page.length < 1000) break;
       }
+      setCatalog((c) => ({ ...(c ?? {}), bankIds: data.map((r) => r.id), bankKnown: !failed }));
       if (!data.length) return;
       setCalibration(Object.fromEntries(data.map((r) => [r.id, { rating: r.elo_rating }])));
       const items = data
@@ -887,11 +893,25 @@ export default function App() {
       const { data, error } = await supabase.from("case_studies")
         .select("id, cat, title, blurb, intro, vitals, labs, note, steps, population")
         .eq("approved", true).is("exam_form", null); // exam cases stay quarantined
+      setCatalog((c) => ({ ...(c ?? {}), dbCases: !error && Array.isArray(data) ? data : [], casesKnown: !error }));
       if (!error && data?.length) {
         setBankCases(data.map((r) => ({ ...r, dbId: r.id, ai: true })));
       }
     })();
   }, [bankOpen]);
+  /* Legacy rows have no source. Name them only after the bank and the
+     case catalog have both been read, and only when exactly one catalog
+     contains the id. */
+  useEffect(() => {
+    if (!loaded || !catalog?.bankKnown || !catalog?.casesKnown) return;
+    const current = log;
+    const next = classifyLog(current, { builtinIds: BUNDLED_QUESTION_IDS, bankIds: catalog.bankIds, dbCases: catalog.dbCases, bankKnown: true });
+    if (next.every((row, i) => row.key === current[i]?.key && !!row.unclassified === !!current[i]?.unclassified && row.source === current[i]?.source)) return;
+    setLog(next);
+    setMissSchedule((schedule) => rekeySchedule(schedule, current, next));
+    // The catalog is the input. The log it rewrites is read once per catalog.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, catalog]);
 
   const answeredIds = log.map((l) => l.id);
   const acc = log.length ? log.filter((l) => l.correct).length / log.length : 0;
@@ -932,37 +952,43 @@ export default function App() {
      retrievals earn it; repeats, skips, and too-fast taps earn none.
      Returns the XP result so the feedback line shows exactly what was earned. */
   const record = (q, correct, opts = {}) => {
-    const item = linkBuiltInGuest(q, QUESTIONS);
-    const res = answerXp({ q: item, correct, ms: opts.ms ?? Infinity, log });
-    // population is additive on the log entry — old entries simply lack it
-    setLog((l) => [...l, { id: q.id, cat: q.cat, diff: q.diff, correct, ...(q.population ? { pop: q.population } : {}), ...(q.source ? { source: q.source } : {}) }]);
-    if (opts.schedule !== false) setMissSchedule((m) => updateMissSchedule(m, q.id, correct));
-    touchDay();
-    const { ability: nextAbility, itemDelta } = updateAbility(ability, q, correct, calibration);
-    setAbility(nextAbility);
-    // Fire-and-forget item telemetry — bank items only (case-study pseudo-ids
-    // and locally-generated questions aren't in the shared bank).
-    if (calibration[q.id] !== undefined) {
+    const source = q.source === "case" || q.source === "bank" || q.source === "builtin"
+      ? q.source
+      : (String(q.id).startsWith("case-") ? "case" : (BUNDLED_QUESTIONS.some((item) => item.id === q.id && item.stem === q.stem) ? "builtin" : "bank"));
+    const item = stampedQuestion({ ...q, source });
+    const applied = applyAnswer({
+      log, xp, ability, streak, rewards: rewardsRef.current, daily, missSchedule, run: runRef.current, bestRun,
+    }, { q: item, correct, ms: opts.ms ?? Infinity, today: todayStr(), schedule: opts.schedule !== false, calibration });
+    const next = applied.state;
+    const res = applied.result;
+    setLog(next.log);
+    setMissSchedule(next.missSchedule);
+    setDaily(next.daily);
+    setStreak(next.streak);
+    setRewards(next.rewards);
+    rewardsRef.current = next.rewards;
+    setAbility(next.ability);
+    setXp(next.xp);
+    runRef.current = next.run;
+    setRun(next.run);
+    setBestRun(next.bestRun);
+    const note = applied.streakNote;
+    if (note?.milestone) setMoments((m) => [...m, streakMoment(note.milestone)]);
+    if (note?.event === "cover") setMoments((m) => [...m, { kind: "cover-used", title: "Your streak is protected", line: `A shift cover covered the day you missed. Day ${note.streak.count} today.`, next: `${note.rewards.covers} cover${note.rewards.covers === 1 ? "" : "s"} left` }]);
+    const { itemDelta } = updateAbility(ability, item, correct, calibration);
+    if (source === "bank" && calibration[q.id] !== undefined) {
       fetch("/api/telemetry", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ itemId: q.id, correct, itemDelta }),
       }).catch(() => {});
     }
-    if (res.xp) setXp((x) => x + res.xp);
-    /* A too-fast tap never builds a run, even when the XP reason is "repeat". */
     const counts = answerCountsForRun({ correct, q: item, ms: opts.ms ?? Infinity });
-    const nextRun = counts ? runRef.current + 1 : 0;
-    runRef.current = nextRun;
-    const newBest = nextRun >= 3 && nextRun > bestRun;
-    setRun(nextRun);
-    if (counts) setBestRun((b) => Math.max(b, nextRun));
-    const prior = [...log].reverse().find((row) => sameAnswer(item, row));
-    setRewards((r) => bumpDay(r, todayStr(), { q: 1, ok: correct ? 1 : 0, xp: res.xp, fixes: correct && prior && prior.correct === false ? 1 : 0 }));
-    const combo = counts ? comboFor(nextRun) : null;
+    const newBest = next.run >= 3 && next.run > bestRun;
+    const combo = counts ? comboFor(next.run) : null;
     announce(comboSpeech(combo, newBest));
-    if (res.xp > 0) rewardBeat(combo || newBest ? "combo" : "correct", rewardsRef.current.prefs);
-    return { ...res, run: nextRun, combo, newBest };
+    if (res.xp > 0) rewardBeat(combo || newBest ? "combo" : "correct", next.rewards.prefs);
+    return { ...res, run: next.run, combo, newBest };
   };
   /* A graded card counts toward today's cards and its XP toward the day's
      XP (so the weekly view matches the header). Undo reverses all of it,

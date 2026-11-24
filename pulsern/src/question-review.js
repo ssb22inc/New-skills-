@@ -19,10 +19,21 @@ export function updateMissSchedule(schedule, id, correct) {
   return { ...map, [id]: nextSchedule(entry, correct ? "good" : "hard") };
 }
 
-/* Latest result per question id from the answer log. */
+/* Latest result per canonical key. A row with no key falls back to its
+   id so older fixtures still group. An unclassified row is skipped. */
+export function answerIdentity(row) {
+  if (!row || row.unclassified) return null;
+  if (typeof row.key === "string" && row.key) return row.key;
+  if (row.source === "builtin" || row.source === "bank" || row.source === "case") return `${row.source}:${row.id}`;
+  return row.id != null ? String(row.id) : null;
+}
+
 export function latestResults(log) {
   const latest = {};
-  for (const l of log ?? []) if (l && l.id != null) latest[l.id] = !!l.correct;
+  for (const l of log ?? []) {
+    const id = answerIdentity(l);
+    if (id != null) latest[id] = !!l.correct;
+  }
   return latest;
 }
 
@@ -53,27 +64,29 @@ export const isDue = (schedule, id, today = todayStr()) => {
    collide with a shared-bank item. Review still needs the original stem. */
 export function expandTrialQuestions(questions, log, registry = null) {
   const list = questions ?? [];
-  const have = new Set(list.map((q) => String(q.id)));
+  const have = new Set(list.map((q) => answerIdentity(q) ?? String(q.id)));
   const bySource = new Map((registry ?? list).map((q) => [String(q.id), q]));
   const extra = [];
   for (const row of log ?? []) {
-    const id = String(row?.id ?? "");
-    if (!id.startsWith("guest-") || have.has(id)) continue;
-    const src = bySource.get(id.slice("guest-".length));
+    const ident = answerIdentity(row) ?? String(row?.id ?? "");
+    if (!ident || have.has(ident)) continue;
+    const fromKey = ident.startsWith("builtin:") ? ident.slice("builtin:".length) : (ident.startsWith("guest-") ? ident.slice("guest-".length) : null);
+    const src = fromKey != null ? bySource.get(fromKey) : null;
     if (!src) continue;
-    have.add(id);
-    extra.push({ ...src, id: row.id });
+    have.add(ident);
+    extra.push({ ...src, id: row.id, ...(row.key ? { key: row.key, source: row.source ?? "builtin" } : {}) });
   }
   return extra.length ? [...list, ...extra] : list;
 }
 
 export function reviewPools(questions, log, schedule, today = todayStr()) {
   const latest = latestResults(log);
-  const due = questions.filter((q) => isDue(schedule, q.id, today))
-    .sort((a, b) => (schedule[a.id].due < schedule[b.id].due ? -1 : schedule[a.id].due > schedule[b.id].due ? 1 : 0));
-  const dueIds = new Set(due.map((q) => q.id));
-  const misses = questions.filter((q) => latest[q.id] === false);
-  const review = [...due, ...misses.filter((q) => !dueIds.has(q.id))];
+  const idOf = (q) => answerIdentity(q) ?? String(q.id);
+  const due = questions.filter((q) => isDue(schedule, idOf(q), today))
+    .sort((a, b) => (schedule[idOf(a)].due < schedule[idOf(b)].due ? -1 : schedule[idOf(a)].due > schedule[idOf(b)].due ? 1 : 0));
+  const dueIds = new Set(due.map(idOf));
+  const misses = questions.filter((q) => latest[idOf(q)] === false);
+  const review = [...due, ...misses.filter((q) => !dueIds.has(idOf(q)))];
   return { due, misses, review };
 }
 
@@ -84,7 +97,10 @@ export function reviewPools(questions, log, schedule, today = todayStr()) {
 export function todayPool(questions, log, schedule, freshPool, today = todayStr()) {
   const { due, misses } = reviewPools(questions, log, schedule, today);
   if (due.length) return due;
-  const waiting = (q) => !!schedule?.[q.id] && !isDue(schedule, q.id, today);
+  const waiting = (q) => {
+    const id = answerIdentity(q) ?? String(q.id);
+    return !!schedule?.[id] && !isDue(schedule, id, today);
+  };
   return [...misses.filter((q) => !waiting(q)), ...freshPool];
 }
 

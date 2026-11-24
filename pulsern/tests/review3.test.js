@@ -8,7 +8,7 @@ import { signOutAndForgetTrial } from "../src/sign-out.js";
 import { enforceOneTimeAppRelogin, GUEST_TRIAL_KEY } from "../src/app-routing.js";
 import { GUEST_KEY } from "../src/guest.js";
 import { answerXp, caseStepIds, legacyCaseAllowlist } from "../src/rewards.js";
-import { migrateBlob } from "../src/state.js";
+import { classifyLog } from "../src/question-key.js";
 import { CASE_STUDIES } from "../src/case-studies.js";
 
 const mem = (init = {}) => {
@@ -37,9 +37,9 @@ describe("Codex P2 wiring", () => {
     expect(signOut.indexOf("await saveQueue.current.flush()")).toBeLessThan(signOut.indexOf("saveQueue.current.invalidate()"));
     expect(app).toContain("setRewards((r) => maybeGrantCover(r, today).rewards)");
     expect(app).not.toContain("setRewards(g.rewards)");
-    expect(app).toContain("linkBuiltInGuest(q, QUESTIONS)");
-    expect(app).toContain("const nextRun = counts ? runRef.current + 1 : 0");
-    expect(app).toContain("runRef.current = nextRun");
+    expect(app).toContain("stampedQuestion(");
+    expect(app).toContain("run: runRef.current");
+    expect(app).toContain("runRef.current = next.run");
     expect(app).toContain("linkBuiltInGuest(x, QUESTIONS)");
     expect(app).toContain("createSaveQueue");
     expect(save).toContain("saveQueue.current.enqueue");
@@ -131,29 +131,27 @@ describe("N7: case steps already answered stay answered", () => {
   });
   it("a step answered under the old id pays no first-try XP again", () => {
     const step = caseStepIds({ key: "sepsis", index: 0, step: 1 });
-    const log = [{ id: 101, cat: "Physiological Adaptation", diff: 3, correct: true, source: "case" }];
-    expect(answerXp({ q: { ...step, cat: "Physiological Adaptation", diff: 3 }, correct: true, log }).reason).toBe("repeat");
+    const catalogs = { bankKnown: true, builtinIds: [], bankIds: [], dbCases: [{ id: 12, cat: "Pharmacology", steps: [{}] }] };
+    const log = classifyLog([{ id: 101, cat: "Physiological Adaptation", diff: 3, correct: true }], catalogs);
+    const q = { ...step, source: "case", key: "case:case-sepsis-1", cat: "Physiological Adaptation", diff: 3 };
+    expect(answerXp({ q, correct: true, ms: 9000, log }).reason).toBe("repeat");
     const db = caseStepIds({ dbId: 12, step: 0 });
-    expect(answerXp({ q: { ...db, cat: "Pharmacology", diff: 3 }, correct: true, log: [{ id: 50120, cat: "Pharmacology", diff: 3, correct: true, source: "case" }] }).xp).toBe(0);
+    const dbLog = classifyLog([{ id: 50120, cat: "Pharmacology", diff: 3, correct: true }], catalogs);
+    expect(answerXp({ q: { ...db, source: "case", key: "case:case-db12-0", cat: "Pharmacology", diff: 3 }, correct: true, ms: 9000, log: dbLog }).xp).toBe(0);
   });
-  it("tags only the historical bundled case-step ids, and leaves every other row a bank answer", () => {
+  it("tags only an id that one catalog owns", () => {
     expect(legacyCaseAllowlist().size).toBe(15);
-    expect([...legacyCaseAllowlist().keys()].sort()).toEqual(["100", "101", "102", "110", "111", "112", "113", "114", "115", "120", "121", "122", "123", "124", "125"]);
+    const catalogs = { bankKnown: true, builtinIds: [], bankIds: [], dbCases: [] };
     const step = caseStepIds({ key: "sepsis", index: 0, step: 1 });
     const stem = "Which findings require immediate follow-up? Select all that apply.";
-    const historical = { id: 101, cat: "Physiological Adaptation", diff: 3, correct: true };
-    const tagged = migrateBlob({ log: [historical] }, ["Physiological Adaptation"]).log[0];
-    expect(tagged).toMatchObject({ ...historical, source: "case" });
-    expect(answerXp({ q: { ...step, cat: "Physiological Adaptation", diff: 3, stem }, correct: true, ms: 9000, log: [tagged] }).reason).toBe("repeat");
-    expect(answerXp({ q: { ...step, cat: "Physiological Adaptation", diff: 3, stem }, correct: true, ms: 9000, log: [tagged] }).xp).toBe(0);
-    const bank = migrateBlob({ log: [{ id: 80, cat: "Physiological Adaptation", diff: 3, correct: true }] }, ["Physiological Adaptation"]).log[0];
-    expect(bank.source).toBeUndefined();
-    expect(answerXp({ q: { ...step, cat: "Physiological Adaptation", diff: 3, stem }, correct: true, ms: 9000, log: [bank] }).xp).toBe(30);
-    const wrongCategory = migrateBlob({ log: [{ id: 101, cat: "Pharmacology", diff: 3, correct: true }] }, ["Pharmacology"]).log[0];
-    expect(wrongCategory.source).toBeUndefined();
-    const alsoAQuestion = migrateBlob({ log: [historical] }, ["Physiological Adaptation"], ["101"]).log[0];
-    expect(alsoAQuestion.source).toBeUndefined();
-    expect(answerXp({ q: { ...step, cat: "Physiological Adaptation", diff: 3, stem }, correct: true, ms: 9000, log: [alsoAQuestion] }).reason).toBe("correct");
+    const tagged = classifyLog([{ id: 101, cat: "Physiological Adaptation", diff: 3, correct: true }], catalogs)[0];
+    expect(tagged.key).toBe("case:case-sepsis-1");
+    expect(answerXp({ q: { ...step, source: "case", key: tagged.key, cat: "Physiological Adaptation", diff: 3, stem }, correct: true, ms: 9000, log: [tagged] }).xp).toBe(0);
+    const unknown = classifyLog([{ id: 80, cat: "Physiological Adaptation", diff: 3, correct: true }], catalogs)[0];
+    expect(unknown.unclassified).toBe(true);
+    expect(answerXp({ q: { ...step, source: "case", key: "case:case-sepsis-1", cat: "Physiological Adaptation", diff: 3, stem }, correct: true, ms: 9000, log: [unknown] }).xp).toBe(30);
+    const shared = classifyLog([{ id: 101, cat: "Physiological Adaptation", diff: 3, correct: true }], { ...catalogs, bankIds: [101] })[0];
+    expect(shared.unclassified).toBe(true);
   });
 });
 

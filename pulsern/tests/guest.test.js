@@ -56,7 +56,7 @@ describe("guest XP uses the same rules as an account", () => {
     const merged = mergeGuestIntoBlob(migrateBlob({}, CATS), answered.guest, { today: TODAY, now: NOW });
     expect(merged.summary.xp).toBe(0);
     expect(merged.blob.xp).toBe(0);
-    expect(merged.blob.log[0]).toMatchObject({ id: "guest-1", cat: "Pharmacology", diff: 2, correct: true });
+    expect(merged.blob.log[0]).toMatchObject({ id: 1, key: "builtin:1", cat: "Pharmacology", diff: 2, correct: true });
   });
   it("a save that started before Add does not clear the guest copy", () => {
     let pending = false;
@@ -92,12 +92,10 @@ describe("guest XP uses the same rules as an account", () => {
     expect(writes).toEqual(["first", "second"]);
   });
   it("a merged built-in is not a new question, and a different bank item with the same number still is", () => {
-    const bundled = { id: 7, cat: "Pharmacology", diff: 2, stem: "Which action should the nurse take first for this client?" };
-    const bank = { id: 7, cat: "Pharmacology", diff: 2, stem: "A different shared-bank stem." };
-    const log = [{ id: "guest-7", cat: "Pharmacology", diff: 2, correct: true }];
-    const linked = linkBuiltInGuest(bundled, [bundled]);
-    expect(answerXp({ q: linked, correct: true, ms: 9000, log }).reason).toBe("repeat");
-    expect(linkBuiltInGuest(bank, [bundled])).toBe(bank);
+    const bundled = { id: 7, source: "builtin", key: "builtin:7", cat: "Pharmacology", diff: 2, stem: "Which action should the nurse take first for this client?" };
+    const bank = { id: 7, source: "bank", key: "bank:7", cat: "Pharmacology", diff: 2, stem: "A different shared-bank stem." };
+    const log = [{ id: 7, source: "builtin", key: "builtin:7", cat: "Pharmacology", diff: 2, correct: true }];
+    expect(answerXp({ q: bundled, correct: true, ms: 9000, log }).reason).toBe("repeat");
     expect(answerXp({ q: bank, correct: true, ms: 9000, log }).reason).toBe("correct");
   });
   it("a missing session is not a successful save", () => {
@@ -149,7 +147,7 @@ describe("progress handoff into a new account", () => {
     const blob = migrateBlob({}, CATS);
     const { blob: out, summary } = mergeGuestIntoBlob(blob, played(), { today: TODAY, now: NOW, updateAbility });
     expect(summary).toMatchObject({ answers: 3, correct: 2, xp: 50, streak: 1, streakStarted: true });
-    expect(out.log.map((l) => l.id)).toEqual(["guest-1", "guest-2", "guest-3"]);
+    expect(out.log.map((l) => l.key)).toEqual(["builtin:1", "builtin:2", "builtin:3"]);
     expect(out.xp).toBe(50);
     expect(out.daily).toEqual({ day: TODAY, answered: 3 });
     expect(out.streak).toMatchObject({ count: 1, lastDay: TODAY });
@@ -160,11 +158,12 @@ describe("progress handoff into a new account", () => {
     expect(migrateBlob(JSON.parse(JSON.stringify(out)), CATS).log).toEqual(out.log);
   });
 
-  it("prefixes ids so a built-in id never collides with a shared-bank id", () => {
-    const blob = { ...migrateBlob({}, CATS), log: [{ id: 1, cat: "Pharmacology", diff: 2, correct: false }] };
+  it("a built-in answer does not collide with a shared-bank answer of the same number", () => {
+    const blob = { ...migrateBlob({}, CATS), log: [{ id: 1, source: "bank", key: "bank:1", cat: "Pharmacology", diff: 2, correct: false }] };
     const { blob: out } = mergeGuestIntoBlob(blob, played(), { today: TODAY, now: NOW });
-    expect(out.log.filter((l) => l.id === 1)).toHaveLength(1);
-    expect(out.log.some((l) => l.id === "guest-1")).toBe(true);
+    expect(out.log.map((l) => l.key)).toContain("bank:1");
+    expect(out.log.map((l) => l.key)).toContain("builtin:1");
+    expect(out.xp).toBeGreaterThan(0);
   });
 
   it("is idempotent: merging twice adds nothing the second time", () => {
@@ -197,9 +196,9 @@ describe("progress handoff into a new account", () => {
     expect(blob.rewards.days["2026-11-24"]).toMatchObject({ q: 1, ok: 0 });
     expect(blob.streak).toMatchObject({ count: 2, lastDay: "2026-11-24" });
     expect(blob.daily).toEqual({ day: "2026-11-24", answered: 1 });
-    expect(blob.missSchedule["guest-2"].due).toBe("2026-11-24");
+    expect(blob.missSchedule["builtin:2"].interval).toBe(1);
     expect(summary.streak).toBe(2);
-    expect(blob.log.every((row) => row.day == null && row.ms == null)).toBe(true);
+    expect(blob.log.map((row) => row.day)).toEqual(["2026-11-23", "2026-11-24"]);
   });
   it("a stale autosave does not finish after the merged save", async () => {
     const queue = createSaveQueue();
@@ -224,7 +223,7 @@ describe("progress handoff into a new account", () => {
     const blob = { ...migrateBlob({}, CATS), missSchedule: { 9: { interval: 7, due: "2026-12-01" } } };
     const { blob: out } = mergeGuestIntoBlob(blob, g, { today: TODAY, now: NOW });
     expect(out.missSchedule[9]).toEqual({ interval: 7, due: "2026-12-01" });
-    expect(out.missSchedule["guest-2"].due).toBe(TODAY);
+    expect(out.missSchedule["builtin:2"].interval).toBe(1);
   });
   it("summarises the trial for the save screen", () => {
     expect(guestSummary(played())).toMatchObject({ n: 3, ok: 2, acc: 67, xp: 50 });
@@ -286,10 +285,10 @@ describe("a trial cannot be lost, duplicated, or over-paid", () => {
     const once = mergeGuestIntoBlob(migrateBlob({}, CATS), first, { today: TODAY, now: NOW });
     const twice = mergeGuestIntoBlob(once.blob, second, { today: TODAY, now: NOW + 5000 });
     expect(twice.summary.answers).toBe(1);
-    expect(twice.blob.log.map((l) => l.id)).toEqual(["guest-1", "guest-1"]);
+    expect(twice.blob.log.map((l) => l.key)).toEqual(["builtin:1", "builtin:1"]);
     expect(new Set(twice.blob.log.map((l) => l.attempt)).size).toBe(2);
     expect(twice.blob.xp).toBe(REVIEW_FIX_BONUS);
-    expect(twice.blob.missSchedule["guest-1"]).toEqual({ interval: 3, due: "2026-11-27" });
+    expect(twice.blob.missSchedule["builtin:1"].interval).toBe(3);
     const again = mergeGuestIntoBlob(twice.blob, second, { today: TODAY, now: NOW + 5000 });
     expect(again.summary).toBeNull();
     expect(again.blob.xp).toBe(twice.blob.xp);
@@ -303,7 +302,8 @@ describe("a trial cannot be lost, duplicated, or over-paid", () => {
     const merged = mergeGuestIntoBlob(migrateBlob({}, CATS), g, { today: TODAY, now: NOW });
     expect(merged.blob.log).toHaveLength(2);
     expect(merged.blob.xp).toBe(REVIEW_FIX_BONUS);
-    expect(merged.blob.missSchedule["guest-1"]).toBeUndefined();
+    expect(merged.blob.ability.Pharmacology.n).toBe(2);
+    expect(merged.blob.missSchedule["builtin:1"].interval).toBe(3);
   });
 
   it("gives an old row without an attempt a stable id, so a retry does not duplicate it", () => {
@@ -336,27 +336,21 @@ describe("a trial cannot be lost, duplicated, or over-paid", () => {
     expect(twice.blob.streak.count).toBe(once.blob.streak.count);
   });
 
-  it("does not pay or extend a streak for a built-in the account already answered, and still records the attempt", () => {
-    const builtIns = [mk(7)];
+  it("does not pay a new first try for a built-in the account already answered, and a bank 7 does not count", () => {
     let correct = emptyGuest(NOW, TODAY);
     correct = guestAnswer(correct, mk(7), true, { ms: 9000, today: TODAY }).guest;
-    const account = { ...migrateBlob({}, CATS), log: [{ id: 7, cat: "Pharmacology", diff: 2, correct: true }], xp: 20, streak: { count: 4, lastDay: "2026-11-22", shield: true } };
-    const paid = mergeGuestIntoBlob(account, correct, { today: TODAY, now: NOW, builtIns });
+    const account = { ...migrateBlob({}, CATS), log: [{ id: 7, source: "builtin", key: "builtin:7", cat: "Pharmacology", diff: 2, correct: true, origin: "recorded" }], xp: 20, streak: { count: 4, lastDay: "2026-11-22", shield: true } };
+    const paid = mergeGuestIntoBlob(account, correct, { today: TODAY, now: NOW });
     expect(paid.summary.xp).toBe(0);
     expect(paid.blob.xp).toBe(20);
-    expect(paid.blob.streak).toMatchObject({ count: 4, lastDay: "2026-11-22" });
-    expect(paid.blob.log.map((row) => row.id)).toEqual([7, "guest-7"]);
-    expect(paid.blob.rewards.days[TODAY]).toBeUndefined();
-    expect(paid.blob.bestRun).toBe(0);
-    let missed = emptyGuest(NOW, TODAY);
-    missed = guestAnswer(missed, mk(7), false, { ms: 9000, today: TODAY }).guest;
-    const scheduled = mergeGuestIntoBlob(account, missed, { today: TODAY, now: NOW, builtIns });
-    expect(scheduled.blob.xp).toBe(20);
-    expect(scheduled.blob.missSchedule["guest-7"]).toEqual({ interval: 1, due: TODAY });
-    const unrelated = mergeGuestIntoBlob(account, correct, { today: TODAY, now: NOW, builtIns: [{ id: 8 }] });
+    expect(paid.blob.ability.Pharmacology.n).toBe(1);
+    expect(paid.blob.rewards.days[TODAY]).toMatchObject({ q: 1, xp: 0 });
+    expect(paid.blob.log.map((row) => row.key)).toEqual(["builtin:7", "builtin:7"]);
+    const bankAccount = { ...account, log: [{ id: 7, source: "bank", key: "bank:7", cat: "Pharmacology", diff: 2, correct: true, origin: "recorded" }] };
+    const unrelated = mergeGuestIntoBlob(bankAccount, correct, { today: TODAY, now: NOW });
     expect(unrelated.blob.xp).toBe(40);
-    expect(guestImportIdentity({ id: 7 }, builtIns).aliases).toEqual(["7"]);
-    expect(guestImportIdentity({ id: 7 }, []).aliases).toEqual([]);
+    expect(guestImportIdentity({ id: 7 }).key).toBe("builtin:7");
+    expect(guestImportIdentity({ id: 7, source: "bank" }).key).toBe("bank:7");
   });
   it("sign-out forgets a held trial in session storage, not only the device copy", async () => {
     releaseHeldGuest();

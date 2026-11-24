@@ -3,16 +3,16 @@ import { answerXp, emptyRewards } from "../src/rewards.js";
 import { mergeGuestIntoBlob, emptyGuest, guestAnswer, guestFresh } from "../src/guest.js";
 import { migrateBlob } from "../src/state.js";
 const CATS = ["Management of Care", "Pharmacology"];
-const q = { id: 7, cat: "Pharmacology", diff: 2, stem: "x ".repeat(30) };
+const q = { id: 7, source: "builtin", key: "builtin:7", cat: "Pharmacology", diff: 2, stem: "x ".repeat(30) };
 describe("REVIEW-2 proofs", () => {
   it("wrong-then-right never pays more than right-first-time", () => {
     let log = [], xp = 0;
-    for (let i = 0; i < 5; i++) for (const c of [false, true]) { xp += answerXp({ q, correct: c, ms: 1e4, log }).xp; log.push({ id: q.id, correct: c }); }
+    for (let i = 0; i < 5; i++) for (const c of [false, true]) { xp += answerXp({ q, correct: c, ms: 1e4, log }).xp; log.push({ id: q.id, key: q.key, source: q.source, correct: c }); }
     expect(xp).toBeLessThan(answerXp({ q, correct: true, ms: 1e4, log: [] }).xp * 5 + 1);
-    expect(answerXp({ q, correct: true, ms: 1e4, log: [{ id: 7, correct: false }] }).xp).toBeLessThan(20);
+    expect(answerXp({ q, correct: true, ms: 1e4, log: [{ id: 7, source: "builtin", key: "builtin:7", correct: false }] }).xp).toBeLessThan(20);
   });
   it("repeat detection survives a string/number id mismatch", () => {
-    expect(answerXp({ q, correct: true, ms: 1e4, log: [{ id: "7", correct: true }] }).reason).toBe("repeat");
+    expect(answerXp({ q, correct: true, ms: 1e4, log: [{ id: "7", source: "builtin", key: "builtin:7", correct: true }] }).reason).toBe("repeat");
   });
   it("a tampered localStorage guest cannot inject XP or more than 5 answers", () => {
     const now = Date.now();

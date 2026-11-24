@@ -113,7 +113,7 @@ describe("M2: trial answers and an existing account", () => {
       await page.getByText("Your trial answers are in your account").waitFor();
       await page.waitForTimeout(800);
       const saved = await page.evaluate(() => window.__upserts.at(-1));
-      expect(saved.log.filter((l) => String(l.id).startsWith("guest-"))).toHaveLength(2);
+      expect(saved.log.filter((l) => l.key === "builtin:1" || l.key === "builtin:2")).toHaveLength(2);
       expect(await page.evaluate(() => localStorage.getItem("pulsern-guest-v1"))).toBeNull();
     } finally { await ctx.close(); }
   }, 120_000);
@@ -126,7 +126,7 @@ describe("M2: trial answers and an existing account", () => {
       expect(await page.getByRole("heading", { name: /trial answers to this account\?/ }).count()).toBe(0);
       await page.waitForTimeout(800);
       const saved = await page.evaluate(() => window.__upserts.at(-1));
-      expect(saved.log.map((l) => l.id)).toEqual(["guest-1", "guest-2"]);
+      expect(saved.log.map((l) => l.key)).toEqual(["builtin:1", "builtin:2"]);
     } finally { await ctx.close(); }
   }, 120_000);
 });

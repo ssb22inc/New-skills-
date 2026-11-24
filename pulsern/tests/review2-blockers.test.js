@@ -13,7 +13,7 @@ import { migrateBlob } from "../src/state.js";
 import { hapticsAllowed, GUEST_PREFS, buzz } from "../src/effects.js";
 
 const CATS = ["Management of Care", "Safety & Infection Control", "Health Promotion & Maintenance", "Psychosocial Integrity", "Basic Care & Comfort", "Pharmacology", "Reduction of Risk", "Physiological Adaptation"];
-const q = { id: 7, cat: "Pharmacology", diff: 2, stem: "word ".repeat(30) };
+const q = { id: 7, source: "builtin", key: "builtin:7", cat: "Pharmacology", diff: 2, stem: "word ".repeat(30) };
 const SLOW = 1e5;
 
 describe("B1: product capture expects the shipped Today screen", () => {
@@ -29,7 +29,7 @@ describe("B1: product capture expects the shipped Today screen", () => {
 describe("M1: missing on purpose never pays", () => {
   const play = (pattern) => {
     let log = [], xp = 0;
-    for (const c of pattern) { xp += answerXp({ q, correct: c, ms: SLOW, log }).xp; log.push({ id: q.id, cat: q.cat, correct: c }); }
+    for (const c of pattern) { xp += answerXp({ q, correct: c, ms: SLOW, log }).xp; log.push({ id: q.id, key: q.key, source: q.source, cat: q.cat, correct: c }); }
     return xp;
   };
   const firstTry = answerXp({ q, correct: true, ms: SLOW, log: [] }).xp;
@@ -44,7 +44,7 @@ describe("M1: missing on purpose never pays", () => {
     expect(play([true, true, true])).toBe(firstTry);
   });
   it("string and number ids are the same question", () => {
-    expect(answerXp({ q, correct: true, ms: SLOW, log: [{ id: "7", correct: false }, { id: 7, correct: true }] }).xp).toBe(0);
+    expect(answerXp({ q, correct: true, ms: SLOW, log: [{ id: "7", source: "builtin", key: "builtin:7", correct: false }, { id: 7, source: "builtin", key: "builtin:7", correct: true }] }).xp).toBe(0);
   });
 });
 

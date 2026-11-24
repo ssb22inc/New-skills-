@@ -9,10 +9,12 @@
 
    Handoff: the guest's answers live in localStorage on this device. When an
    account loads on the same device, mergeGuestIntoBlob folds them into the
-   existing per-user progress blob (no new table, no migration). Merged log
-   ids get a "guest-" prefix so a built-in id can never collide with a
-   shared-bank id of the same number. */
-import { answerXp, answerCountsForRun, advanceStreak, bumpDay, daysBetween, sameAnswer } from "./rewards.js";
+   existing per-user progress blob (no new table, no migration). Each trial
+   answer is stored as builtin:<id>. A shared-bank question with the same
+   number is bank:<id> and is a different question. */
+import { answerXp, answerCountsForRun } from "./rewards.js";
+import { applyAnswer, stampedQuestion } from "./answer-apply.js";
+import { canonicalKey } from "./question-key.js";
 
 export const GUEST_KEY = "pulsern-guest-v1";
 export const GUEST_HOLD_KEY = "pulsern-guest-hold-v1";
@@ -185,8 +187,9 @@ export const guestRemaining = (guest) => Math.max(0, GUEST_LIMIT - (guest?.log?.
 /* One scored guest answer. Same XP rules as an account (rewards.js). */
 export function guestAnswer(guest, q, correct, { ms = Infinity, today } = {}) {
   if (guestRemaining(guest) === 0) return { guest, res: { xp: 0, reason: "limit" }, accepted: false };
-  const res = answerXp({ q, correct, ms, log: guest.log });
-  const run = answerCountsForRun({ correct, q, ms }) ? guest.run + 1 : 0;
+  const item = stampedQuestion({ ...q, source: "builtin" });
+  const res = answerXp({ q: item, correct, ms, log: guest.log });
+  const run = answerCountsForRun({ correct, q: item, ms }) ? guest.run + 1 : 0;
   const words = String(q?.stem ?? "").trim().split(/\s+/).filter(Boolean).length;
   const studyDay = today ?? guest.day;
   /* Stable for this trial, unique per answer. A later trial has a new
@@ -194,7 +197,7 @@ export function guestAnswer(guest, q, correct, { ms = Infinity, today } = {}) {
      this trial repeats these ids and adds nothing. */
   const attempt = `${guest.startedAt}:${guest.log.length}`;
   const entry = {
-    id: q.id, cat: q.cat, diff: q.diff, correct, attempt,
+    id: q.id, key: item.key, source: "builtin", cat: q.cat, diff: q.diff, correct, attempt,
     ...(studyDay ? { day: studyDay } : {}),
     ...(Number.isFinite(ms) ? { ms } : {}),
     ...(words ? { words } : {}),
@@ -220,24 +223,23 @@ export function guestSummary(guest) {
 /* Fold a guest's work into a migrated account blob. `s` is the output of
    migrateBlob. Returns the new blob and a summary (null when nothing was
    merged). Idempotent: a merged entry is never added twice. */
-/* guest-<built-in id> is the same question as that built-in id, and as an
-   earlier guest import of it. The alias is added only when the id is in
-   the bundled question list, so a shared-bank item that merely uses the
-   same number is not treated as that question. */
-export function guestImportIdentity(entry, builtIns = []) {
-  const raw = String(entry?.id ?? "").replace(/^guest-/, "");
-  const known = (builtIns ?? []).some((q) => q && String(q.id) === raw);
-  return { id: `guest-${raw}`, aliases: known ? [raw] : [] };
+/* The trial only serves built-in questions, and it records that source
+   on the row. A row that already names bank or case keeps that source.
+   A missing source is builtin, because this log cannot contain anything else. */
+export function guestImportIdentity(entry) {
+  const source = entry?.source === "bank" || entry?.source === "case" ? entry.source : "builtin";
+  const id = entry?.id;
+  return stampedQuestion({ ...entry, id, source, key: entry?.key ?? canonicalKey(source, id) });
 }
 
-export function mergeGuestIntoBlob(s, guest, { today, now = Date.now(), updateAbility = null, calibration = {}, builtIns = [] } = {}) {
+export function mergeGuestIntoBlob(s, guest, { today, now = Date.now(), calibration = {} } = {}) {
   if (!guestFresh(guest, now)) return { blob: s, summary: null };
   /* Import identity is the attempt, never the question id. guest-1 from a
      later trial is a new answer. The same attempt merged again is a no-op. */
   const have = new Set((s.log ?? []).map((l) => l?.attempt).filter((id) => id != null).map(String));
   /* localStorage is user-editable: never trust its totals. Keep at most
      GUEST_LIMIT well-formed rows and recompute XP from them. */
-  const valid = guest.log
+  const entries = guest.log
     .filter((l) => l && (typeof l.id === "number" || typeof l.id === "string") && typeof l.cat === "string" && typeof l.correct === "boolean")
     .slice(0, GUEST_LIMIT)
     .map((l, index) => ({
@@ -246,79 +248,35 @@ export function mergeGuestIntoBlob(s, guest, { today, now = Date.now(), updateAb
       ...(l.pop ? { pop: l.pop } : {}),
       ...(Number.isFinite(l.ms) ? { ms: l.ms } : {}),
       ...(Number.isFinite(l.words) && l.words > 0 ? { words: l.words } : {}),
-      ...(typeof l.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(l.day) ? { day: l.day } : {}),
-    }));
-  const entries = valid
-    .map((l) => ({ ...l, id: `guest-${l.id}` }))
+      ...(l.source ? { source: l.source } : {}),
+      ...(l.key ? { key: l.key } : {}),
+      day: typeof l.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(l.day) ? l.day : (guest.day ?? today),
+    }))
+    .map((l) => ({ ...guestImportIdentity(l), ...l, key: guestImportIdentity(l).key, source: guestImportIdentity(l).source }))
     .filter((l) => !have.has(String(l.attempt)));
   if (!entries.length) return { blob: s, summary: null };
-  const scored = [];
-  let gxp = 0;
-  {
-    /* Score against answers already in the account, so a second attempt of
-       guest-1 is a fix or a repeat, never another full payout. */
-    const accountLog = [...(s.log ?? [])];
-    const seen = [...accountLog];
-    for (const e of entries) {
-      const ident = guestImportIdentity(e, builtIns);
-      const stem = e.words ? Array.from({ length: e.words }, () => "w").join(" ") : "";
-      const q = { id: ident.id, aliases: ident.aliases, diff: e.diff, stem };
-      const alreadyAnswered = accountLog.some((row) => sameAnswer(q, row));
-      /* Already in the account: answerXp pays a repeat 0 or a one-time fix,
-         never another full first answer. A repeat does not credit the streak.
-         The row is still stored, and a miss still gets a review date below. */
-      const earned = answerXp({ q, correct: e.correct, ms: Number.isFinite(e.ms) ? e.ms : Infinity, log: seen }).xp;
-      gxp += earned;
-      scored.push({ ...e, earned, alreadyAnswered });
-      seen.push(e);
-    }
-  }
-  const logged = scored.map(({ ms, words, earned, day, alreadyAnswered, ...row }) => row);
-  const freshBest = scored.filter((e) => !e.alreadyAnswered).length;
-  guest = { ...guest, xp: gxp, bestRun: freshBest ? Math.min(guest.bestRun ?? 0, freshBest) : 0 };
-  let ability = s.ability;
-  if (typeof updateAbility === "function") {
-    for (const e of scored) {
-      if (e.alreadyAnswered) continue;
-      ability = updateAbility(ability, { id: e.id, cat: e.cat, diff: e.diff }, e.correct, calibration).ability;
-    }
-  }
-  const groups = new Map();
-  for (const e of scored) {
-    const day = e.day ?? guest.day ?? today;
-    if (!groups.has(day)) groups.set(day, []);
-    groups.get(day).push(e);
-  }
-  let streak = s.streak;
-  let rewards = s.rewards;
-  let streakStarted = false;
-  for (const day of [...groups.keys()].sort()) {
-    const rows = groups.get(day);
-    const fresh = rows.filter((r) => !r.alreadyAnswered);
-    if (fresh.length && (!streak.lastDay || daysBetween(streak.lastDay, day) >= 1)) {
-      const adv = advanceStreak(streak, rewards, day);
-      streak = adv.streak; rewards = adv.rewards; streakStarted = true;
-    }
-    if (fresh.length) rewards = bumpDay(rewards, day, { q: fresh.length, ok: fresh.filter((r) => r.correct).length, xp: rows.reduce((n, r) => n + r.earned, 0) });
-  }
-  rewards = { ...rewards, best: { ...rewards.best, run: Math.max(rewards.best.run, guest.bestRun ?? 0) } };
-  const todayRows = (groups.get(today) ?? []).filter((r) => !r.alreadyAnswered);
-  const daily = todayRows.length
-    ? (s.daily?.day === today ? { ...s.daily, answered: s.daily.answered + todayRows.length } : { day: today, answered: todayRows.length })
-    : s.daily;
-  const missSchedule = { ...(s.missSchedule ?? {}) };
-  const lastAttempt = new Map();
-  for (const e of scored) lastAttempt.set(String(e.id), e);
-  for (const [id, e] of lastAttempt) {
-    const src = id.replace(/^guest-/, "");
-    const prev = guest.missSchedule?.[src] ?? guest.missSchedule?.[Number(src)];
-    /* A corrected miss keeps the review date the trial already scheduled.
-       Deleting it is how the next retrieval disappears. */
-    if (prev && typeof prev.due === "string") missSchedule[id] = prev;
-    else if (!e.correct && !missSchedule[id]) missSchedule[id] = { interval: 1, due: e.day ?? today };
+  let state = {
+    log: s.log ?? [], xp: s.xp ?? 0, ability: s.ability, streak: s.streak, rewards: s.rewards,
+    daily: s.daily, missSchedule: s.missSchedule, run: 0, bestRun: s.bestRun ?? 0,
+  };
+  const beforeDay = s.streak?.lastDay ?? null;
+  let xpGain = 0;
+  for (const e of entries) {
+    const stem = e.words ? Array.from({ length: e.words }, () => "w").join(" ") : "";
+    const applied = applyAnswer(state, {
+      q: { id: e.id, key: e.key, source: e.source, cat: e.cat, diff: e.diff, stem, population: e.pop },
+      correct: e.correct,
+      ms: Number.isFinite(e.ms) ? e.ms : Infinity,
+      today: e.day,
+      attempt: e.attempt,
+      calibration,
+    });
+    if (applied.duplicate) continue;
+    xpGain += applied.result?.xp ?? 0;
+    state = applied.state;
   }
   return {
-    blob: { ...s, log: [...s.log, ...logged], xp: s.xp + (guest.xp ?? 0), bestRun: freshBest ? Math.max(s.bestRun ?? 0, guest.bestRun ?? 0) : (s.bestRun ?? 0), ability, streak, rewards, daily, missSchedule },
-    summary: { answers: entries.length, correct: entries.filter((e) => e.correct).length, xp: guest.xp ?? 0, streak: streak.count, streakStarted },
+    blob: { ...s, log: state.log, xp: state.xp, bestRun: state.bestRun, ability: state.ability, streak: state.streak, rewards: state.rewards, daily: state.daily, missSchedule: state.missSchedule },
+    summary: { answers: entries.length, correct: entries.filter((e) => e.correct).length, xp: xpGain, streak: state.streak?.count ?? 0, streakStarted: state.streak?.lastDay !== beforeDay },
   };
 }

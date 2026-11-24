@@ -9,7 +9,7 @@ import {
 } from "../src/rewards.js";
 
 const CATS = ["Management of Care", "Safety & Infection Control", "Health Promotion & Maintenance", "Psychosocial Integrity", "Basic Care & Comfort", "Pharmacology", "Reduction of Risk", "Physiological Adaptation"];
-const q = { id: 7, cat: "Pharmacology", diff: 2, stem: "A client receiving digoxin reports nausea and yellow vision. Which action should the nurse take first?" };
+const q = { id: 7, source: "builtin", key: "builtin:7", cat: "Pharmacology", diff: 2, stem: "A client receiving digoxin reports nausea and yellow vision. Which action should the nurse take first?" };
 // evenly spread, so any recent window has the same accuracy as the whole
 const acc = (cat, n, pct) => Array.from({ length: n }, (_, i) => ({ id: `${cat}-${i}`, cat, diff: 2, correct: Math.floor(((i + 1) * pct) / 100) > Math.floor((i * pct) / 100) }));
 
@@ -39,18 +39,18 @@ describe("answer XP", () => {
     expect(xpNote({ reason: "too-fast", xp: 0 })).toMatch(/considered/);
   });
   it("pays nothing for repeating a question already answered correctly", () => {
-    const log = [{ id: 7, cat: "Pharmacology", diff: 2, correct: true }];
+    const log = [{ id: 7, source: "builtin", key: "builtin:7", cat: "Pharmacology", diff: 2, correct: true }];
     expect(answerXp({ q, correct: true, ms: 9000, log })).toMatchObject({ xp: 0, reason: "repeat" });
   });
   it("a rapid repeat still fails the reading-time floor for a run", () => {
-    const log = [{ id: 7, cat: "Pharmacology", diff: 2, correct: true }];
+    const log = [{ id: 7, source: "builtin", key: "builtin:7", cat: "Pharmacology", diff: 2, correct: true }];
     const ms = minThinkMs(q) - 1;
     expect(answerXp({ q, correct: true, ms, log }).reason).toBe("repeat");
     expect(answerCountsForRun({ correct: true, q, ms })).toBe(false);
     expect(answerCountsForRun({ correct: true, q, ms: minThinkMs(q) })).toBe(true);
   });
   it("adds a bonus for correcting an earlier miss", () => {
-    const log = [{ id: 7, cat: "Pharmacology", diff: 2, correct: false }];
+    const log = [{ id: 7, source: "builtin", key: "builtin:7", cat: "Pharmacology", diff: 2, correct: false }];
     expect(answerXp({ q, correct: true, ms: 9000, log })).toMatchObject({ xp: REVIEW_FIX_BONUS, reason: "fix", fix: true });
   });
   it("cannot be farmed: twenty rapid taps on known items earn 0", () => {
