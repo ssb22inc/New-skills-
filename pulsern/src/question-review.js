@@ -128,17 +128,27 @@ export function questionByIdentity(questions, id) {
 }
 
 /* Questions whose canonical key is not already in the log. A built-in
-   answer does not hide the bank question that shares its number. */
+   answer does not hide the bank question that shares its number.
+   A number that is a miss in more than one catalog is not offered as
+   new: the miss stays in the unresolved review until the student says
+   which question it was. A single unrelated question stays new. */
 export function unseenQuestions(questions, log) {
   const index = historyIndex(log);
   const peers = peerCounts(questions);
-  return (questions ?? []).filter((q) => q && settledResult(q, log, questions, index, peers).state === "none");
+  const blocked = new Set();
+  for (const [num, correct] of index.unresolved) {
+    if (correct === false && (peers.get(num) ?? 0) > 1) blocked.add(num);
+  }
+  for (const [num, correct] of index.unscoped) {
+    if (correct === false && (peers.get(num) ?? 0) > 1) blocked.add(num);
+  }
+  return (questions ?? []).filter((q) => q && !blocked.has(String(q.id)) && settledResult(q, log, questions, index, peers).state === "none");
 }
 
 /* A merged trial answer keeps the built-in stem. Its navigation id is
    the canonical key, so a bank row with the same number is a different
    question. Legacy guest- prefixed rows still resolve to the built-in. */
-export function expandTrialQuestions(questions, log, registry = null) {
+export function expandTrialQuestions(questions, log, registry = null, schedule = null) {
   const list = questions ?? [];
   const have = new Set(list.map((q) => answerIdentity(q) ?? String(q.id)));
   const bySource = new Map((registry ?? list).map((q) => [String(q.id), q]));
@@ -152,22 +162,70 @@ export function expandTrialQuestions(questions, log, registry = null) {
     have.add(ident);
     extra.push({ ...src, id: row.id, ...(row.key ? { key: row.key, source: row.source ?? "builtin" } : {}) });
   }
+  for (const key of Object.keys(schedule ?? {})) {
+    if (!key.startsWith("builtin:") || have.has(key)) continue;
+    const src = bySource.get(key.slice("builtin:".length));
+    if (!src) continue;
+    have.add(key);
+    extra.push({ ...src, id: src.id, key, source: "builtin" });
+  }
   return extra.length ? [...list, ...extra] : list;
+}
+
+/* A legacy number that still belongs to more than one question. The miss
+   stays reviewable here, and neither catalog question inherits it. */
+function unresolvedCards(log, questions, index, peers) {
+  const cards = [];
+  const seen = new Set();
+  const add = (num) => {
+    if (seen.has(num)) return;
+    seen.add(num);
+    const candidates = (questions ?? []).filter((q) => q && !q.unresolved && String(q.id) === num);
+    const row = (log ?? []).find((item) => item && String(item.id) === num && (item.unclassified || !questionIdentity(item)));
+    cards.push({
+      unresolved: true,
+      id: `unresolved:${num}`,
+      legacyId: num,
+      cat: typeof row?.cat === "string" && row.cat ? row.cat : (candidates[0]?.cat ?? "Management of Care"),
+      diff: 1,
+      type: "mc",
+      stem: candidates.length > 1
+        ? `An older save recorded a miss on question ${num}. That number matches more than one question, so it is not counted as any of them until you say which one it was.`
+        : `An older save recorded a miss on question ${num}. It could not be matched to one question, so it stays here until you identify it.`,
+      candidates,
+    });
+  };
+  for (const [num, correct] of index.unresolved) if (correct === false) add(num);
+  for (const [num, correct] of index.unscoped) {
+    if (correct === false && (peers.get(num) ?? 0) > 1) add(num);
+  }
+  return cards;
 }
 
 export function reviewPools(questions, log, schedule, today = todayStr()) {
   const index = historyIndex(log);
   const peers = peerCounts(questions);
   const idOf = (q) => answerIdentity(q) ?? String(q.id);
-  const dueOf = (q) => scheduleEntry(q, schedule, questions, log, index, peers);
-  const due = questions.filter((q) => {
+  const dueOf = (q) => {
+    if (q?.unresolved) {
+      const raw = schedule?.[q.legacyId] ?? schedule?.[Number(q.legacyId)];
+      return raw && typeof raw.due === "string" ? raw : null;
+    }
+    return scheduleEntry(q, schedule, questions, log, index, peers);
+  };
+  const cards = unresolvedCards(log, questions, index, peers);
+  const pool = [...(questions ?? []).filter((q) => q && !q.unresolved), ...cards];
+  const due = pool.filter((q) => {
     const entry = dueOf(q);
     return !!entry && typeof entry.due === "string" && entry.due <= today;
   }).sort((a, b) => (dueOf(a).due < dueOf(b).due ? -1 : dueOf(a).due > dueOf(b).due ? 1 : 0));
   const dueIds = new Set(due.map(idOf));
-  const misses = questions.filter((q) => {
+  const misses = pool.filter((q) => {
+    if (q.unresolved) return true;
     const settled = settledResult(q, log, questions, index, peers);
-    return settled.state === "known" && settled.correct === false;
+    if (settled.state === "known") return settled.correct === false;
+    const entry = dueOf(q);
+    return !!entry && typeof entry.due === "string";
   });
   const review = [...due, ...misses.filter((q) => !dueIds.has(idOf(q)))];
   return { due, misses, review };

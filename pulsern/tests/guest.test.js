@@ -83,18 +83,33 @@ describe("guest XP uses the same rules as an account", () => {
     const session = memStore();
     saveGuest(storage, guestAnswer(emptyGuest(NOW, TODAY), mk(1), true, { ms: 9000, today: TODAY }).guest);
     holdGuestTrial(loadGuest(storage), session);
-    const { stashPendingProgress, readPendingProgress } = await import("../src/progress-load.js");
+    const { stashPendingProgress, readPendingProgress, clearPendingProgress, unsavedAnswers, applyUnsavedAnswers, PENDING_PROGRESS_TTL_MS } = await import("../src/progress-load.js");
     const { signOutAndForgetTrial } = await import("../src/sign-out.js");
-    expect(stashPendingProgress(storage, { userId: "u1", payload: JSON.stringify({ xp: 9 }) })).toBe(true);
-    await signOutAndForgetTrial({ auth: { signOut: async () => {} }, storage, holdStorage: session });
+    const answers = unsavedAnswers(
+      [{ id: 1, key: "builtin:1", source: "builtin", cat: "Pharmacology", correct: true, attempt: "one", day: TODAY }],
+      [{ id: 1, key: "builtin:1", source: "builtin", cat: "Pharmacology", correct: true, attempt: "one", day: TODAY }, { id: 2, key: "builtin:2", source: "builtin", cat: "Pharmacology", diff: 1, correct: false, attempt: "two", day: TODAY }],
+    );
+    expect(answers.map((row) => row.attempt)).toEqual(["two"]);
+    expect(await stashPendingProgress(storage, { userId: "u1", answers })).toBe(true);
+    storage.setItem("pulsern-pending-progress-v1:u1", JSON.stringify({ v: 1, payload: "{\"examDate\":\"2026-12-01\",\"log\":[]}" }));
+    await signOutAndForgetTrial({ auth: { signOut: async () => {} }, storage, holdStorage: session, userId: "u1" });
     expect(loadGuest(storage)).toBeNull();
     expect(peekHeldGuest(session)).toBeNull();
-    expect(readPendingProgress(storage, "u1", null).payload).toBe(JSON.stringify({ xp: 9 }));
-    expect(readPendingProgress(storage, "someone-else", null)).toBeNull();
-    expect(readPendingProgress(storage, "u1", "newer-cloud")).toBeNull();
-    const { clearPendingProgress } = await import("../src/progress-load.js");
-    clearPendingProgress(storage, "someone-else");
-    expect(readPendingProgress(storage, "u1", null).payload).toBe(JSON.stringify({ xp: 9 }));
+    const pending = await readPendingProgress(storage, "u1");
+    expect(pending.answers.map((row) => row.attempt)).toEqual(["two"]);
+    const stored = [...storage.m.values()].join("\n");
+    expect(stored).not.toContain("examDate");
+    expect(stored).not.toContain("\"u1\"");
+    expect(await readPendingProgress(storage, "someone-else")).toBeNull();
+    await clearPendingProgress(storage, "someone-else");
+    expect((await readPendingProgress(storage, "u1")).answers).toHaveLength(1);
+    const server = { ...migrateBlob({}, CATS), log: [{ id: 1, key: "builtin:1", source: "builtin", cat: "Pharmacology", correct: true, attempt: "one", day: TODAY }], xp: 20 };
+    const restored = applyUnsavedAnswers(server, pending.answers, { today: TODAY });
+    expect(restored.log.map((row) => row.attempt)).toEqual(["one", "two"]);
+    expect(restored.ability.Pharmacology.n).toBe(1);
+    const again = applyUnsavedAnswers(restored, pending.answers, { today: TODAY });
+    expect(again.log).toHaveLength(2);
+    expect(await readPendingProgress(storage, "u1", Date.now() + PENDING_PROGRESS_TTL_MS + 1)).toBeNull();
     release();
   });
   it("flush finishes the newest queued save before sign-out can drop it", async () => {

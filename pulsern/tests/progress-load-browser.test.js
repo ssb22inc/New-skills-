@@ -110,11 +110,19 @@ describe("M2: trial answers and an existing account", () => {
     const { ctx, page } = await open({ session: sessionFor(NOW - 90 * 86400000), row: existingRow, guestData: guest(NOW - 3600_000) });
     try {
       await page.getByRole("button", { name: "Add to my account" }).click({ timeout: 30_000 });
-      await page.getByText("Your trial answers are in your account").waitFor();
+      await page.getByRole("heading", { name: "Trial progress was added" }).waitFor();
+      await page.getByText("readiness is unchanged").waitFor();
+      expect(await page.getByText("readiness estimate").count()).toBe(0);
       await page.waitForTimeout(800);
       const saved = await page.evaluate(() => window.__upserts.at(-1));
-      expect(saved.log.filter((l) => l.key === "builtin:1" || l.key === "builtin:2")).toHaveLength(2);
+      expect(saved.log).toHaveLength(30);
+      expect(saved.xp).toBe(520);
+      expect(saved.missSchedule["builtin:2"].interval).toBe(1);
+      expect(saved.streak.count).toBe(20);
+      expect(saved.ability?.Pharmacology?.n ?? 0).toBe(0);
       expect(await page.evaluate(() => localStorage.getItem("pulsern-guest-v1"))).toBeNull();
+      await page.getByRole("button", { name: "Practice", exact: true }).click();
+      await page.getByRole("button", { name: "Review misses (1)" }).waitFor({ timeout: 15_000 });
     } finally { await ctx.close(); }
   }, 120_000);
 

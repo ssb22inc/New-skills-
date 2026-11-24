@@ -117,6 +117,14 @@ describe("legacy rows", () => {
     expect(both).toBeNull();
     const tagged = classifyLog([{ id: 7, cat: "Pharmacology", diff: 2, correct: true }], { ...catalogs, bankIds: [7] })[0];
     expect(tagged.unclassified).toBe(true);
+    const named = classifyLog([{ id: 7, cat: "Pharmacology", diff: 2, correct: false }], {
+      ...catalogs,
+      bankIds: [7],
+      builtinCats: { 7: "Pharmacology" },
+      bankCats: { 7: "Safety and Infection Control" },
+    })[0];
+    expect(named.key).toBe("builtin:7");
+    expect(named.unclassified).toBe(false);
     expect(tagged.key).toBeNull();
     const none = classifyLog([{ id: 404, cat: "Pharmacology", diff: 3, correct: true }], catalogs)[0];
     expect(none.unclassified).toBe(true);
@@ -217,6 +225,10 @@ describe("review, restore, and import use the canonical key", () => {
     expect(merged.missSchedule["builtin:8"].interval).toBe(1);
     expect(merged.missSchedule["builtin:8"].due > TODAY).toBe(true);
     expect(merged.xp).toBe(account.xp + 10);
+    const bankOnly = [{ id: 8, source: "bank", key: "bank:8", cat: "Pharmacology", diff: 2, stem: "Bank 8." }];
+    const bundled = [{ id: 8, source: "builtin", key: "builtin:8", cat: "Pharmacology", diff: 2, stem: "Built-in 8." }];
+    const restored = reviewPools(expandTrialQuestions(bankOnly, merged.log, bundled, merged.missSchedule), merged.log, merged.missSchedule, TODAY);
+    expect(restored.review.map(questionIdentity)).toEqual(["builtin:8"]);
     const again = mergeGuestIntoBlob(merged, guest, { today: TODAY, now: Date.now() });
     expect(again.summary).toBeNull();
     expect(again.blob.xp).toBe(merged.xp);
@@ -234,8 +246,10 @@ describe("review, restore, and import use the canonical key", () => {
     const bankQ = stampCatalogQuestion({ id: 7, stem: "Bank stem.", cat: "Pharmacology", diff: 2 }, [{ id: 7, stem: "Bundled stem." }]);
     const ambiguous = [{ id: 7, correct: false }];
     expect(settledResult(bankQ, ambiguous, [bankQ, bundled]).state).toBe("none");
-    expect(reviewPools([bankQ, bundled], ambiguous, { 7: { interval: 1, due: "2026-01-16" } }, "2026-01-16").review).toEqual([]);
-    expect(unseenQuestions([bankQ, bundled], ambiguous).map(questionIdentity)).toEqual(["bank:7", "builtin:7"]);
+    const ambiguousReview = reviewPools([bankQ, bundled], ambiguous, { 7: { interval: 1, due: "2026-01-16" } }, "2026-01-16").review;
+    expect(ambiguousReview.map((item) => item.id)).toEqual(["unresolved:7"]);
+    expect(ambiguousReview[0].candidates.map(questionIdentity)).toEqual(["bank:7", "builtin:7"]);
+    expect(unseenQuestions([bankQ, bundled], ambiguous)).toEqual([]);
   });
 
   it("does not rebuild ability over legacy rows that have no key", () => {
@@ -255,11 +269,11 @@ describe("review, restore, and import use the canonical key", () => {
     const bankQ = stampCatalogQuestion({ id: 101, stem: "Bank stem.", cat: "Pharmacology", diff: 2 }, []);
     const log = [{ id: 101, cat: "Physiological Adaptation", correct: false, unclassified: true, key: null }];
     expect(settledResult(bankQ, log, [bankQ]).state).toBe("none");
-    expect(reviewPools([bankQ], log, { 101: { interval: 1, due: "2026-01-16" } }, "2026-01-16").review).toEqual([]);
+    expect(reviewPools([bankQ], log, { 101: { interval: 1, due: "2026-01-16" } }, "2026-01-16").review.map((item) => item.id)).toEqual(["unresolved:101"]);
     expect(unseenQuestions([bankQ], log)).toEqual([bankQ]);
     const bundled = stampCatalogQuestion({ id: 101, stem: "Bundled 101.", cat: "Pharmacology", diff: 2 }, [{ id: 101, stem: "Bundled 101." }]);
-    expect(reviewPools([bankQ, bundled], log, { 101: { interval: 1, due: "2026-01-16" } }, "2026-01-16").review).toEqual([]);
-    expect(unseenQuestions([bankQ, bundled], log)).toEqual([bankQ, bundled]);
+    expect(reviewPools([bankQ, bundled], log, { 101: { interval: 1, due: "2026-01-16" } }, "2026-01-16").review.map((item) => item.id)).toEqual(["unresolved:101"]);
+    expect(unseenQuestions([bankQ, bundled], log)).toEqual([]);
   });
 
   it("a correct review of an ambiguous miss advances that question's schedule", () => {
@@ -272,7 +286,7 @@ describe("review, restore, and import use the canonical key", () => {
     const next = applyAnswer(state, { q, correct: true, ms: 9000, today: TODAY, attempt: "review-bank" }).state;
     expect(next.missSchedule[7]).toEqual({ interval: 1, due: TODAY });
     expect(next.missSchedule["bank:7"]).toBeUndefined();
-    expect(reviewPools([q], next.log, next.missSchedule, TODAY).review).toEqual([]);
+    expect(reviewPools([q], next.log, next.missSchedule, TODAY).review.map((item) => item.id)).toEqual(["unresolved:7"]);
   });
 
   it("builds review pools from one pass over a large bank and history", () => {

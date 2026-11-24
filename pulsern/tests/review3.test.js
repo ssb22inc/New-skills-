@@ -32,7 +32,7 @@ describe("Codex P2 wiring", () => {
     expect(app).toContain("undoLog.current[id] = { prev: srsMap[id], xp: xpGain, day: todayStr() }");
     expect(app).toContain("onUngrade?.(rec.xp, rec.day)");
     expect(app).toContain("reverseCardDay(r, credited, cardXpGain)");
-    const signOut = app.slice(app.indexOf("const signOutAndForgetTrial"), app.indexOf("const signOutAndForgetTrial") + 1400);
+    const signOut = app.slice(app.indexOf("const signOutAndForgetTrial"), app.indexOf("const signOutAndForgetTrial") + 1800);
     expect(signOut.indexOf("waitForFlush(() => saveQueue.current.flush())")).toBeGreaterThan(-1);
     expect(signOut.indexOf("saved.timedOut")).toBeGreaterThan(-1);
     expect(signOut.indexOf("stashPendingProgress")).toBeGreaterThan(-1);

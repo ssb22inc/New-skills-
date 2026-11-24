@@ -13,6 +13,7 @@
        created after the trial started (no saved progress yet). Any other
        account is asked first, and nothing merges unless the student says so. */
 import { guestFresh } from "./guest.js";
+import { applyAnswer } from "./answer-apply.js";
 
 /* A session lookup that errors, or returns no user, is not "no saved row".
    Only a confirmed signed-in user with an empty SELECT is a new account. */
@@ -55,36 +56,116 @@ export function parseProgress(raw, migrate) {
    untouched and "Download a copy" uses the in-memory copy. Any old copy is
    removed on load and on sign-out. */
 export const LEGACY_PROGRESS_BACKUP_KEY = "pulsern-progress-backup-v1";
-/* Progress that could not be written before sign-out. The next sign-in
-   for the same account applies it and the autosave sends it up. */
+/* Answers that could not be written before sign-out. Only those answers
+   are stored, under a hash of the account, and only until they expire.
+   The next sign-in replays them onto whatever the server has now. */
 export const PENDING_PROGRESS_KEY = "pulsern-pending-progress-v1";
+export const PENDING_PROGRESS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-export function pendingProgressKey(userId) {
-  return userId ? `${PENDING_PROGRESS_KEY}:${userId}` : PENDING_PROGRESS_KEY;
+export async function accountTag(userId) {
+  const bytes = new TextEncoder().encode(String(userId ?? ""));
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].slice(0, 16).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/* `baseRaw` is the server row this snapshot was saved against. A later
-   cloud row is left alone. The key is per account, so one person's save
-   cannot delete another's recovery copy. */
-export function stashPendingProgress(storage, { userId, payload, baseRaw = null }) {
+export function pendingProgressKey(tag) {
+  return tag ? `${PENDING_PROGRESS_KEY}:${tag}` : PENDING_PROGRESS_KEY;
+}
+
+/* An answer already in the confirmed log is not unsaved. Attempts match
+   first. A row that gained a key during classification still matches the
+   copy that was saved without one. */
+export function unsavedAnswers(confirmed, current) {
+  const pool = [...(confirmed ?? [])];
+  const extra = [];
+  for (const row of current ?? []) {
+    if (!row || typeof row.correct !== "boolean") continue;
+    const i = pool.findIndex((kept) => sameSavedAnswer(kept, row));
+    if (i >= 0) pool.splice(i, 1);
+    else extra.push(pendingAnswer(row));
+  }
+  return extra;
+}
+
+function sameSavedAnswer(a, b) {
+  if (a?.attempt != null && b?.attempt != null) return String(a.attempt) === String(b.attempt);
+  if (a?.key && b?.key && a.key !== b.key) return false;
+  return String(a?.id) === String(b?.id) && !!a.correct === !!b.correct && (a?.day ?? null) === (b?.day ?? null);
+}
+
+function pendingAnswer(row) {
+  return {
+    id: row.id,
+    ...(row.key ? { key: row.key } : {}),
+    ...(row.source ? { source: row.source } : {}),
+    ...(row.cat ? { cat: row.cat } : {}),
+    ...(row.diff != null ? { diff: row.diff } : {}),
+    correct: !!row.correct,
+    ...(row.attempt != null ? { attempt: String(row.attempt) } : {}),
+    ...(row.day ? { day: row.day } : {}),
+    ...(Number.isFinite(row.ms) ? { ms: row.ms } : {}),
+    ...(row.pop ? { pop: row.pop } : {}),
+  };
+}
+
+/* Replay only the unsaved answers onto the current server blob. An
+   attempt the server already has is left as it is, so a save that
+   landed after the timeout does not get scored twice. */
+export function applyUnsavedAnswers(blob, answers, { today, calibration = {} } = {}) {
+  let state = blob ?? {};
+  for (const row of answers ?? []) {
+    const applied = applyAnswer(state, {
+      q: { id: row.id, key: row.key, source: row.source, cat: row.cat, diff: row.diff, population: row.pop },
+      correct: !!row.correct,
+      ms: Number.isFinite(row.ms) ? row.ms : Infinity,
+      today: row.day ?? today,
+      attempt: row.attempt,
+      calibration,
+    });
+    if (!applied.duplicate) state = applied.state;
+  }
+  return state;
+}
+
+export async function stashPendingProgress(storage, { userId, answers, now = Date.now() } = {}) {
+  const rows = unsavedAnswers([], answers ?? []);
+  if (!rows.length || !userId) return false;
+  const tag = await accountTag(userId);
   try {
-    storage.setItem(pendingProgressKey(userId), JSON.stringify({ v: 1, userId: userId ?? null, payload, baseRaw }));
+    storage.setItem(pendingProgressKey(tag), JSON.stringify({
+      v: 2, accountTag: tag, expiresAt: now + PENDING_PROGRESS_TTL_MS, answers: rows,
+    }));
     return true;
   } catch { return false; }
 }
 
-export function readPendingProgress(storage, userId, serverRaw = null) {
+export async function readPendingProgress(storage, userId, now = Date.now()) {
+  if (!userId) return null;
+  const tag = await accountTag(userId);
+  const key = pendingProgressKey(tag);
   try {
-    const parsed = JSON.parse(storage?.getItem(pendingProgressKey(userId)) ?? "null");
-    if (!parsed || parsed.v !== 1 || typeof parsed.payload !== "string") return null;
-    if ((parsed.userId ?? null) !== (userId ?? null)) return null;
-    if ((parsed.baseRaw ?? null) !== (serverRaw ?? null)) return null;
+    const parsed = JSON.parse(storage?.getItem(key) ?? "null");
+    if (!parsed || parsed.v !== 2 || parsed.accountTag !== tag || !Array.isArray(parsed.answers)) return null;
+    if (!Number.isFinite(parsed.expiresAt) || parsed.expiresAt <= now) {
+      storage.removeItem(key);
+      return null;
+    }
     return parsed;
   } catch { return null; }
 }
 
-export function clearPendingProgress(storage, userId) {
-  try { storage?.removeItem(pendingProgressKey(userId)); } catch { /* storage blocked */ }
+export async function clearPendingProgress(storage, userId) {
+  if (!userId) return;
+  try { storage?.removeItem(pendingProgressKey(await accountTag(userId))); } catch { /* storage blocked */ }
+}
+
+/* The previous recovery key held the whole account blob and named the
+   account in the key. Drop that copy when this account signs in or out. */
+export function clearPlainPending(storage, userId) {
+  try {
+    storage?.removeItem(PENDING_PROGRESS_KEY);
+    if (userId) storage?.removeItem(`${PENDING_PROGRESS_KEY}:${userId}`);
+  } catch { /* storage blocked */ }
 }
 
 export function clearLegacyProgressBackup(storage) {

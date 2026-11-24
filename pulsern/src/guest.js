@@ -337,7 +337,7 @@ function importTrialLive(s, entries, { today, calibration }) {
   if (!accepted) return { blob: s, summary: null };
   return {
     blob: { ...s, log: state.log, xp: state.xp, bestRun: state.bestRun, ability: state.ability, streak: state.streak, rewards: state.rewards, daily: state.daily, missSchedule: state.missSchedule, run: state.run },
-    summary: { answers: accepted, correct, xp: xpGain, streak: state.streak?.count ?? 0, streakStarted: state.streak?.lastDay !== beforeDay },
+    summary: { answers: accepted, correct, xp: xpGain, streak: state.streak?.count ?? 0, streakStarted: state.streak?.lastDay !== beforeDay, recorded: true, reviews: 0 },
   };
 }
 
@@ -364,6 +364,7 @@ function importTrialOntoHistory(s, entries, today) {
   let nextSchedule = schedule;
   let xpGain = 0;
   let correct = 0;
+  let reviews = 0;
   for (const e of latest.values()) {
     const stem = e.words ? Array.from({ length: e.words }, () => "w").join(" ") : "";
     const q = { id: e.id, key: e.key, source: e.source, cat: e.cat, diff: e.diff, stem, population: e.pop };
@@ -372,10 +373,13 @@ function importTrialOntoHistory(s, entries, today) {
     xp += res.xp || 0;
     if (res.xp) rewards = bumpDay(rewards, today, { xp: res.xp });
     if (e.correct) correct += 1;
-    else nextSchedule = updateMissSchedule(nextSchedule, e.key, false, today);
+    else {
+      nextSchedule = updateMissSchedule(nextSchedule, e.key, false, today);
+      reviews += 1;
+    }
   }
   return {
     blob: { ...s, xp, rewards, missSchedule: nextSchedule },
-    summary: { answers: latest.size, correct, xp: xpGain, streak: s.streak?.count ?? 0, streakStarted: false },
+    summary: { answers: latest.size, correct, xp: xpGain, streak: s.streak?.count ?? 0, streakStarted: false, recorded: false, reviews },
   };
 }

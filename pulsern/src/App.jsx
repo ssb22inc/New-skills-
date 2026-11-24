@@ -323,7 +323,7 @@ import { applyAnswer, commitLiveAnswer, stampedQuestion } from "./answer-apply.j
 import { classifyLog, rekeySchedule } from "./question-key.js";
 import { stampCatalogQuestion, stampLoadedCatalog } from "./question-identity.js";
 import { signOutAndForgetTrial as signOut } from "./sign-out.js";
-import { readProgress, parseProgress, clearLegacyProgressBackup, guestHandoff, sessionReadDecision, stashPendingProgress, readPendingProgress, clearPendingProgress } from "./progress-load.js";
+import { readProgress, parseProgress, clearLegacyProgressBackup, guestHandoff, sessionReadDecision, stashPendingProgress, readPendingProgress, clearPendingProgress, clearPlainPending, unsavedAnswers, applyUnsavedAnswers } from "./progress-load.js";
 
 const STORE_KEY = "pulsern-v1";
 
@@ -525,15 +525,14 @@ export default function App() {
   useEffect(() => () => { saveQueue.current?.invalidate(); }, []);
   const signOutAndForgetTrial = async () => {
     const saved = await waitForFlush(() => saveQueue.current.flush());
+    const userId = accountId.current;
     if (saved.timedOut) {
-      stashPendingProgress(window.localStorage, {
-        userId: accountId.current,
-        baseRaw: serverRawRef.current,
-        payload: JSON.stringify({ theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips, missSchedule, fcNew, rewards }),
-      });
+      const answers = unsavedAnswers(confirmedLogRef.current, log);
+      clearPlainPending(window.localStorage, userId);
+      await stashPendingProgress(window.localStorage, { userId, answers });
       saveQueue.current.invalidate();
       accountId.current = null;
-      signOut({ auth: supabase.auth, storage: window.localStorage, holdStorage: window.sessionStorage });
+      signOut({ auth: supabase.auth, storage: window.localStorage, holdStorage: window.sessionStorage, userId });
       return;
     }
     if (!saved.ok || pendingHandoff.current) {
@@ -544,14 +543,16 @@ export default function App() {
     }
     saveQueue.current.invalidate();
     accountId.current = null;
-    signOut({ auth: supabase.auth, storage: window.localStorage, holdStorage: window.sessionStorage });
+    signOut({ auth: supabase.auth, storage: window.localStorage, holdStorage: window.sessionStorage, userId });
   };
 
   /* ---- load saved progress (retryable; never treats a failed read as new) ---- */
   const [loadState, setLoadState] = useState("loading"); // loading | ok | error | corrupt
   const [saveBlocked, setSaveBlocked] = useState(false); // saved row could not be opened: study, but never write over it
   const unreadableRaw = useRef(null);
-  const serverRawRef = useRef(null);
+  const confirmedLogRef = useRef(null);
+  const pendingRestore = useRef(false);
+  const liveAttempt = useRef(0);
   const [guestOffer, setGuestOffer] = useState(null);     // trial answers waiting for this account's consent
   const applyBlob = (s) => {
     setTheme(s.theme);
@@ -584,7 +585,6 @@ export default function App() {
     setLoadState("loading");
     try { clearLegacyProgressBackup(window.localStorage); } catch { /* storage blocked */ }
     const read = await readProgress(() => store.get(STORE_KEY));
-    serverRawRef.current = read.raw ?? null;
     /* Failed read: stay unloaded. Autosave and the trial merge both wait
        for `loaded`, so nothing is written over the real row. */
     if (read.status === "error") { setLoadState("error"); return; }
@@ -605,11 +605,13 @@ export default function App() {
     try { guest = readGuestForHandoff(window.localStorage, window.sessionStorage); } catch { /* storage blocked */ }
     let createdAt = null;
     try { const { data } = await supabase.auth.getSession(); createdAt = data?.session?.user?.created_at ?? null; accountId.current = data?.session?.user?.id ?? null; } catch { /* unknown = ask */ }
-    const pending = readPendingProgress(window.localStorage, accountId.current, read.raw ?? null);
-    if (pending && parsed.status !== "corrupt") {
-      const restored = parseProgress(pending.payload, (b) => migrateBlob(b, CATS));
-      if (restored.status === "ok") s = restored.blob;
-    }
+    confirmedLogRef.current = s?.log ?? [];
+    clearPlainPending(window.localStorage, accountId.current);
+    const pending = await readPendingProgress(window.localStorage, accountId.current);
+    if (pending?.answers?.length && parsed.status !== "corrupt") {
+      s = applyUnsavedAnswers(s ?? migrateBlob({}, CATS), pending.answers, { today: todayStr(), calibration });
+      pendingRestore.current = true;
+    } else pendingRestore.current = false;
     const handoff = guestHandoff({ guest, accountCreatedAt: createdAt, hasSavedProgress: !!read.raw });
     if (handoff === "merge") {
       const merged = mergeGuestIntoBlob(s ?? migrateBlob({}, CATS), guest, { today: todayStr(), calibration });
@@ -655,7 +657,7 @@ export default function App() {
     const pendingAtStart = pendingGuestClear.current === true;
     const note = pendingHandoff.current;
     const userId = accountId.current;
-    saveQueue.current.enqueue(seq, () => store.set(STORE_KEY, payload, userId)).then((res) => {
+    saveQueue.current.enqueue(seq, () => store.set(STORE_KEY, payload, userId)).then(async (res) => {
       if (!res || res.stale || res.error?.code === "account-changed") return;
       if (res.error?.code === "signed-out") {
         if (pendingAtStart) setGuestSaveError(true);
@@ -668,7 +670,8 @@ export default function App() {
         return;
       }
       if (guestClearOnSave(pendingAtStart)) { pendingGuestClear.current = false; clearGuest(window.localStorage); releaseHeldGuest(window.sessionStorage); }
-      clearPendingProgress(window.localStorage, userId);
+      confirmedLogRef.current = log;
+      if (pendingRestore.current) { await clearPendingProgress(window.localStorage, userId); pendingRestore.current = false; }
       if (outcome === "saved" && note) {
         setGuestNote(note);
         setGuestSaveError(false);
@@ -886,7 +889,7 @@ export default function App() {
         data.push(...page);
         if (page.length < 1000) break;
       }
-      setCatalog((c) => ({ ...(c ?? {}), bankIds: data.map((r) => r.id), bankKnown: !failed }));
+      setCatalog((c) => ({ ...(c ?? {}), bankIds: data.map((r) => r.id), bankCats: Object.fromEntries(data.map((r) => [String(r.id), r.cat])), bankKnown: !failed }));
       if (!data.length) return;
       setCalibration(Object.fromEntries(data.map((r) => [r.id, { rating: r.elo_rating }])));
       const items = data
@@ -926,7 +929,14 @@ export default function App() {
   useEffect(() => {
     if (!loaded || !catalog?.bankKnown || !catalog?.casesKnown) return;
     const current = log;
-    const next = classifyLog(current, { builtinIds: BUNDLED_QUESTION_IDS, bankIds: catalog.bankIds, dbCases: catalog.dbCases, bankKnown: true });
+    const next = classifyLog(current, {
+      builtinIds: BUNDLED_QUESTION_IDS,
+      builtinCats: Object.fromEntries(BUNDLED_QUESTIONS.map((item) => [String(item.id), item.cat])),
+      bankIds: catalog.bankIds,
+      bankCats: catalog.bankCats,
+      dbCases: catalog.dbCases,
+      bankKnown: true,
+    });
     if (next.every((row, i) => row.key === current[i]?.key && !!row.unclassified === !!current[i]?.unclassified && row.source === current[i]?.source)) return;
     setLog(next);
     setMissSchedule((schedule) => rekeySchedule(schedule, current, next));
@@ -982,6 +992,7 @@ export default function App() {
     const beforeAbility = progressRef.current.ability;
     const applied = commitLiveAnswer(progressRef, {
       q: item, correct, ms: opts.ms ?? Infinity, today: todayStr(), schedule: opts.schedule !== false, calibration,
+      attempt: opts.attempt ?? `live:${accountId.current ?? "local"}:${liveAttempt.current += 1}`,
     });
     const next = applied.state;
     const res = applied.result;
@@ -1022,6 +1033,22 @@ export default function App() {
     const credited = day || todayStr();
     setRewards((r) => reverseCardDay(r, credited, cardXpGain));
     setDaily((d) => (d.day === credited && d.answered > 0 ? { ...d, answered: d.answered - 1 } : d));
+  };
+  const resolveLegacy = (legacyId, chosen) => {
+    if (!chosen?.key || !chosen?.source) return;
+    setLog((rows) => rows.map((row) => (
+      row && row.unclassified && String(row.id) === String(legacyId)
+        ? { ...row, source: chosen.source, key: chosen.key, unclassified: false }
+        : row
+    )));
+    setMissSchedule((schedule) => {
+      const map = { ...(schedule ?? {}) };
+      const raw = map[legacyId] ?? map[String(legacyId)];
+      if (raw && map[chosen.key] == null) map[chosen.key] = raw;
+      delete map[legacyId];
+      delete map[String(legacyId)];
+      return map;
+    });
   };
   const setPref = (k, v) => setRewards((r) => ({ ...r, prefs: { ...r.prefs, [k]: v } }));
   const motion = motionAllowed(rewards.prefs);
@@ -1064,7 +1091,7 @@ export default function App() {
   const today = todayStr();
   const board = useMemo(() => badgeBoard(log, CATS, rewards.badgesSeen), [log, rewards.badgesSeen]);
   const career = useMemo(() => careerStatus({ xp, log, cats: CATS, rankHigh: rewards.rankHigh }), [xp, log, rewards.rankHigh]);
-  const missesOpen = useMemo(() => reviewPools(expandTrialQuestions(allQuestions, log, BUNDLED_QUESTIONS), log, missSchedule, today).review.length, [allQuestions, log, missSchedule, today]);
+  const missesOpen = useMemo(() => reviewPools(expandTrialQuestions(allQuestions, log, BUNDLED_QUESTIONS, missSchedule), log, missSchedule, today).review.length, [allQuestions, log, missSchedule, today]);
   const qToday = todayQuestionCount({ rewards, daily, today });
   const shift = shiftStatus({ day: rewards.days[today], answeredToday: qToday.known ? qToday.count : 0, questionsKnown: qToday.known, dueCount, missesOpen });
   const week = weekRounds(rewards, today);
@@ -1406,8 +1433,11 @@ export default function App() {
         {guestNote && !guestSaveError && !locked && (
           <section className="card rw-saved" role="status">
             <p className="eyebrow">Progress saved</p>
-            <h2 className="h2">Your trial answers are in your account</h2>
-            <p className="small">{guestNote.answers} answer{guestNote.answers === 1 ? "" : "s"}, {guestNote.correct} correct, +{guestNote.xp} XP{guestNote.streakStarted ? `, and day ${guestNote.streak} of your streak` : ""}. They count toward your stats, badges, and readiness estimate.</p>
+            <h2 className="h2">{guestNote.recorded ? "Your trial answers are in your account" : "Trial progress was added"}</h2>
+            <p className="small">{guestNote.recorded
+              ? `${guestNote.answers} answer${guestNote.answers === 1 ? "" : "s"}, ${guestNote.correct} correct, +${guestNote.xp} XP${guestNote.streakStarted ? `, and day ${guestNote.streak} of your streak` : ""}. They count toward your stats, badges, and readiness estimate.`
+              : `+${guestNote.xp} XP for questions this account had not answered. ${guestNote.reviews} miss${guestNote.reviews === 1 ? "" : "es"} scheduled for review. Existing answers, ability, and streak are unchanged, so readiness is unchanged.`}
+            </p>
             <button type="button" className="btn ghost" onClick={() => setGuestNote(null)}>Got it</button>
           </section>
         )}
@@ -1419,7 +1449,7 @@ export default function App() {
         )}
         {!locked && <>
           {tab === "today" && <Today xp={xp} streak={streak} bestRun={bestRun} log={log} readiness={readiness} readyLabel={readyLabel} catStats={catStats} daily={daily} dueCount={dueCount} go={goSection}
-            record={record} questions={allQuestions} provider={provider}
+            record={record} questions={allQuestions} provider={provider} onResolveLegacy={resolveLegacy}
             ability={ability} calibration={calibration} plan={plan} missSchedule={missSchedule}
             newAllowance={newAllowance} onNewCard={onNewCard} onRefundNewCard={onRefundNewCard}
             profile={profile} setProfile={setProfile} showProfile={profilePrompt} dismissProfileCard={() => setProfileCardDismissed(true)}
@@ -1428,7 +1458,7 @@ export default function App() {
             needsFirstAnswer={activating} quizKick={quizKick} appliedQuizKick={appliedQuizKick} accessPending={accessPending}
             homeEpoch={homeEpoch} tourHold={tourStep != null} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} onSession={onSession}
             rewards={rewards} shift={shift} career={career} missesOpen={missesOpen} beginSession={beginSession} recapProps={recapProps} onGrade={noteCard} onUngrade={unnoteCard} />}
-          {tab === "qbank" && <QBank key={sectionEpoch} record={record} log={log} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} missSchedule={missSchedule} isOwner={isOwner} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus}
+          {tab === "qbank" && <QBank key={sectionEpoch} record={record} log={log} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} missSchedule={missSchedule} isOwner={isOwner} onSession={onSession} onResolveLegacy={resolveLegacy} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus}
             onBegin={beginSession} renderBreak={({ onMore, onEnd }) => <RecapPanel {...recapProps} doneLabel="End session" onDone={onEnd} onMore={onMore} moreLabel="One more block →" />} />}
           {tab === "case" && <CaseStudy key={sectionEpoch} record={record} provider={provider} cases={allCases} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
           {tab === "cards" && <Flashcards key={sectionEpoch} onGrade={noteCard} onUngrade={unnoteCard} addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)} newAllowance={newAllowance} onNewCard={onNewCard} onRefundNewCard={onRefundNewCard} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
@@ -1716,7 +1746,7 @@ function Today(props) {
     <div className="stack">
       <p className="eyebrow stage-label">Answer this to unlock Today</p>
       <p className="small">One question opens your daily plan. No need to look for a Start button.</p>
-      <QBank record={props.record} log={props.log} questions={props.questions} provider={props.provider} ability={props.ability} calibration={props.calibration} missSchedule={props.missSchedule} auto autoLimit={1} preferMc onDone={finishFirst} onSession={props.onSession} />
+      <QBank record={props.record} log={props.log} questions={props.questions} provider={props.provider} ability={props.ability} calibration={props.calibration} missSchedule={props.missSchedule} auto autoLimit={1} preferMc onDone={finishFirst} onSession={props.onSession} onResolveLegacy={props.onResolveLegacy} />
     </div>
   );
 
@@ -1730,7 +1760,7 @@ function Today(props) {
   if (stage === "quiz") return (
     <div className="stack">
       <p className="eyebrow stage-label">TODAY'S ROUND · STEP 2 OF 2 · QUESTIONS</p>
-      <QBank record={props.record} log={props.log} questions={props.questions} provider={props.provider} ability={props.ability} calibration={props.calibration} missSchedule={props.missSchedule} auto onDone={() => setStage("done")} onSession={props.onSession} />
+      <QBank record={props.record} log={props.log} questions={props.questions} provider={props.provider} ability={props.ability} calibration={props.calibration} missSchedule={props.missSchedule} auto onDone={() => setStage("done")} onSession={props.onSession} onResolveLegacy={props.onResolveLegacy} />
     </div>
   );
 
@@ -1900,7 +1930,7 @@ function blankAnswer(q) {
   return { sel: [], order: [] };
 }
 
-export function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, onDone, questions = QUESTIONS, provider = "claude", addQuestions, ability = {}, calibration = {}, missSchedule = {}, isOwner = false, onSession, tourFocus = null, guest = false, onGuestSignIn, onBegin, renderBreak }) {
+export function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, onDone, questions = QUESTIONS, provider = "claude", addQuestions, ability = {}, calibration = {}, missSchedule = {}, isOwner = false, onSession, tourFocus = null, guest = false, onGuestSignIn, onBegin, renderBreak, onResolveLegacy = null }) {
   const [diffTarget, setDiffTarget] = useState(1);
   const [calcOpen, setCalcOpen] = useState(false); // on-screen calculator
   const [q, setQ] = useState(null);
@@ -1940,7 +1970,8 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
   const toggleIn = (arr, set) => (v) => set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
 
   const freshPool = unseenQuestions(catalog, log).filter(inFocus);
-  const reviewQuestions = expandTrialQuestions(catalog, log, BUNDLED_QUESTIONS);
+  const reviewQuestions = expandTrialQuestions(catalog, log, BUNDLED_QUESTIONS, missSchedule);
+  const resolvedLegacy = useRef(new Set());
   /* Missed questions run on a spaced-review schedule (question-review.js):
      duePool = scheduled reviews whose LOCAL date has arrived; reviewPool =
      those plus every current miss, so Review Misses still serves all misses
@@ -1989,7 +2020,7 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
        pool can hide everything else. */
     let pool = sessionPool(focused, {
       log, schedule: missSchedule, fresh: freshPool, mode: which, held: heldIds(trail),
-    });
+    }).filter((item) => !(item?.unresolved && resolvedLegacy.current.has(String(item.legacyId))));
     if (!pool.length) {
       const fb = fallbackSkip(trail);
       if (fb) { reveal(fb); return; }
@@ -2170,6 +2201,29 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
     <section className="card"><h2 className="h2">{mode === "review" ? "Review pool cleared" : "No new questions left"}</h2><p className="small">{mode === "review" ? "Every missed question has been re-answered correctly, and nothing else is due. Each one returns on its next review date. Corrected errors are some of the strongest memories you'll form." : "You've seen the whole bank. Switch to Review misses to close remaining gaps."}</p>
       <button className="btn" onClick={endSession}>Back to session menu</button></section>
   );
+
+  if (q.unresolved) {
+    const choose = (candidate) => {
+      resolvedLegacy.current.add(String(q.legacyId));
+      onResolveLegacy?.(q.legacyId, candidate);
+      endSession();
+    };
+    return (
+      <section className="card">
+        <p className="eyebrow">Unresolved review</p>
+        <h2 className="h2">Which question was this?</h2>
+        <p className="small">{q.stem}</p>
+        <div className="stack">
+          {(q.candidates ?? []).map((candidate) => (
+            <button type="button" className="btn" key={answerIdentity(candidate) ?? candidate.id} onClick={() => choose(candidate)}>
+              {candidate.source === "bank" ? "Bank question" : candidate.source === "builtin" ? "Built-in question" : "Question"}: {candidate.stem}
+            </button>
+          ))}
+          <button type="button" className="btn ghost" onClick={endSession}>Leave unresolved</button>
+        </div>
+      </section>
+    );
+  }
 
   const ext = ngnExt(q); // NGN payloads: rows/columns/actions/conditions/parameters/dropdowns
   const toggleSel = (i) => {

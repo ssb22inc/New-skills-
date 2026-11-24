@@ -50,14 +50,22 @@ export function resolveLegacyRow(row, catalogs = {}) {
   if (!row || row.id == null || catalogs.bankKnown !== true) return null;
   const id = String(row.id);
   const hits = [];
-  if (asSet(catalogs.builtinIds).has(id)) hits.push({ source: "builtin", key: canonicalKey("builtin", row.id) });
-  if (asSet(catalogs.bankIds).has(id)) hits.push({ source: "bank", key: canonicalKey("bank", row.id) });
+  if (asSet(catalogs.builtinIds).has(id)) hits.push({ source: "builtin", key: canonicalKey("builtin", row.id), cat: catalogs.builtinCats?.[id] ?? null });
+  if (asSet(catalogs.bankIds).has(id)) hits.push({ source: "bank", key: canonicalKey("bank", row.id), cat: catalogs.bankCats?.[id] ?? null });
   const bundled = (catalogs.bundledCases ?? legacyCaseAllowlist()).get(id);
-  if (bundled && (row.cat == null || bundled.cat === row.cat)) hits.push({ source: "case", key: canonicalKey("case", bundled.caseId) });
+  if (bundled && (row.cat == null || bundled.cat === row.cat)) hits.push({ source: "case", key: canonicalKey("case", bundled.caseId), cat: bundled.cat ?? null });
   const db = dbCaseForLegacyId(row.id, catalogs.dbCases);
-  if (db && (row.cat == null || db.cat === row.cat)) hits.push({ source: "case", key: db.key });
+  if (db && (row.cat == null || db.cat === row.cat)) hits.push({ source: "case", key: db.key, cat: db.cat ?? null });
   const unique = [...new Map(hits.map((hit) => [hit.key, hit])).values()];
-  return unique.length === 1 ? unique[0] : null;
+  if (unique.length === 1) return unique[0];
+  /* A recorded category is provenance. It names the row only when exactly
+     one catalog hit has that category. A missing category never eliminates
+     a hit, so two unknown homes stay unresolved. */
+  if (row.cat && unique.length > 1 && unique.every((hit) => hit.cat != null)) {
+    const matched = unique.filter((hit) => hit.cat === row.cat);
+    if (matched.length === 1) return matched[0];
+  }
+  return null;
 }
 
 export function classifyLog(log, catalogs = {}) {
