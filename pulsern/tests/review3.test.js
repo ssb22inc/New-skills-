@@ -24,7 +24,7 @@ describe("Codex P2 wiring", () => {
     const save = app.slice(app.indexOf("autosave on change"), app.indexOf("autosave on change") + 1600);
     expect(save.indexOf("const pendingAtStart = pendingGuestClear.current === true")).toBeGreaterThan(-1);
     expect(save.indexOf("const pendingAtStart")).toBeLessThan(save.indexOf("saveQueue.current.enqueue"));
-    expect(save).toContain("store.set(STORE_KEY, payload, userId)");
+    expect(save).toContain("store.set(STORE_KEY, payload, userId, ctx)");
     expect(save).toContain("guestClearOnSave(pendingAtStart)");
     expect(save).toContain("handoffAfterSave");
     expect(save).toContain('res.error?.code === "signed-out"');

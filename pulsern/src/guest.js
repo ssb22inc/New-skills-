@@ -155,22 +155,47 @@ export function waitForFlush(flush, ms = SIGN_OUT_FLUSH_MS) {
   });
 }
 
-export function createSaveQueue() {
+export const SAVE_ATTEMPT_MS = 8000;
+
+/* One account, one write at a time, newest payload wins. A save that
+   does not finish is aborted so a later snapshot can be written. An
+   older request is not allowed to land after that. */
+export function createSaveQueue({ attemptMs = SAVE_ATTEMPT_MS } = {}) {
   let chain = Promise.resolve();
   let latest = 0;
+  let active = null;
   return {
     next() { latest += 1; return latest; },
-    invalidate() { latest += 1; },
+    invalidate() {
+      latest += 1;
+      active?.abort();
+    },
     enqueue(seq, task) {
       const run = chain.catch(() => {}).then(async () => {
         if (seq !== latest) return { stale: true };
+        const ctrl = new AbortController();
+        active = ctrl;
+        const isCurrent = () => seq === latest && !ctrl.signal.aborted;
+        let timer;
+        const timeout = new Promise((_, reject) => {
+          timer = setTimeout(() => {
+            ctrl.abort();
+            reject(Object.assign(new Error("save-timeout"), { code: "save-timeout" }));
+          }, attemptMs);
+        });
         try {
-          await task();
-          if (seq !== latest) return { stale: true };
+          await Promise.race([
+            Promise.resolve().then(() => task({ signal: ctrl.signal, isCurrent })),
+            timeout,
+          ]);
+          if (!isCurrent()) return { stale: true };
           return { ok: true };
         } catch (error) {
           if (seq !== latest) return { stale: true };
           return { ok: false, error };
+        } finally {
+          clearTimeout(timer);
+          if (active === ctrl) active = null;
         }
       });
       chain = run;

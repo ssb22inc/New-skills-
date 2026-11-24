@@ -13,8 +13,8 @@ const CAT_RENAMES = { "Psychosocial & Health Promotion": "Psychosocial Integrity
 
 export function migrateBlob(s, cats) {
   const ability = {};
-  /* Legacy rows are not named here. Naming them needs the bank and case
-     catalogs, which are applied by classifyLog once those reads return. */
+  /* Legacy rows are not named here. The one-time server relabel names
+     the ones it can. A row it cannot match stays unresolved. */
   const log = Array.isArray(s.log) ? s.log : [];
   for (const [k, v] of Object.entries(s.ability ?? {})) ability[CAT_RENAMES[k] ?? k] = v;
   return {

@@ -4,7 +4,7 @@
 import { describe, it, expect } from "vitest";
 import { applyAnswer, commitLiveAnswer } from "../src/answer-apply.js";
 import { emptyGuest, guestAnswer, mergeGuestIntoBlob, holdGuestTrial, peekHeldGuest, releaseHeldGuest, GUEST_KEY, GUEST_HOLD_KEY } from "../src/guest.js";
-import { classifyLog, resolveLegacyRow, canonicalKey, rekeySchedule, claimLegacyRow, claimLegacyAt } from "../src/question-key.js";
+import { classifyLog, resolveLegacyRow, canonicalKey, rekeySchedule, claimLegacyRow, claimLegacyAt, claimLegacySchedule } from "../src/question-key.js";
 import { stampCatalogQuestion, stampLoadedCatalog, questionIdentity } from "../src/question-identity.js";
 import { reviewPools, todayPool, sessionPool, unseenQuestions, questionByIdentity, latestResults, expandTrialQuestions, settledResult, legacyCandidates, scheduleEntry } from "../src/question-review.js";
 import { emptyNav, appendQuestion, goBack, present } from "../src/question-nav.js";
@@ -252,7 +252,10 @@ describe("review, restore, and import use the canonical key", () => {
     const bank101 = stampCatalogQuestion({ id: 101, stem: "Bank 101.", cat: "Pharmacology", diff: 2 }, []);
     const caseSchedule = { 101: { interval: 1, due: "2026-01-16" } };
     expect(scheduleEntry(bank101, caseSchedule, [bank101], [caseRow])).toBeNull();
-    expect(reviewPools([bank101], [caseRow], caseSchedule, "2026-01-16").review).toEqual([]);
+    const caseMiss = reviewPools([bank101], [caseRow], caseSchedule, "2026-01-16").review;
+    expect(caseMiss.map((item) => item.key)).toEqual(["case:case-sepsis-1"]);
+    expect(caseMiss[0].catalogMiss).toBe(true);
+    expect(caseMiss.some((item) => item.key === "bank:101")).toBe(false);
   });
 
   it("does not rebuild ability over legacy rows that have no key", () => {
@@ -324,6 +327,16 @@ describe("review, restore, and import use the canonical key", () => {
     expect(ambiguous[7]).toEqual(schedule[7]);
     expect(ambiguous["builtin:7"]).toBeUndefined();
     expect(ambiguous["bank:7"]).toBeUndefined();
+    const bankThenCase = rekeySchedule({ 101: schedule[7] }, [{ id: 101 }, { id: 101 }], [
+      { id: 101, source: "bank", key: "bank:101", cat: "Pharmacology", correct: false },
+      { id: 101, source: "case", key: "case:case-sepsis-1", cat: "Physiological Adaptation", correct: true },
+    ]);
+    expect(bankThenCase["bank:101"]).toEqual(schedule[7]);
+    expect(bankThenCase[101]).toBeUndefined();
+    expect(bankThenCase["case:case-sepsis-1"]).toBeUndefined();
+    const scheduleMap = { 101: { interval: 3, due: "2026-12-01" } };
+    expect(claimLegacySchedule(scheduleMap, 101, { source: "case", key: "case:case-sepsis-1" })).toEqual(scheduleMap);
+    expect(claimLegacySchedule(scheduleMap, 101, { source: "bank", key: "bank:101" })["bank:101"]).toEqual(scheduleMap[101]);
   });
 
   it("naming an unscoped legacy miss gives it a key and a later correction pays the fix bonus", () => {

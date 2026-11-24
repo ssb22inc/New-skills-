@@ -132,6 +132,43 @@ begin
 end;
 $$;
 
+-- Latest built-in or bank answer that can own a QBank review date for
+-- this numeric id. Case steps and schedule:false rows are skipped. A
+-- later row with no single home returns null so the number stays put.
+create or replace function backup_20261124.schedule_owner(log jsonb, raw_id text)
+returns text
+language plpgsql
+stable
+as $$
+declare
+  item jsonb;
+begin
+  if jsonb_typeof(log) is distinct from 'array' or raw_id is null then
+    return null;
+  end if;
+  for item in
+    select elem
+    from jsonb_array_elements(log) with ordinality as logged(elem, ordinality)
+    where elem->>'id' = raw_id
+    order by ordinality desc
+  loop
+    if coalesce(item->>'unresolved','false') = 'true'
+       or coalesce(item->>'unclassified','false') = 'true'
+       or coalesce(item->>'key','') !~ '^(builtin|bank|case):' then
+      return null;
+    end if;
+    if coalesce(item->>'schedule','true') = 'false' or coalesce(item->>'source','') = 'case' then
+      continue;
+    end if;
+    if coalesce(item->>'source','') in ('builtin','bank')
+       and coalesce(item->>'key','') ~ '^(builtin|bank):' then
+      return item->>'key';
+    end if;
+  end loop;
+  return null;
+end;
+$$;
+
 create or replace function backup_20261124.relabel_blob(blob jsonb)
 returns jsonb
 language plpgsql
@@ -142,48 +179,113 @@ declare
   item jsonb;
   classified jsonb;
   new_schedule jsonb := '{}'::jsonb;
+  pending jsonb := '{}'::jsonb;
   sched_key text;
   sched_val jsonb;
-  latest jsonb;
+  raw_id text;
+  owner text;
 begin
   if jsonb_typeof(blob) is distinct from 'object' then
     return blob;
   end if;
-  for item in select value from jsonb_array_elements(coalesce(blob->'log','[]'::jsonb))
+  -- A missing, null, or non-array log is left untouched for the app.
+  if jsonb_typeof(blob->'log') is distinct from 'array' then
+    return blob;
+  end if;
+  for item in select value from jsonb_array_elements(blob->'log')
   loop
     classified := backup_20261124.relabel_answer(item);
     new_log := new_log || jsonb_build_array(classified->'elem');
   end loop;
-  if jsonb_typeof(blob->'missSchedule') = 'object' then
-    for sched_key, sched_val in select key, value from jsonb_each(blob->'missSchedule')
-    loop
-      if sched_key ~ '^(builtin|bank|case):' then
-        new_schedule := new_schedule || jsonb_build_object(sched_key, sched_val);
-        continue;
-      end if;
-      select elem
-        into latest
+  if jsonb_typeof(blob->'missSchedule') is distinct from 'object' then
+    return jsonb_set(blob, '{log}', new_log);
+  end if;
+  for sched_key, sched_val in select key, value from jsonb_each(blob->'missSchedule')
+  loop
+    if sched_key ~ '^(builtin|bank):' then
+      new_schedule := new_schedule || jsonb_build_object(sched_key, sched_val);
+      continue;
+    end if;
+    raw_id := sched_key;
+    if sched_key ~ '^case:' then
+      select elem->>'id' into raw_id
       from jsonb_array_elements(new_log) with ordinality as logged(elem, ordinality)
-      where elem->>'id' = sched_key
+      where elem->>'key' = sched_key
       order by ordinality desc
       limit 1;
-      if latest is not null
-         and coalesce(latest->>'unresolved','false') <> 'true'
-         and coalesce(latest->>'key','') ~ '^(builtin|bank|case):'
-         and not (new_schedule ? (latest->>'key')) then
-        new_schedule := new_schedule || jsonb_build_object(latest->>'key', sched_val);
-      else
-        new_schedule := new_schedule || jsonb_build_object(sched_key, sched_val);
+      if raw_id is null or pending ? raw_id then
+        continue;
       end if;
-    end loop;
-    return jsonb_set(jsonb_set(blob, '{log}', new_log), '{missSchedule}', new_schedule);
-  end if;
-  return jsonb_set(blob, '{log}', new_log);
+    elsif pending ? sched_key then
+      continue;
+    end if;
+    pending := pending || jsonb_build_object(raw_id, sched_val);
+  end loop;
+  for sched_key, sched_val in select key, value from jsonb_each(pending)
+  loop
+    owner := backup_20261124.schedule_owner(new_log, sched_key);
+    if owner is not null then
+      if not (new_schedule ? owner) then
+        new_schedule := new_schedule || jsonb_build_object(owner, sched_val);
+      end if;
+    else
+      new_schedule := new_schedule || jsonb_build_object(sched_key, sched_val);
+    end if;
+  end loop;
+  return jsonb_set(jsonb_set(blob, '{log}', new_log), '{missSchedule}', new_schedule);
 end;
 $$;
 
 revoke all on function backup_20261124.relabel_answer(jsonb) from public, anon, authenticated;
+revoke all on function backup_20261124.schedule_owner(jsonb, text) from public, anon, authenticated;
 revoke all on function backup_20261124.relabel_blob(jsonb) from public, anon, authenticated;
+
+-- Self-check. A bad log must not abort the migration, and a review date
+-- shared by a bank question and a later case step stays with the bank question.
+do $$
+declare
+  blob jsonb;
+  out jsonb;
+begin
+  blob := '{"log":null,"xp":1}'::jsonb;
+  if backup_20261124.relabel_blob(blob) is distinct from blob then
+    raise exception 'null log was rewritten';
+  end if;
+  blob := '{"log":{"id":1},"xp":1}'::jsonb;
+  if backup_20261124.relabel_blob(blob) is distinct from blob then
+    raise exception 'object log was rewritten';
+  end if;
+  blob := '{"xp":1}'::jsonb;
+  if backup_20261124.relabel_blob(blob) is distinct from blob then
+    raise exception 'missing log was rewritten';
+  end if;
+  blob := jsonb_build_object(
+    'log', jsonb_build_array(
+      jsonb_build_object('id', 101, 'cat', 'Pharmacology', 'correct', false),
+      jsonb_build_object('id', 101, 'cat', 'Physiological Adaptation', 'correct', true)
+    ),
+    'missSchedule', jsonb_build_object('101', jsonb_build_object('interval', 3, 'due', '2026-12-01'))
+  );
+  out := backup_20261124.relabel_blob(blob);
+  if not (out->'missSchedule' ? 'bank:101') then
+    raise exception 'review date did not stay with the bank question';
+  end if;
+  if out->'missSchedule' ? 'case:case-sepsis-1' or out->'missSchedule' ? '101' then
+    raise exception 'review date moved onto a case step or stayed on the shared number';
+  end if;
+  blob := jsonb_build_object(
+    'log', jsonb_build_array(
+      jsonb_build_object('id', '101', 'cat', 'Pharmacology', 'correct', false, 'source', 'bank', 'key', 'bank:101'),
+      jsonb_build_object('id', '101', 'cat', 'Physiological Adaptation', 'correct', true, 'source', 'case', 'key', 'case:case-sepsis-1')
+    ),
+    'missSchedule', jsonb_build_object('case:case-sepsis-1', jsonb_build_object('interval', 3, 'due', '2026-12-01'))
+  );
+  out := backup_20261124.relabel_blob(blob);
+  if (out->'missSchedule'->'bank:101') is distinct from jsonb_build_object('interval', 3, 'due', '2026-12-01')
+     or out->'missSchedule' ? 'case:case-sepsis-1' then
+    raise exception 'a case review date was not returned to the bank question';
+  end if;
+end $$;
 
 -- Idempotent: a second run leaves canonical and unresolved rows untouched.
 update public.progress

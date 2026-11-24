@@ -1,6 +1,6 @@
 /* Missed questions come back on a real LOCAL calendar date. */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { updateMissSchedule, deriveMissSchedule, reviewPools, todayPool, sessionPool, expandTrialQuestions } from "../src/question-review.js";
+import { updateMissSchedule, deriveMissSchedule, reviewPools, todayPool, sessionPool, expandTrialQuestions, legacyCandidates } from "../src/question-review.js";
 import { migrateBlob } from "../src/state.js";
 
 const CATS = [
@@ -173,5 +173,25 @@ describe("Today round and Review Misses pools", () => {
     const resolved = expandTrialQuestions([bankItem], trialLog, [builtIn]);
     expect(resolved.find((item) => item.id === "guest-7").stem).toBe("Which finding is priority?");
     expect(resolved.find((item) => item.id === 7).stem).toBe("Unrelated bank item");
+  });
+
+  it("offers the case step when a saved miss shares its number and category with a bank question", () => {
+    const bankItem = { id: 101, source: "bank", key: "bank:101", cat: "Physiological Adaptation", type: "mc", stem: "Bank stem" };
+    const log = [{ id: 101, unclassified: true, unresolved: true, cat: "Physiological Adaptation", correct: false }];
+    const list = legacyCandidates([bankItem], log, []);
+    const card = reviewPools(list, log, {}).review.find((item) => item.unresolved);
+    expect(card.candidates.map((item) => item.key).sort()).toEqual(["bank:101", "case:case-sepsis-1"]);
+    expect(card.candidates.find((item) => item.source === "case").stem).toMatch(/complication/);
+  });
+
+  it("keeps a canonical bank miss visible when that question is not in the loaded catalog", () => {
+    const log = [{ id: 2500, source: "bank", key: "bank:2500", cat: "Pharmacology", correct: false }];
+    const loaded = [{ id: 1, source: "bank", key: "bank:1", cat: "Pharmacology", type: "mc", stem: "Loaded" }];
+    const review = reviewPools(loaded, log, {}).review;
+    expect(review.map((item) => item.key)).toEqual(["bank:2500"]);
+    expect(review[0].catalogMiss).toBe(true);
+    expect(reviewPools(loaded, log, {}, "2026-11-24").misses).toHaveLength(1);
+    const focused = sessionPool(loaded, { log, schedule: {}, fresh: [], mode: "review", allow: (item) => item.cat === "Safety & Infection Control" });
+    expect(focused).toEqual([]);
   });
 });

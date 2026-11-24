@@ -97,12 +97,24 @@ export function classifyLog(log, catalogs = {}) {
   });
 }
 
-/* A numeric review date belongs to the latest answer that can own a
-   review: a classified built-in or bank row. A later case step, or a
-   row that still has no single home, leaves the number where it is. */
+/* A numeric review date belongs to the latest built-in or bank answer
+   that can own a review. Case steps and schedule:false rows never own
+   one. A later row with no single home leaves the number where it is. */
 function ownsReview(row) {
-  if (!row || row.unclassified || row.schedule === false || !row.key) return false;
+  if (!row || row.unclassified || row.unresolved || row.schedule === false || !row.key) return false;
   return row.source === "builtin" || row.source === "bank";
+}
+
+/* Naming a case step does not move a QBank review date onto it.
+   Naming a built-in or bank question does, once. */
+export function claimLegacySchedule(schedule, legacyId, chosen) {
+  const map = { ...(schedule ?? {}) };
+  if (!chosen?.key || chosen.source === "case") return map;
+  const raw = map[legacyId] ?? map[String(legacyId)];
+  if (raw && map[chosen.key] == null) map[chosen.key] = raw;
+  delete map[legacyId];
+  delete map[String(legacyId)];
+  return map;
 }
 
 export function rekeySchedule(schedule, before, after) {
@@ -118,11 +130,21 @@ export function rekeySchedule(schedule, before, after) {
     groups.get(key).push(i);
   });
   for (const [id, indexes] of groups) {
-    const latest = after[indexes[indexes.length - 1]];
-    if (!ownsReview(latest)) continue;
+    let owner = null;
+    let blocked = false;
+    for (let i = indexes.length - 1; i >= 0; i--) {
+      const row = after[indexes[i]];
+      if (!row || row.unclassified || row.unresolved || !row.key) {
+        blocked = true;
+        break;
+      }
+      if (row.schedule === false || row.source === "case") continue;
+      if (ownsReview(row)) { owner = row; break; }
+    }
+    if (blocked || !owner) continue;
     const raw = map[id] ?? map[Number(id)];
-    if (map[latest.key] != null && map[latest.key] !== raw) continue;
-    if (map[latest.key] == null) map[latest.key] = raw;
+    if (map[owner.key] != null && map[owner.key] !== raw) continue;
+    if (map[owner.key] == null) map[owner.key] = raw;
     delete map[id];
     delete map[Number(id)];
   }

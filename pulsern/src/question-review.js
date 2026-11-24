@@ -10,7 +10,9 @@
    Deterministic plain code (CLAUDE.md rule 6); dates LOCAL (rule 4). */
 import { nextSchedule } from "./srs.js";
 import { todayStr } from "./dates.js";
-import { questionIdentity } from "./question-identity.js";
+import { canonicalKey, questionIdentity } from "./question-identity.js";
+import { CASE_STUDIES } from "./case-studies.js";
+import { caseStepIds } from "./rewards.js";
 
 /* Next schedule after one answer. Returns a NEW map (React-state safe).
    `day` is the local day the answer was taken. Omit it and the review
@@ -150,7 +152,45 @@ export function questionByIdentity(questions, id) {
 /* The active bank list drops bundled questions. A legacy miss whose
    number is also a built-in still needs that built-in as a candidate,
    or the student can only assign the miss to the bank question. */
-export function legacyCandidates(questions, log, registry = []) {
+function unresolvedCat(log, num) {
+  let cat = null;
+  for (const row of log ?? []) {
+    if (!row || String(row.id) !== String(num)) continue;
+    if (!(row.unclassified || row.unresolved || !questionIdentity(row))) continue;
+    if (typeof row.cat === "string" && row.cat) cat = row.cat;
+  }
+  return cat;
+}
+
+/* A bundled or database case step whose old numeric id is this miss.
+   The step is offered only when its category is the one that was saved. */
+function legacyCaseSteps(cases, num, rowCat) {
+  const want = String(num);
+  const out = [];
+  (cases ?? CASE_STUDIES).forEach((c, index) => {
+    (c.steps ?? []).forEach((step, stepIndex) => {
+      const ids = c.dbId != null
+        ? caseStepIds({ dbId: c.dbId, step: stepIndex })
+        : caseStepIds({ key: c.key, index, step: stepIndex });
+      if (!ids.legacyAliases.map(String).includes(want)) return;
+      if (rowCat && c.cat && c.cat !== rowCat) return;
+      const key = canonicalKey("case", ids.id);
+      if (!key) return;
+      out.push({
+        id: Number.isNaN(Number(want)) ? want : Number(want),
+        source: "case",
+        key,
+        cat: c.cat,
+        stem: step.stem,
+        type: step.type || "mc",
+        schedule: false,
+      });
+    });
+  });
+  return out;
+}
+
+export function legacyCandidates(questions, log, registry = [], cases = null) {
   const index = historyIndex(log);
   const wanted = new Set();
   for (const [num, correct] of index.unresolved) if (correct === false) wanted.add(String(num));
@@ -164,6 +204,13 @@ export function legacyCandidates(questions, log, registry = []) {
     if (have.has(ident)) continue;
     have.add(ident);
     list.push(stamped);
+  }
+  for (const num of wanted) {
+    for (const step of legacyCaseSteps(cases, num, unresolvedCat(log, num))) {
+      if (have.has(step.key)) continue;
+      have.add(step.key);
+      list.push(step);
+    }
   }
   return list;
 }
@@ -217,12 +264,17 @@ function unresolvedCards(log, questions, index) {
   const add = (num) => {
     if (seen.has(num)) return;
     seen.add(num);
-    const candidates = (questions ?? []).filter((q) => q && !q.unresolved && String(q.id) === num);
     let logIndex = -1;
     (log ?? []).forEach((item, i) => {
       if (item && String(item.id) === num && (item.unclassified || !questionIdentity(item)) && item.correct === false) logIndex = i;
     });
     const row = logIndex >= 0 ? log[logIndex] : null;
+    const rowCat = typeof row?.cat === "string" ? row.cat : "";
+    const candidates = (questions ?? []).filter((q) => {
+      if (!q || q.unresolved || q.catalogMiss || String(q.id) !== num) return false;
+      if (rowCat && q.cat && q.cat !== rowCat) return false;
+      return true;
+    });
     cards.push({
       unresolved: true,
       id: `unresolved:${num}`,
@@ -246,26 +298,64 @@ function unresolvedCards(log, questions, index) {
   return cards;
 }
 
+/* A saved bank or case miss whose question is not in the loaded catalog.
+   It stays a miss. It is not treated as corrected, and it is not dropped. */
+function catalogMissCards(log, questions) {
+  const keyedCatalog = (questions ?? []).some((q) => questionIdentity(q));
+  if (!keyedCatalog) return [];
+  const have = new Set();
+  for (const q of questions ?? []) {
+    const id = answerIdentity(q);
+    if (id) have.add(id);
+  }
+  const latest = new Map();
+  (log ?? []).forEach((row, i) => {
+    const id = questionIdentity(row);
+    if (!id || (!id.startsWith("bank:") && !id.startsWith("case:"))) return;
+    latest.set(id, { correct: row.correct === true, row, i });
+  });
+  const cards = [];
+  for (const [id, info] of latest) {
+    if (info.correct || have.has(id)) continue;
+    cards.push({
+      catalogMiss: true,
+      id: `unavailable:${id}`,
+      key: id,
+      source: id.startsWith("case:") ? "case" : "bank",
+      cat: typeof info.row.cat === "string" && info.row.cat ? info.row.cat : "Management of Care",
+      population: info.row.pop,
+      type: info.row.type,
+      diff: info.row.diff ?? 1,
+      stem: "This saved miss is still here. Retry to open the question.",
+    });
+  }
+  return cards;
+}
+
 export function reviewPools(questions, log, schedule, today = todayStr()) {
   const index = historyIndex(log);
   const peers = peerCounts(questions);
   const idOf = (q) => answerIdentity(q) ?? String(q.id);
   const dueOf = (q) => {
+    if (q?.catalogMiss) {
+      const entry = schedule?.[q.key];
+      return entry && typeof entry.due === "string" ? entry : null;
+    }
     if (q?.unresolved) {
       const raw = schedule?.[q.legacyId] ?? schedule?.[Number(q.legacyId)];
       return raw && typeof raw.due === "string" ? raw : null;
     }
     return scheduleEntry(q, schedule, questions, log, index, peers);
   };
-  const cards = unresolvedCards(log, questions, index);
-  const pool = [...(questions ?? []).filter((q) => q && !q.unresolved), ...cards];
+  const cards = [...unresolvedCards(log, questions, index), ...catalogMissCards(log, questions)];
+  const pool = [...(questions ?? []).filter((q) => q && !q.unresolved && !q.catalogMiss), ...cards];
   const due = pool.filter((q) => {
     const entry = dueOf(q);
     return !!entry && typeof entry.due === "string" && entry.due <= today;
   }).sort((a, b) => (dueOf(a).due < dueOf(b).due ? -1 : dueOf(a).due > dueOf(b).due ? 1 : 0));
   const dueIds = new Set(due.map(idOf));
   const misses = pool.filter((q) => {
-    if (q.unresolved) return true;
+    if (q.catalogMiss || q.unresolved) return true;
     const settled = settledResult(q, log, questions, index, peers);
     if (settled.state === "known") return settled.correct === false;
     const entry = dueOf(q);
@@ -285,7 +375,9 @@ function asSkip(skip) {
 }
 
 function reviewWaiting(q, schedule, questions, log, index, peers, today) {
-  const entry = q?.unresolved
+  const entry = q?.catalogMiss
+    ? (schedule?.[q.key] ?? null)
+    : q?.unresolved
     ? (schedule?.[q.legacyId] ?? schedule?.[Number(q.legacyId)] ?? null)
     : scheduleEntry(q, schedule, questions, log, index, peers);
   return !!entry && !(typeof entry.due === "string" && entry.due <= today);

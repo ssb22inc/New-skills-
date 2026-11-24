@@ -243,6 +243,28 @@ describe("progress handoff into a new account", () => {
     expect(await newer).toEqual({ ok: true });
     expect(order).toEqual(["b"]);
   });
+  it("a stalled write unblocks the next save and does not land afterward", async () => {
+    const queue = createSaveQueue({ attemptMs: 30 });
+    const writes = [];
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const first = queue.enqueue(queue.next(), async ({ signal }) => {
+      await new Promise((resolve, reject) => {
+        const fail = () => reject(Object.assign(new Error("aborted"), { code: "aborted" }));
+        if (signal.aborted) fail();
+        else signal.addEventListener("abort", fail, { once: true });
+        gate.then(resolve);
+      });
+      writes.push("first");
+    });
+    const second = queue.enqueue(queue.next(), async () => { writes.push("second"); });
+    await expect(first).resolves.toMatchObject({ stale: true });
+    await expect(second).resolves.toEqual({ ok: true });
+    expect(writes).toEqual(["second"]);
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    expect(writes).toEqual(["second"]);
+  });
   it("says saved only after the merged write succeeds", () => {
     expect(handoffAfterSave({ ok: true, pending: true })).toBe("saved");
     expect(handoffAfterSave({ ok: false, pending: true })).toBe("error");
