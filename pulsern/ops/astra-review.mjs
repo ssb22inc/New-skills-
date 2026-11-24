@@ -89,8 +89,10 @@ export function classifyPath(path) {
   return { mode: "review", why: null };
 }
 
-/* Roughly 4 characters per token; about $2 of Astra input at the ceiling. */
-export const MAX_PROMPT_CHARS = 800_000;
+/* 2,000,000 characters is inside gpt-6.2-sol's 1,050,000-token context
+   (about four characters a token). A larger change is refused whole.
+   Nothing is dropped to make it fit. */
+export const MAX_PROMPT_CHARS = 2_000_000;
 export const MAX_FULL_FILE_CHARS = 60_000;
 
 /* ---------------------------------------------------------------------------

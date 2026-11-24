@@ -42,7 +42,7 @@ async function settle(promise) {
 
 describe("model registry", () => {
   it("makes Sol the reviewer and keeps the writer in another family", () => {
-    expect(REVIEW_MODEL).toBe("openai/gpt-6.1-sol");
+    expect(REVIEW_MODEL).toBe("openai/gpt-6.2-sol");
     expect(familyOf(GEN_MODEL)).not.toBe(familyOf(REVIEW_MODEL));
     expect(() => assertCrossFamily(GEN_MODEL, REVIEW_MODEL)).not.toThrow();
   });
@@ -59,6 +59,7 @@ describe("model registry", () => {
   });
 
   it("knows Sol takes no sampling temperature", () => {
+    expect(acceptsTemperature("openai/gpt-6.2-sol")).toBe(false);
     expect(acceptsTemperature("openai/gpt-6.1-sol")).toBe(false);
     expect(acceptsTemperature("anthropic/claude-sonnet-4.6")).toBe(true);
   });

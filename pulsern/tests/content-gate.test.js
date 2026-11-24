@@ -29,7 +29,7 @@ afterEach(() => vi.restoreAllMocks());
 describe("review()", () => {
   it("asks Astra, not the old reviewer", async () => {
     await review("judge this");
-    expect(sent[0].model).toBe("openai/gpt-6.1-sol");
+    expect(sent[0].model).toBe("openai/gpt-6.2-sol");
   });
 
   /* Astra thinks before it answers and that thinking counts against

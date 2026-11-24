@@ -12,7 +12,7 @@ import { createHash } from "node:crypto";
 import { deflateSync } from "node:zlib";
 import {
   classifyPath, planContext, buildPrompt, validateResult, verdictFor, renderMarkdown, reportBaseName,
-  FINDINGS_SCHEMA, MAX_FULL_FILE_CHARS, pageDigest, lockDigest, textDiff, parseNameStatusZ,
+  FINDINGS_SCHEMA, MAX_PROMPT_CHARS, MAX_FULL_FILE_CHARS, pageDigest, lockDigest, textDiff, parseNameStatusZ,
   collectChanges, runReview, exactText, reviewableImage, reviewText, fromReviewText,
 } from "../ops/astra-review.mjs";
 import { encodeCanonicalPng, canonicalDeflate, canonicalPng } from "../ops/png-canonical.mjs";
@@ -709,7 +709,18 @@ describe("fitting a change into one review", () => {
   it("refuses when the diffs alone exceed the budget", () => {
     const plan = planContext([file("a", 600, null), file("b", 600, null)], 1000);
     expect(plan.ok).toBe(false);
+    expect(plan.files).toEqual([]);
     expect(plan.reason).toMatch(/over the 1,000-character review budget/);
+  });
+  it("holds 2,000,000 characters and refuses the whole change past that, without keeping a piece", () => {
+    expect(MAX_PROMPT_CHARS).toBe(2_000_000);
+    const under = planContext([file("a", 1_500_000, null)]);
+    expect(under.ok).toBe(true);
+    expect(under.files).toHaveLength(1);
+    const over = planContext([file("a", MAX_PROMPT_CHARS + 1, null)]);
+    expect(over.ok).toBe(false);
+    expect(over.files).toEqual([]);
+    expect(over.reason).toMatch(/2,000,001 characters, over the 2,000,000-character review budget/);
   });
   it("counts fixed overhead against the budget", () => {
     expect(planContext([file("a", 500, null)], 1000, 600).ok).toBe(false);
