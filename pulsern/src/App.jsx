@@ -251,7 +251,7 @@ function levelFor(xp) {
 
 /* ---- date helpers for real multi-day spacing ----
    Extracted to src/dates.js so tests can exercise them (PULSERN_BUILD.md §10.4). */
-import { fmtLocal, todayStr, yesterdayStr, twoDaysAgoStr, addDays, weekStart } from "./dates.js";
+import { fmtLocal, todayStr, addDays, weekStart } from "./dates.js";
 import { supabase } from "./supabase.js";
 import { emptyAbility, updateAbility, itemRating, readinessFrom, pickTargetRating } from "./ability-engine.js";
 import { migrateBlob } from "./state.js";
@@ -307,17 +307,25 @@ import { useSessionReport } from "./session-report.js";
 import { tourMark, tourStepAt, tourStepsFor } from "./tour.js";
 import { LeaveDialog, Tour, useTourDismissScroll, useTourPlacement } from "./tour.jsx";
 import {
-  emptyRewards, answerXp, xpNote, comboFor, bumpDay, advanceStreak, shiftStatus, weekRounds, maybeGrantCover,
+  emptyRewards, answerXp, xpNote, comboFor, cardXp, questionsOn, bumpDay, advanceStreak, shiftStatus, weekRounds, maybeGrantCover,
   careerStatus, badgeBoard, detectMoments, markMomentsSeen, sessionRecap, MAX_COVERS,
 } from "./rewards.js";
 import { motionAllowed, rewardBeat } from "./effects.js";
 import {
   RewardsStyle, StreakGlyph, EcgBeat, ComboChip, MomentSheet, streakMoment, ShiftCard, CareerCard,
-  BadgeGrid, RoundsCard, BestsCard, SessionRecap,
+  BadgeGrid, RoundsCard, BestsCard, SessionRecap, EffectsCard, comboSpeech,
 } from "./rewards-ui.jsx";
-import { loadGuest, guestFresh, mergeGuestIntoBlob, clearGuest } from "./guest.js";
+import { loadGuest, mergeGuestIntoBlob, clearGuest, guestSummary } from "./guest.js";
+import { readProgress, guestHandoff } from "./progress-load.js";
 
 const STORE_KEY = "pulsern-v1";
+
+/* Signing out also forgets any try-before-sign-up answers on this device,
+   so the next person on a shared computer never inherits them. */
+function signOutAndForgetTrial() {
+  try { clearGuest(window.localStorage); } catch { /* storage blocked */ }
+  return supabase.auth.signOut();
+}
 
 /* ---- STORAGE ADAPTER ---------------------------------------------------
    The app touches persistence ONLY through `store`. To migrate platforms,
@@ -335,16 +343,20 @@ const store = {
     if (!session) return null;
     const { data, error } = await supabase.from("progress")
       .select("blob").eq("user_id", session.user.id).eq("key", key).maybeSingle();
-    if (error || !data) return null;
+    /* A read error must never look like "no saved progress": the caller
+       would treat the account as new and autosave defaults over it. */
+    if (error) throw new Error(error.message || "Could not read saved progress");
+    if (!data) return null;
     return JSON.stringify(data.blob);
   },
   async set(key, value) {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
-    await supabase.from("progress").upsert({
+    const { error } = await supabase.from("progress").upsert({
       user_id: session.user.id, key, blob: JSON.parse(value),
       updated_at: new Date().toISOString(),
-    });
+    }) ?? {};
+    if (error) throw new Error(error.message || "Could not save progress");
   },
   async delete(key) {
     const { data: { session } } = await supabase.auth.getSession();
@@ -485,59 +497,90 @@ export default function App() {
   const rewardsRef = useRef(rewards);
   rewardsRef.current = rewards;
   const [moments, setMoments] = useState([]);       // celebrations waiting for a natural break
+  const [liveMsg, setLiveMsg] = useState("");       // persistent screen-reader live region (combos)
   const [guestNote, setGuestNote] = useState(null); // what a guest trial carried into this account
   const pendingGuestClear = useRef(false);
 
-  /* ---- load saved progress once ---- */
-  useEffect(() => {
-    (async () => {
-      try {
-        const raw = await store.get(STORE_KEY);
-        let s = raw ? migrateBlob(JSON.parse(raw), CATS) : null; // legacy saves get defaults (§4)
-        /* Try-before-sign-up handoff: answers a guest gave on this device
-           fold into this account once (src/guest.js). */
-        let guest = null;
-        try { guest = loadGuest(window.localStorage); } catch { /* storage blocked */ }
-        if (guest) {
-          const merged = guestFresh(guest)
-            ? mergeGuestIntoBlob(s ?? migrateBlob({}, CATS), guest, { today: todayStr(), updateAbility })
-            : { blob: s, summary: null };
-          if (merged.summary) { s = merged.blob; setGuestNote(merged.summary); }
-          pendingGuestClear.current = true;
-        }
-        if (s) {
-          setTheme(s.theme);
-          setXp(s.xp);
-          setBestRun(s.bestRun);
-          setLog(s.log);
-          setFlagged(s.flagged);
-          setFlaggedCases(s.flaggedCases);
-          setStreak(s.streak);
-          const d = s.daily ?? { day: todayStr(), answered: 0 };
-          setDaily(d.day === todayStr() ? d : { day: todayStr(), answered: 0 });
-          // Kept verbatim. Re-stamping gaps with today's date on every load is
-          // what made ungraded cards look permanently due.
-          setSrs(s.srs);
-          setSrsMap(migrateLegacySrs(s.srs, s.srsMap));
-          setExamResults(s.examResults);
-          setCustomQs(s.customQs);
-          setProvider(s.provider);
-          setAbility(s.ability);
-          setPlan(s.plan);
-          setExamDate(s.examDate);
-          setTourSeen(s.tourSeen);
-          setProfileCardDismissed(s.profileCardDismissed);
-          setFcFlips(s.fcFlips);
-          setMissSchedule(s.missSchedule);
-          setFcNew(s.fcNew);
-          setRewards(s.rewards);
-        }
-      } catch (e) {
-        /* first visit — nothing saved yet */
-      }
-      setLoaded(true);
-    })();
+  /* ---- load saved progress (retryable; never treats a failed read as new) ---- */
+  const [loadState, setLoadState] = useState("loading"); // loading | ok | error
+  const [guestOffer, setGuestOffer] = useState(null);     // trial answers waiting for this account's consent
+  const applyBlob = (s) => {
+    setTheme(s.theme);
+    setXp(s.xp);
+    setBestRun(s.bestRun);
+    setLog(s.log);
+    setFlagged(s.flagged);
+    setFlaggedCases(s.flaggedCases);
+    setStreak(s.streak);
+    const d = s.daily ?? { day: todayStr(), answered: 0 };
+    setDaily(d.day === todayStr() ? d : { day: todayStr(), answered: 0 });
+    // Kept verbatim. Re-stamping gaps with today's date on every load is
+    // what made ungraded cards look permanently due.
+    setSrs(s.srs);
+    setSrsMap(migrateLegacySrs(s.srs, s.srsMap));
+    setExamResults(s.examResults);
+    setCustomQs(s.customQs);
+    setProvider(s.provider);
+    setAbility(s.ability);
+    setPlan(s.plan);
+    setExamDate(s.examDate);
+    setTourSeen(s.tourSeen);
+    setProfileCardDismissed(s.profileCardDismissed);
+    setFcFlips(s.fcFlips);
+    setMissSchedule(s.missSchedule);
+    setFcNew(s.fcNew);
+    setRewards(s.rewards);
+  };
+  const loadProgress = useCallback(async () => {
+    setLoadState("loading");
+    const read = await readProgress(() => store.get(STORE_KEY));
+    /* Failed read: stay unloaded. Autosave and the trial merge both wait
+       for `loaded`, so nothing is written over the real row. */
+    if (read.status === "error") { setLoadState("error"); return; }
+    let s = null;
+    try { s = read.raw ? migrateBlob(JSON.parse(read.raw), CATS) : null; } // legacy saves get defaults (§4)
+    catch { setLoadState("error"); return; }
+    /* Try-before-sign-up handoff (src/progress-load.js guestHandoff). */
+    let guest = null;
+    try { guest = loadGuest(window.localStorage); } catch { /* storage blocked */ }
+    let createdAt = null;
+    try { const { data } = await supabase.auth.getSession(); createdAt = data?.session?.user?.created_at ?? null; } catch { /* unknown = ask */ }
+    const handoff = guestHandoff({ guest, accountCreatedAt: createdAt, hasSavedProgress: !!read.raw });
+    if (handoff === "merge") {
+      const merged = mergeGuestIntoBlob(s ?? migrateBlob({}, CATS), guest, { today: todayStr(), updateAbility });
+      if (merged.summary) { s = merged.blob; setGuestNote(merged.summary); }
+      pendingGuestClear.current = true;
+    } else if (handoff === "ask") {
+      setGuestOffer({ guest, summary: guestSummary(guest) });
+    } else if (handoff === "expired") {
+      try { clearGuest(window.localStorage); } catch { /* storage blocked */ }
+    }
+    if (s) applyBlob(s);
+    setLoadState("ok");
+    setLoaded(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  useEffect(() => { loadProgress(); }, [loadProgress]);
+
+  /* Consent for trial answers found on this device for an existing account.
+     Discard is the default: nothing merges unless the student taps Add.
+     Either way the device copy is removed. */
+  const resolveGuestOffer = (add) => {
+    const offer = guestOffer;
+    setGuestOffer(null);
+    if (!offer) return;
+    if (add && loaded) {
+      const merged = mergeGuestIntoBlob({ log, xp, bestRun, ability, streak, rewards, daily }, offer.guest, { today: todayStr(), updateAbility, calibration });
+      if (merged.summary) {
+        const b = merged.blob;
+        setLog(b.log); setXp(b.xp); setBestRun(b.bestRun); setAbility(b.ability); setStreak(b.streak); setRewards(b.rewards); setDaily(b.daily);
+        setGuestNote(merged.summary);
+        pendingGuestClear.current = true; // removed after the merged copy is saved
+        return;
+      }
+    }
+    try { clearGuest(window.localStorage); } catch { /* storage blocked */ }
+  };
 
   /* ---- autosave on change ---- */
   useEffect(() => {
@@ -809,7 +852,7 @@ export default function App() {
       best: { ...r.best, streak: Math.max(r.best.streak, adv.streak.count) },
     }));
     if (adv.milestone) setMoments((m) => [...m, streakMoment(adv.milestone)]);
-    if (adv.event === "cover") setMoments((m) => [...m, { kind: "cover", title: "Your streak is protected", line: `A shift cover covered the day you missed. Day ${adv.streak.count} today.`, next: `${adv.rewards.covers} cover${adv.rewards.covers === 1 ? "" : "s"} left` }]);
+    if (adv.event === "cover") setMoments((m) => [...m, { kind: "cover-used", title: "Your streak is protected", line: `A shift cover covered the day you missed. Day ${adv.streak.count} today.`, next: `${adv.rewards.covers} cover${adv.rewards.covers === 1 ? "" : "s"} left` }]);
   };
 
   /* `correct` is the FULL-CREDIT outcome (every NCSBN partial-credit point
@@ -846,11 +889,23 @@ export default function App() {
     if (counts) setBestRun((b) => Math.max(b, nextRun));
     setRewards((r) => bumpDay(r, todayStr(), { q: 1, ok: correct ? 1 : 0, xp: res.xp, fixes: res.fix ? 1 : 0 }));
     const combo = counts ? comboFor(nextRun) : null;
+    setLiveMsg(comboSpeech(combo, newBest));
     if (res.xp > 0) rewardBeat(combo || newBest ? "combo" : "correct", rewardsRef.current.prefs);
     return { ...res, run: nextRun, combo, newBest };
   };
-  const noteCard = () => setRewards((r) => bumpDay(r, todayStr(), { cards: 1 }));
-  const unnoteCard = () => setRewards((r) => ((r.days[todayStr()]?.cards ?? 0) > 0 ? bumpDay(r, todayStr(), { cards: -1 }) : r));
+  /* A graded card counts toward today's cards and its XP toward the day's
+     XP (so the weekly view matches the header). Undo reverses all of it,
+     including the day count touchDay added, so grade → undo → grade counts once. */
+  const noteCard = (cardXpGain = 0) => setRewards((r) => bumpDay(r, todayStr(), { cards: 1, xp: cardXpGain || 0 }));
+  const unnoteCard = (cardXpGain = 0) => {
+    const t = todayStr();
+    setRewards((r) => {
+      const d = r.days[t];
+      if (!d || (d.cards ?? 0) <= 0) return r;
+      return bumpDay(r, t, { cards: -1, xp: -Math.min(d.xp ?? 0, cardXpGain || 0) });
+    });
+    setDaily((d) => (d.day === t && d.answered > 0 ? { ...d, answered: d.answered - 1 } : d));
+  };
   const setPref = (k, v) => setRewards((r) => ({ ...r, prefs: { ...r.prefs, [k]: v } }));
   const motion = motionAllowed(rewards.prefs);
 
@@ -890,7 +945,7 @@ export default function App() {
   const board = useMemo(() => badgeBoard(log, CATS, rewards.badgesSeen), [log, rewards.badgesSeen]);
   const career = useMemo(() => careerStatus({ xp, log, cats: CATS, rankHigh: rewards.rankHigh }), [xp, log, rewards.rankHigh]);
   const missesOpen = useMemo(() => reviewPools(allQuestions, log, missSchedule, today).review.length, [allQuestions, log, missSchedule, today]);
-  const shift = shiftStatus({ day: rewards.days[today], answeredToday: rewards.days[today]?.q ?? 0, dueCount, missesOpen });
+  const shift = shiftStatus({ day: rewards.days[today], answeredToday: questionsOn(rewards, today), dueCount, missesOpen });
   const week = weekRounds(rewards, today);
   const nextDue = useMemo(() => {
     let m = null;
@@ -985,6 +1040,24 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, examDate, plan]);
 
+  if (loadState === "error") return (
+    <div className="app" data-theme={theme}>
+      <Style />
+      <RewardsStyle />
+      <main className="body">
+        <section className="card rw-load-error" role="alert" aria-labelledby="load-error-title">
+          <p className="eyebrow">Saved progress</p>
+          <h2 id="load-error-title" className="h2">We couldn't load your progress</h2>
+          <p className="small">Your saved XP, streak and answers are safe. Nothing has been changed, and nothing will be saved until your progress loads. Check your connection and try again.</p>
+          <div className="row">
+            <button type="button" className="btn" onClick={loadProgress}>Try again</button>
+            <button type="button" className="btn ghost" onClick={signOutAndForgetTrial}>Sign out</button>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+
   if (!loaded) return (
     <div className="app" data-theme={theme}>
       <Style />
@@ -1074,6 +1147,7 @@ export default function App() {
     <div className={"app" + (shield ? " shield" : "") + (isOwner ? " owner" : "") + (scrolling ? " scrolling" : "") + (sessionLive ? " in-session" : "") + (motion ? "" : " fx-reduced") + " tab-" + tab} data-theme={theme}>
       <Style />
       <RewardsStyle />
+      <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{liveMsg}</p>
       <header className={"top" + (menuOpen ? " menu-open" : "")}>
         {/* Exam lockdown: while a readiness exam runs, all navigation and
             references disappear — only the exam (and its calculator) exists,
@@ -1118,15 +1192,6 @@ export default function App() {
                   title="Light mode reads best for long study sessions; night mode cuts glare for late review">
                   {theme === "light" ? "🌙 Night mode" : "☀ Light mode"}
                 </button>
-                <button type="button" className="menu-item menu-switch" role="switch" aria-checked={!!rewards.prefs.sound} onClick={() => setPref("sound", !rewards.prefs.sound)}>
-                  <span>♪ Sound effects</span><span className="menu-state mono">{rewards.prefs.sound ? "On" : "Off"}</span>
-                </button>
-                <button type="button" className="menu-item menu-switch" role="switch" aria-checked={!!rewards.prefs.haptics} onClick={() => setPref("haptics", !rewards.prefs.haptics)}>
-                  <span>≋ Haptics</span><span className="menu-state mono">{rewards.prefs.haptics ? "On" : "Off"}</span>
-                </button>
-                <button type="button" className="menu-item menu-switch" role="switch" aria-checked={!!rewards.prefs.reduceFx} onClick={() => setPref("reduceFx", !rewards.prefs.reduceFx)}>
-                  <span>◐ Reduce effects</span><span className="menu-state mono">{rewards.prefs.reduceFx ? "On" : "Off"}</span>
-                </button>
                 <button type="button" className="menu-item" onClick={() => { window.location.assign("/about/"); }}>🩺 Meet the RN behind PulseRN</button>
                 <button type="button" className="menu-item" onClick={openTour}>🎓 Tour</button>
                 <button type="button" className="menu-item" onClick={() => goSection("stats")}>⚙ Settings & Stats</button>
@@ -1136,7 +1201,7 @@ export default function App() {
               {isOwner && (
                 <button className="menu-item" onClick={() => { window.location.assign("/owner/"); }}>🛠 Owner tools: system &amp; accounts</button>
               )}
-              <button className="menu-item" onClick={() => supabase.auth.signOut()}>↪ Sign out</button>
+              <button className="menu-item" onClick={signOutAndForgetTrial}>↪ Sign out</button>
             </nav>
           </>
         )}
@@ -1159,6 +1224,17 @@ export default function App() {
                 : "Your payment went through, but the plan hasn't appeared yet. Tap \"Refresh my access\" below. If it still doesn't show, email sheldon@pulsern.app and we'll fix it right away."}
             </p>
             <InstallCard />
+          </section>
+        )}
+        {guestOffer && loaded && (
+          <section className="card rw-saved rw-offer" aria-labelledby="guest-offer-title">
+            <p className="eyebrow">Trial answers on this device</p>
+            <h2 id="guest-offer-title" className="h2">Add your {guestOffer.summary.n} trial answer{guestOffer.summary.n === 1 ? "" : "s"} to this account?</h2>
+            <p className="small">Someone answered {guestOffer.summary.n} free question{guestOffer.summary.n === 1 ? "" : "s"} on this device before signing in ({guestOffer.summary.ok} correct). Add them only if they were yours. Either way, they are removed from this device.</p>
+            <div className="row">
+              <button type="button" className="btn ghost" onClick={() => resolveGuestOffer(false)}>Discard</button>
+              <button type="button" className="btn" onClick={() => resolveGuestOffer(true)}>Add to my account</button>
+            </div>
           </section>
         )}
         {guestNote && !locked && (
@@ -1192,7 +1268,7 @@ export default function App() {
           {tab === "cards" && <Flashcards key={sectionEpoch} onGrade={noteCard} onUngrade={unnoteCard} addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)} newAllowance={newAllowance} onNewCard={onNewCard} onRefundNewCard={onRefundNewCard} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
           {tab === "exams" && <ExamCenter record={record} examResults={examResults} setExamResults={setExamResults} cats={CATS} ent={ent} isOwner={isOwner} onRunning={setExamLock} onAttempt={(f) => setEnt((e) => (e ? { ...e, examsLeft: Math.max(0, e.examsLeft - 1), attempted: [...e.attempted, f] } : e))} onUpgrade={() => goSection("plans")} onSession={onSession} bindExit={examLeave.bindExit} onScored={examLeave.onScored} onLeaveSubmit={examLeave.onLeaveSubmit} />}
           {tab === "plans" && <Paywall ent={ent} onRefresh={refreshEnt} trialBanner={ent?.status === "trial"} />}
-          {tab === "stats" && <Stats rewards={rewards} career={career} board={board} week={week} xp={xp} streak={streak} bestRun={bestRun} readiness={readiness} readyLabel={readyLabel} log={log} catStats={catStats} popStats={popStats} acc={acc} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => goSection("plans")} profile={profile} setProfile={setProfile} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
+          {tab === "stats" && <Stats setPref={setPref} rewards={rewards} career={career} board={board} week={week} xp={xp} streak={streak} bestRun={bestRun} readiness={readiness} readyLabel={readyLabel} log={log} catStats={catStats} popStats={popStats} acc={acc} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => goSection("plans")} profile={profile} setProfile={setProfile} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
           {tourStep != null && <div className="tour-scroll-room" aria-hidden="true" />}
         </>}
       </main>
@@ -2213,6 +2289,7 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
   const [phase, setPhase] = useState("read");
   const [stepScores, setStepScores] = useState({}); // step index -> { points, max }; skips are absent
   const [stepRes, setStepRes] = useState(null); // XP result of the step just answered
+  const stepShownAt = useRef(Date.now()); // when the open step appeared (XP reading-time floor)
   const [credit, setCredit] = useState({ points: 0, max: 1 });
   const [ok, setOk] = useState(false);
   const [nav, setNav] = useState(() => emptyNav());
@@ -2242,6 +2319,7 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
       return;
     }
     setSel(view.sel ?? []);
+    stepShownAt.current = Date.now();
     setPhase("answering");
   };
 
@@ -2250,8 +2328,9 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
   };
   const start = () => showCase(appendQuestion(emptyNav(), 0));
   const s = cs?.steps[step];
-  // pseudo-ids stay outside the shared question-bank id space
-  const stepId = cs ? (cs.dbId ? 50000 + cs.dbId * 10 + step : 100 + caseIdx * 10 + step) : 0;
+  /* Case-step log ids are strings, so they can never collide with a
+     numeric shared-bank question id (repeat detection and XP stay exact). */
+  const stepId = cs ? `case-${cs.dbId ? `db${cs.dbId}` : cs.title}-${step}` : "case-none";
 
   const submit = () => {
     if (currentEntry(nav)?.status === "answered") return;
@@ -2263,7 +2342,7 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
     setCredit(c);
     if (marked.recorded) {
       setStepScores((m) => ({ ...m, [step]: c }));
-      setStepRes(record({ id: stepId, cat: cs.cat, diff: 3 }, correct, { schedule: false }) ?? null);
+      setStepRes(record({ id: stepId, cat: cs.cat, diff: 3, stem: s?.stem }, correct, { schedule: false, ms: Date.now() - stepShownAt.current }) ?? null);
     }
     justScored.current = true;
     setNav(marked.nav);
@@ -2569,6 +2648,8 @@ export function Flashcards({ addXp, onGrade, onUngrade, cards, srsMap, setSrsMap
   const curId = entry?.id ?? null;
   const cur = curId != null ? cards.find((c) => c.id === curId) ?? null : null;
   const show = !!entry?.show;
+  const flipAt = useRef(0); // when this card's answer appeared (card XP time floor)
+  useEffect(() => { if (show) flipAt.current = Date.now(); }, [show, curId]);
   const typed = entry?.typed ?? "";
   const place = `${session.index}:${curId ?? ""}`;
   const placeRef = useRef(place);
@@ -2602,11 +2683,11 @@ export function Flashcards({ addXp, onGrade, onUngrade, cards, srsMap, setSrsMap
     // first grade of a never-seen card counts against today's new-card cap.
     // Undo refunds that charge; grading the card again counts it once.
     if (!srsMap[id] && !countedNew.current.has(id)) { countedNew.current.add(id); onNewCard?.(id); }
-    const xpGain = g === "good" ? 5 : g === "easy" ? 8 : 0;
+    const xpGain = cardXp(g, Date.now() - flipAt.current);
     undoLog.current[id] = { prev: srsMap[id], xp: xpGain };
     setSrsMap((m) => ({ ...m, [id]: nextSchedule(m[id], g) }));
     if (xpGain) addXp(xpGain);
-    onGrade?.();
+    onGrade?.(xpGain);
     setSession(result.nav);
   };
   /* Undo: back on a card graded this sitting, put its previous schedule
@@ -2626,7 +2707,7 @@ export function Flashcards({ addXp, onGrade, onUngrade, cards, srsMap, setSrsMap
         return n;
       });
       if (rec.xp) addXp(-rec.xp);
-      onUngrade?.();
+      onUngrade?.(rec.xp);
       delete undoLog.current[id];
     }
     setSession((s) => undoGrade(s));
@@ -2805,7 +2886,7 @@ export function Flashcards({ addXp, onGrade, onUngrade, cards, srsMap, setSrsMap
 
 /* ================= STATS ================= */
 
-function Stats({ rewards = null, career = null, board = null, week = null, xp = 0, streak = null, bestRun = 0, readiness = null, readyLabel = "", log, catStats, popStats = [], acc, resetAll, provider, setProvider, customCount, examDate, setExamDate, isOwner = false, ent = null, onManagePlan, profile, setProfile, tourFocus = null }) {
+function Stats({ setPref = null, rewards = null, career = null, board = null, week = null, xp = 0, streak = null, bestRun = 0, readiness = null, readyLabel = "", log, catStats, popStats = [], acc, resetAll, provider, setProvider, customCount, examDate, setExamDate, isOwner = false, ent = null, onManagePlan, profile, setProfile, tourFocus = null }) {
 
   const [confirm, setConfirm] = useState(false);
   const p = AI_PROVIDERS.find((x) => x.id === provider) || AI_PROVIDERS[0];
@@ -2872,6 +2953,7 @@ function Stats({ rewards = null, career = null, board = null, week = null, xp = 
           <p className="small tip">{p.note}{customCount ? ` · ${customCount} AI-generated question${customCount === 1 ? "" : "s"} in your bank.` : ""}</p>
         </section>
       )}
+      {rewards && setPref && <EffectsCard prefs={rewards.prefs} setPref={setPref} />}
       <section className="card">
         <p className="eyebrow">Saved progress</p>
         <p className="small">Your XP, streak, answer history, and flashcard schedule sync to your account and reload on any device.</p>
@@ -2885,7 +2967,7 @@ function Stats({ rewards = null, career = null, board = null, week = null, xp = 
       <section className="card">
         <p className="eyebrow">Account</p>
         <p className="small">Signing out keeps your synced progress safe. Sign back in anywhere to continue.</p>
-        <button className="btn ghost" onClick={() => supabase.auth.signOut()}>Sign out</button>
+        <button className="btn ghost" onClick={signOutAndForgetTrial}>Sign out</button>
         <p className="small tip">All questions, case studies, flashcards, exams, and materials are the property of the owner of PulseRN and may not be copied, captured, or used outside this app without the owner's explicit consent.</p>
         <p className="small tip">NCLEX® is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse this product. Educational exam preparation only.</p>
         <p className="small tip"><a href="/legal/" style={{ color: "inherit" }}>Terms, Privacy, and Disclaimer</a></p>

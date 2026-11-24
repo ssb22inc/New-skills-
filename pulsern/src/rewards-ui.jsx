@@ -93,10 +93,19 @@ export function Ripple() {
 }
 
 /* ---------- inline answer feedback ---------- */
+export const WEEKDAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+/* Spoken text for a combo. The app's persistent live region announces it
+   (a role=status that mounts together with its text is often skipped). */
+export function comboSpeech(combo, newBest = false) {
+  if (!combo && !newBest) return "";
+  return combo ? `${combo.n} in a row, ${combo.label}${newBest ? ", personal best" : ""}` : "New personal best run";
+}
+
 export function ComboChip({ combo, newBest = false }) {
   if (!combo && !newBest) return null;
   return (
-    <p className="rw-combo mono" role="status">
+    <p className="rw-combo mono">
       <EcgBeat className="mini" />
       <span>{combo ? `${combo.n} in a row · ${combo.label}` : "New personal best run"}{combo && newBest ? " · personal best" : ""}</span>
     </p>
@@ -104,17 +113,23 @@ export function ComboChip({ combo, newBest = false }) {
 }
 
 /* ---------- moments (milestone / promotion / badge / cover) ---------- */
-const MOMENT_EYEBROW = { streak: "Streak milestone", rank: "Promotion", badge: "Mastery badge", cover: "Shift cover earned" };
+const MOMENT_EYEBROW = { streak: "Streak milestone", rank: "Promotion", badge: "Mastery badge", cover: "Shift cover earned", "cover-used": "Streak protected" };
 
 export function MomentSheet({ moment, onClose, motion = true }) {
   const btn = useRef(null);
+  /* The parent passes a fresh onClose each render; a ref keeps this effect
+     to one run per moment so focus does not jump while it is open. */
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  const momentId = moment ? `${moment.kind}:${moment.title}` : null;
   useEffect(() => {
+    if (!momentId) return undefined;
     const prev = document.activeElement;
     requestAnimationFrame(() => btn.current?.focus());
-    const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); onClose(); } if (e.key === "Tab") { e.preventDefault(); btn.current?.focus(); } };
+    const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); closeRef.current(); } if (e.key === "Tab") { e.preventDefault(); btn.current?.focus(); } };
     window.addEventListener("keydown", onKey);
     return () => { window.removeEventListener("keydown", onKey); if (prev && document.contains(prev)) prev.focus?.(); };
-  }, [onClose]);
+  }, [momentId]);
   if (!moment) return null;
   return (
     <div className="rw-moment-wrap">
@@ -127,7 +142,7 @@ export function MomentSheet({ moment, onClose, motion = true }) {
           )}
           {moment.kind === "rank" && <RankDial index={moment.index} size={92} />}
           {moment.kind === "badge" && <Insignia tier={moment.tier} size={92} />}
-          {moment.kind === "cover" && <span className="rw-moment-shield"><ShieldGlyph size={56} /></span>}
+          {(moment.kind === "cover" || moment.kind === "cover-used") && <span className="rw-moment-shield"><ShieldGlyph size={56} /></span>}
           <EcgBeat className="hero" />
         </div>
         <div className="rw-moment-body">
@@ -160,7 +175,7 @@ export function ShiftCard({ shift, streak, rewards, tourClass = "", children }) 
     <section className={"card rw-shift" + tourClass}>
       <div className="rw-row-between">
         <p className="eyebrow">Today's shift</p>
-        <span className="rw-count mono" aria-label={`${shift.done} of ${shift.total} tasks done`}>{shift.done}/{shift.total}</span>
+        <span className="rw-count mono"><span aria-hidden="true">{shift.done}/{shift.total}</span><span className="sr-only">{shift.done} of {shift.total} tasks done</span></span>
       </div>
       <h2 className="h2">{shift.complete ? "Shift complete. Handoff given." : "Three tasks, about ten minutes"}</h2>
       <ul className="rw-tasks">
@@ -274,8 +289,9 @@ export function RoundsCard({ week, rewards }) {
         <span className="rw-count mono">{week.shifts}/{COVER_EVERY_WEEK} shifts</span>
       </div>
       <ol className="rw-week" aria-label="This week, Monday to Sunday">
-        {week.days.map((d) => (
-          <li key={d.day} className={`rw-day ${d.state}${d.isToday ? " today" : ""}`} aria-label={`${d.day}: ${{ shift: "shift complete", studied: "studied", cover: "protected by a cover", off: "no study", future: "upcoming" }[d.state]}${d.isToday ? ", today" : ""}`}>
+        {week.days.map((d, i) => (
+          <li key={d.day} className={`rw-day ${d.state}${d.isToday ? " today" : ""}`}>
+            <span className="sr-only">{`${WEEKDAY_NAMES[i]}: ${{ shift: "shift complete", studied: "studied", cover: "protected by a cover", off: "no study", future: "upcoming" }[d.state]}${d.isToday ? ", today" : ""}`}</span>
             <span className="rw-day-dot" aria-hidden="true">{d.state === "shift" ? <Check /> : d.state === "cover" ? <ShieldGlyph size={12} /> : null}</span>
             <span className="rw-day-lab mono" aria-hidden="true">{d.label}</span>
           </li>
@@ -359,6 +375,26 @@ export function SessionRecap({ recap, shift, today, motion = true, onDone, doneL
         <button type="button" className="btn" onClick={onDone}>{doneLabel}</button>
         {onMore && <button type="button" className="btn ghost" onClick={onMore}>{moreLabel}</button>}
       </div>
+    </section>
+  );
+}
+
+/* ---------- effect settings (Stats → settings, not the menu) ---------- */
+export function EffectsCard({ prefs, setPref }) {
+  const rows = [
+    ["sound", "Sound effects", "Short, quiet monitor tones on correct answers and milestones."],
+    ["haptics", "Haptics", "A light tap on supported phones. Off whenever effects are reduced."],
+    ["reduceFx", "Reduce effects", "Turns off every reward animation and vibration."],
+  ];
+  return (
+    <section className="card rw-effects" aria-labelledby="rw-effects-title">
+      <p id="rw-effects-title" className="eyebrow">Reward effects</p>
+      {rows.map(([k, label, hint]) => (
+        <button key={k} type="button" className="rw-switch" role="switch" aria-checked={!!prefs?.[k]} aria-labelledby={`rw-sw-${k}-l`} aria-describedby={`rw-sw-${k}`} onClick={() => setPref(k, !prefs?.[k])}>
+          <span className="rw-switch-text"><strong id={`rw-sw-${k}-l`}>{label}</strong><span id={`rw-sw-${k}`} className="small">{hint}</span></span>
+          <span className={prefs?.[k] ? "rw-switch-track on" : "rw-switch-track"} aria-hidden="true"><span /></span>
+        </button>
+      ))}
     </section>
   );
 }
@@ -510,8 +546,17 @@ export function RewardsStyle() {
         .rw-ripple{display:none}
       }
       .app.fx-reduced .rw-ripple{display:none}
-      .menu-switch{display:flex;justify-content:space-between;align-items:center;gap:10px}
-      .menu-state{font-size:12px;font-weight:600;color:var(--accent-ink);background:var(--chip-bg);border-radius:99px;padding:3px 9px}
+      .rw-switch{display:flex;width:100%;align-items:center;justify-content:space-between;gap:14px;min-height:56px;padding:10px 0;background:none;border:0;border-top:1px solid var(--line);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+      .rw-switch:first-of-type{border-top:0}
+      .rw-switch-text{display:flex;flex-direction:column;gap:2px}
+      .rw-switch-text strong{font-size:15px}
+      .rw-switch-text .small{color:var(--muted)}
+      .rw-switch-track{flex:0 0 auto;position:relative;width:46px;height:28px;border-radius:99px;background:var(--surface);border:2px solid var(--muted)}
+      .rw-switch-track span{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--muted)}
+      .rw-switch-track.on{background:var(--teal);border-color:var(--teal)}
+      .rw-switch-track.on span{left:21px;background:var(--btn-ink)}
+      .app:not(.fx-reduced) .rw-switch-track span{transition:left .15s ease}
+      .rw-switch:focus-visible{outline:3px solid var(--teal);outline-offset:2px;border-radius:8px}
       .rw-saved{border-color:var(--ok-line)}
       .guest-ai{border:1px dashed var(--line);border-radius:12px;padding:12px;margin:10px 0 4px;background:var(--surface)}
       .guest-ai .small{margin-bottom:8px}
