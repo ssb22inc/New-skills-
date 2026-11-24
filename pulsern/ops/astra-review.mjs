@@ -498,25 +498,55 @@ function looksLikeReview(obj) {
   return !!obj && typeof obj === "object" && !Array.isArray(obj) && ("assessment" in obj || "findings" in obj);
 }
 
+const reviewish = (span) => /"assessment"\s*:|"findings"\s*:/.test(span);
+
+function unclosedReview(s) {
+  let depth = 0, start = -1, inString = false, escape = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inString) {
+      if (escape) escape = false;
+      else if (c === "\\") escape = true;
+      else if (c === "\"") inString = false;
+      continue;
+    }
+    if (c === "\"") { inString = true; continue; }
+    if (c === "{") {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (c === "}" && depth > 0) {
+      depth--;
+      if (depth === 0) start = -1;
+    }
+  }
+  return depth > 0 && start >= 0 && reviewish(s.slice(start));
+}
+
 export function parseReviewText(text) {
   if (typeof text !== "string" || !text.trim()) throw new Error("review result is empty");
   const stripped = text.replace(/^\uFEFF/, "").trim();
+  if (unclosedReview(stripped)) throw new Error("review result contains an incomplete verdict");
   const unfenced = stripped.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-  const candidates = [unfenced];
-  for (const m of stripped.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)) candidates.push(m[1].trim());
-  candidates.push(...jsonObjectSpans(stripped));
+  const strict = [...jsonObjectSpans(stripped)];
+  for (const m of stripped.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)) strict.push(m[1].trim());
   const verdicts = new Map();
   let invalid = null;
-  for (const candidate of candidates) {
-    if (!candidate) continue;
-    let obj;
-    try { obj = JSON.parse(candidate); } catch { continue; }
-    if (!looksLikeReview(obj)) continue;
+  const consider = (obj) => {
+    if (!looksLikeReview(obj)) return;
     const key = JSON.stringify(obj);
-    if (verdicts.has(key)) continue;
+    if (verdicts.has(key)) return;
     try { verdicts.set(key, validateResult(obj)); }
     catch (e) { invalid = e; }
+  };
+  for (const candidate of strict) {
+    if (!candidate) continue;
+    try { consider(JSON.parse(candidate)); }
+    catch (e) {
+      if (e instanceof SyntaxError && reviewish(candidate)) throw new Error("review result contains a malformed verdict");
+      if (!(e instanceof SyntaxError)) throw e;
+    }
   }
+  try { consider(JSON.parse(unfenced)); } catch { /* prose around one object is not a second verdict */ }
   if (invalid) throw new Error(invalid.message);
   if (verdicts.size === 0) throw new Error("review result is not JSON");
   if (verdicts.size > 1) throw new Error("review result contains more than one verdict");

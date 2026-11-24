@@ -852,7 +852,7 @@ describe("SEO guardian", () => {
     expect(workflow).toContain("npm run seo:enforce -- --advisory");
     expect(workflow).toContain("npm run seo:adversary");
     expect(workflow).not.toMatch(/seo:enforce[^\n]*\|\|/);
-    expect(workflow).toContain("git diff --name-only -z");
+    expect(workflow).toContain("git diff --no-renames --name-only -z");
     expect(workflow).toContain("seo-page-change.mjs --nul");
     expect(workflow).not.toMatch(/names=\$\(git diff/);
     expect(isMarketingPagePath("pulsern/public/learn/nclex-fees-and-payment/index.html")).toBe(true);
@@ -883,12 +883,25 @@ describe("SEO guardian", () => {
     await fs.mkdir(path.join(dir, "pulsern/public/odd"), { recursive: true });
     await fs.writeFile(path.join(dir, "pulsern/public/odd", "a\nb.html"), "x\n");
     git("add", "-A"); git("commit", "-qm", "h");
-    const raw = execFileSync("git", ["diff", "--name-only", "-z", "HEAD~1", "HEAD"], { cwd: dir });
+    const raw = execFileSync("git", ["diff", "--no-renames", "--name-only", "-z", "HEAD~1", "HEAD"], { cwd: dir });
     const names = parseNulNames(raw);
     expect(names).toContain("pulsern/public/révision.html");
     expect(names).toContain("pulsern/public/odd/a\nb.html");
     expect(marketingPagesChanged(names)).toBe(true);
+    const moved = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-page-move-"));
+    const mgit = (...args) => execFileSync("git", args, { cwd: moved });
+    mgit("init", "-q"); mgit("config", "user.email", "t@t"); mgit("config", "user.name", "t");
+    await fs.mkdir(path.join(moved, "pulsern/public/campaign"), { recursive: true });
+    await fs.writeFile(path.join(moved, "pulsern/public/campaign/index.html"), "<p>page</p>\n");
+    mgit("add", "-A"); mgit("commit", "-qm", "b");
+    await fs.mkdir(path.join(moved, "pulsern/archive"), { recursive: true });
+    mgit("mv", "pulsern/public/campaign/index.html", "pulsern/archive/retired-campaign.html");
+    mgit("commit", "-qm", "h");
+    const movedNames = parseNulNames(execFileSync("git", ["diff", "--no-renames", "--name-only", "-z", "HEAD~1", "HEAD"], { cwd: moved }));
+    expect(movedNames).toContain("pulsern/public/campaign/index.html");
+    expect(marketingPagesChanged(movedNames)).toBe(true);
     await fs.rm(dir, { recursive: true, force: true });
+    await fs.rm(moved, { recursive: true, force: true });
     for (const id of ["tests", "build", "deterministic", "product_images", "app_boundary", "crawl", "crawl_live", "live_release", "indexnow", "sources", "commercial", "exam_rules", "accessibility"]) {
       expect(workflow).toContain(`test "\${{ steps.${id}.outcome }}" = "success"`);
     }

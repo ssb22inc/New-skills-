@@ -117,12 +117,12 @@ jobs:
           set -euo pipefail
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch -q --depth=1 origin "${{ github.event.pull_request.base.sha }}"
-            git diff --name-only -z FETCH_HEAD HEAD | node ops/seo-page-change.mjs --nul
+            git diff --no-renames --name-only -z FETCH_HEAD HEAD | node ops/seo-page-change.mjs --nul
           elif [ "${{ github.event_name }}" = "push" ]; then
             before="${{ github.event.before }}"
             if [ -n "$before" ] && [ "$before" != "0000000000000000000000000000000000000000" ]; then
               git fetch -q --depth=1 origin "$before"
-              git diff --name-only -z FETCH_HEAD HEAD | node ops/seo-page-change.mjs --nul
+              git diff --no-renames --name-only -z FETCH_HEAD HEAD | node ops/seo-page-change.mjs --nul
             else
               node ops/seo-page-change.mjs --nul </dev/null
             fi

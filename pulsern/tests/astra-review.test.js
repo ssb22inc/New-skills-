@@ -823,6 +823,17 @@ describe("running a review end to end (Astra finding #5)", () => {
     expect(reviewMaxTokens()).toBe(64000);
   });
 
+  it("rejects an example when the final review is not valid JSON", async () => {
+    const example = JSON.stringify({ assessment: "Example only", findings: [] });
+    const broken = '{"assessment":"blocked","findings":[{"severity":"blocker","file":"pulsern/src/a.js","line":null,"title":"t","problem":"p","failure_scenario":"f","fix":"y","confidence":"high",}],}';
+    const text = "```json\n" + example + "\n```\n" + broken;
+    expect(() => parseReviewText(text)).toThrow(/malformed verdict/);
+    const dir = out();
+    const { code, report } = await runReview(opts(dir), { callModel: async () => ({ text, finishReason: "stop", usage: {}, model: "deepseek/deepseek-v4-pro-0813" }) });
+    expect(code).toBe(2);
+    expect(report.verdict).toBe("FAIL");
+  });
+
   it("rejects an example when the final review is missing a field", async () => {
     const example = JSON.stringify({ assessment: "Example", findings: [] });
     const broken = JSON.stringify({ assessment: "blocked", findings: [{ severity: "major", file: "pulsern/src/a.js", line: null, title: "t", problem: "p", failure_scenario: "f", confidence: "high" }] });
