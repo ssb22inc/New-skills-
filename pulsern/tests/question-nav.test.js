@@ -10,6 +10,7 @@ import {
   heldIds, checkpointAfter, REQUEUE_GAP,
 } from "../src/question-nav.js";
 import { updateMissSchedule } from "../src/question-review.js";
+import { navCoversCheck } from "../src/question-nav.jsx";
 import { emptyAbility, updateAbility } from "../src/ability-engine.js";
 
 const CAT = "Pharmacology";
@@ -196,6 +197,14 @@ describe("back, next, and skip", () => {
     expect(checkpointAfter(8, { answered: true, atEnd: true, auto: false, fromBreak: true })).toBeNull();
     expect(checkpointAfter(8, { answered: true, atEnd: false, auto: false })).toBeNull();
     expect(checkpointAfter(3, { answered: true, atEnd: true, auto: false })).toBeNull();
+  });
+});
+
+describe("sticky navigation versus Check answer", () => {
+  it("treats a button that straddles the row as covered, and a button fully past it as clear", () => {
+    expect(navCoversCheck({ top: 498, bottom: 546 }, 500, 80)).toBe(true);
+    expect(navCoversCheck({ top: 600, bottom: 648 }, 500, 80)).toBe(false);
+    expect(navCoversCheck({ top: 400, bottom: 448 }, 500, 80)).toBe(false);
   });
 });
 

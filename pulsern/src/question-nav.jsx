@@ -7,6 +7,14 @@
 import React, { useEffect, useRef } from "react";
 
 export const OPEN_LABS_EVENT = "pulsern:open-labs";
+
+/* True when Check answer would meet the sticky navigation row, including
+   a button that starts just above the row and extends into it. */
+export function navCoversCheck(box, stickTop, navHeight) {
+  if (!box || navHeight <= 0) return false;
+  const slotBottom = stickTop + navHeight;
+  return box.bottom > stickTop + 1 && box.top < slotBottom - 1;
+}
 export function openLabs() {
   if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(OPEN_LABS_EVENT));
 }
@@ -42,11 +50,7 @@ export function QuestionNav({
       const natural = el.getBoundingClientRect();
       const stickTop = window.innerHeight - 62 - natural.height;
       const checks = [...(el.parentElement?.querySelectorAll("button") ?? [])].filter((node) => !el.contains(node) && /check answer/i.test(node.textContent || ""));
-      const coversCheck = checks.some((node) => {
-        const box = node.getBoundingClientRect();
-        const onScreen = box.bottom > 0 && box.top < window.innerHeight;
-        return onScreen && box.top > stickTop - 1;
-      });
+      const coversCheck = checks.some((node) => navCoversCheck(node.getBoundingClientRect(), stickTop, natural.height));
       el.classList.toggle("q-nav-flat", coversCheck);
     };
     const schedule = () => { if (!frame) frame = requestAnimationFrame(place); };
