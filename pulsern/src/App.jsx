@@ -338,6 +338,7 @@ const STORE_KEY = "pulsern-v1";
    • Cloud sync:       Supabase/Firebase row keyed by user id
    Each method returns/accepts a JSON string and is async-safe.
 ------------------------------------------------------------------------ */
+let progressRevision = 0;
 const store = {
   async get(key) {
     const result = await supabase.auth.getSession();
@@ -349,11 +350,12 @@ const store = {
     }
     const session = result.data.session;
     const { data, error } = await supabase.from("progress")
-      .select("blob").eq("user_id", session.user.id).eq("key", key).maybeSingle();
+      .select("blob, revision").eq("user_id", session.user.id).eq("key", key).maybeSingle();
     /* A read error must never look like "no saved progress": the caller
        would treat the account as new and autosave defaults over it. */
     if (error) throw new Error(error.message || "Could not read saved progress");
-    if (!data) return null;
+    if (!data) { progressRevision = 0; return null; }
+    progressRevision = Number(data.revision) || 0;
     return JSON.stringify(data.blob);
   },
   async set(key, value, expectedUserId, ctx = {}) {
@@ -373,15 +375,41 @@ const store = {
       err.code = decision;
       throw err;
     }
-    let request = supabase.from("progress").upsert({
-      user_id: session.user.id, key, blob: JSON.parse(value),
-      updated_at: new Date().toISOString(),
-    });
-    if (signal && request && typeof request.abortSignal === "function") request = request.abortSignal(signal);
-    if (!current()) throw aborted();
-    const { error } = await request ?? {};
-    if (!current()) throw aborted();
-    if (error) throw new Error(error.message || "Could not save progress");
+    const blob = JSON.parse(value);
+    const writeAt = (expected) => {
+      const patch = { blob, revision: expected + 1, updated_at: new Date().toISOString() };
+      return supabase.from("progress").update(patch)
+        .eq("user_id", session.user.id).eq("key", key).eq("revision", expected)
+        .select("revision");
+    };
+    const finish = async (request) => {
+      if (signal && request && typeof request.abortSignal === "function") request = request.abortSignal(signal);
+      if (!current()) throw aborted();
+      const { data, error } = await request ?? {};
+      if (!current()) throw aborted();
+      if (error) throw new Error(error.message || "Could not save progress");
+      const revision = Array.isArray(data) ? data[0]?.revision : data?.revision;
+      return Number(revision) || null;
+    };
+    let revision = await finish(writeAt(progressRevision));
+    if (!revision && progressRevision === 0 && current()) {
+      let inserted = supabase.from("progress").insert({
+        user_id: session.user.id, key, blob, revision: 1, updated_at: new Date().toISOString(),
+      }).select("revision");
+      try { revision = await finish(inserted); } catch { revision = null; }
+    }
+    if (!revision && current()) {
+      const { data } = await supabase.from("progress")
+        .select("revision").eq("user_id", session.user.id).eq("key", key).maybeSingle();
+      if (!current()) throw aborted();
+      revision = await finish(writeAt(Number(data?.revision) || 0));
+    }
+    if (!revision) {
+      const err = new Error("conflict");
+      err.code = "conflict";
+      throw err;
+    }
+    progressRevision = revision;
   },
   async delete(key) {
     const { data: { session } } = await supabase.auth.getSession();
@@ -639,7 +667,7 @@ export default function App() {
     try { const { data } = await supabase.auth.getSession(); accountId.current = data?.session?.user?.id ?? null; } catch { /* unknown account */ }
     const handoff = guestHandoff({ guest, hasAnswers: accountHasAnswers(s?.log) });
     if (handoff === "merge") {
-      const merged = mergeGuestIntoBlob(s ?? migrateBlob({}, CATS), guest, { today: todayStr(), calibration });
+      const merged = mergeGuestIntoBlob(s ?? migrateBlob({}, CATS), guest, { today: todayStr(), calibration, catalog: QUESTIONS });
       if (merged.summary) { s = merged.blob; pendingHandoff.current = merged.summary; }
       pendingGuestClear.current = true;
     } else if (handoff === "keep") {

@@ -314,7 +314,7 @@ function unresolvedCards(log, questions, index) {
 /* A saved bank miss whose question is not in the loaded catalog.
    Case steps are not QBank questions, so they are not cards here.
    The miss stays visible. It is not treated as corrected or dropped. */
-function catalogMissCards(log, questions) {
+function catalogMissCards(log, questions, schedule, today) {
   const keyedCatalog = (questions ?? []).some((q) => questionIdentity(q));
   if (!keyedCatalog) return [];
   const have = new Set();
@@ -330,7 +330,10 @@ function catalogMissCards(log, questions) {
   });
   const cards = [];
   for (const [id, info] of latest) {
-    if (info.correct || have.has(id)) continue;
+    if (have.has(id)) continue;
+    const entry = schedule?.[id];
+    const dueNow = !!entry && typeof entry.due === "string" && entry.due <= today;
+    if (info.correct && !dueNow) continue;
     cards.push({
       catalogMiss: true,
       id: `unavailable:${id}`,
@@ -361,7 +364,7 @@ export function reviewPools(questions, log, schedule, today = todayStr()) {
     }
     return scheduleEntry(q, schedule, questions, log, index, peers);
   };
-  const cards = [...unresolvedCards(log, questions, index), ...catalogMissCards(log, questions)];
+  const cards = [...unresolvedCards(log, questions, index), ...catalogMissCards(log, questions, schedule, today)];
   const pool = [...(questions ?? []).filter((q) => q && !q.unresolved && !q.catalogMiss && !q.candidateOnly), ...cards];
   const due = pool.filter((q) => {
     const entry = dueOf(q);

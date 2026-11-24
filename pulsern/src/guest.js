@@ -117,6 +117,25 @@ export function handoffAfterSave({ ok, pending }) {
 
 /* A missing session is not a successful write. Callers must keep the device
    copy and must not tell the student the answers are in the account. */
+/* A whole-blob write lands only when the stored revision is still the
+   one this snapshot was based on. A late older write does not replace
+   a newer one. */
+export function applyProgressWrite(rows, { userId, key, blob, expectedRevision }) {
+  const list = rows ?? [];
+  const row = list.find((item) => item.userId === userId && item.key === key);
+  const expected = Number(expectedRevision) || 0;
+  if (!row) {
+    if (expected !== 0) return { conflict: true };
+    const created = { userId, key, blob, revision: 1 };
+    list.push(created);
+    return { revision: 1, rows: list };
+  }
+  if (Number(row.revision) !== expected) return { conflict: true, rows: list };
+  row.blob = blob;
+  row.revision = expected + 1;
+  return { revision: row.revision, rows: list };
+}
+
 export function persistDecision(session, expectedUserId) {
   if (!session?.user?.id) return "signed-out";
   if (expectedUserId && session.user.id !== expectedUserId) return "account-changed";
@@ -291,24 +310,38 @@ export function guestImportIdentity(entry) {
   return stampedQuestion({ ...entry, id, source, key: entry?.key ?? canonicalKey(source, id) });
 }
 
-function trialEntries(s, guest, today) {
+/* A stored trial row counts only when it is one of the built-in questions.
+   Category, difficulty, and identity come from that question, not the row. */
+function builtinTrialQuestion(entry, catalog) {
+  if (!entry || entry.source === "bank" || entry.source === "case") return null;
+  const found = (catalog ?? []).find((q) => q && String(q.id) === String(entry.id));
+  if (!found || found.ai || found.exam_form != null || found.premium) return null;
+  return {
+    id: found.id,
+    cat: found.cat,
+    diff: found.diff ?? 1,
+    correct: entry.correct,
+    attempt: entry.attempt,
+    ...(found.population ? { pop: found.population } : {}),
+    ...(Number.isFinite(entry.ms) ? { ms: entry.ms } : {}),
+    day: entry.day,
+    source: "builtin",
+    key: canonicalKey("builtin", found.id),
+  };
+}
+
+function trialEntries(s, guest, today, catalog) {
   const have = new Set();
   for (const row of s.log ?? []) if (row?.attempt != null) have.add(String(row.attempt));
   return guest.log
-    .filter((l) => l && (typeof l.id === "number" || typeof l.id === "string") && typeof l.cat === "string" && typeof l.correct === "boolean")
+    .filter((l) => l && (typeof l.id === "number" || typeof l.id === "string") && typeof l.correct === "boolean")
     .slice(0, GUEST_LIMIT)
-    .map((l, index) => ({
-      id: l.id, cat: l.cat, diff: Math.max(1, Math.min(3, Number(l.diff) || 1)), correct: l.correct,
+    .map((l, index) => builtinTrialQuestion({
+      ...l,
       attempt: l.attempt != null ? String(l.attempt) : `${guest.startedAt}:${index}`,
-      ...(l.pop ? { pop: l.pop } : {}),
-      ...(Number.isFinite(l.ms) ? { ms: l.ms } : {}),
-      ...(Number.isFinite(l.words) && l.words > 0 ? { words: l.words } : {}),
-      ...(l.source ? { source: l.source } : {}),
-      ...(l.key ? { key: l.key } : {}),
       day: typeof l.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(l.day) ? l.day : (guest.day ?? today),
-    }))
-    .map((l) => ({ ...guestImportIdentity(l), ...l, key: guestImportIdentity(l).key, source: guestImportIdentity(l).source }))
-    .filter((l) => !have.has(String(l.attempt)));
+    }, catalog))
+    .filter((l) => l && !have.has(String(l.attempt)));
 }
 
 export function accountHasAnswers(log) {
@@ -318,10 +351,10 @@ export function accountHasAnswers(log) {
 /* A brand-new account has nothing to merge with, so the trial is scored
    by the live answer function, in the order it was taken. An account that
    already has answer history is left untouched: no XP, no reviews, no markers. */
-export function mergeGuestIntoBlob(s, guest, { today, now = Date.now(), calibration = {} } = {}) {
+export function mergeGuestIntoBlob(s, guest, { today, now = Date.now(), calibration = {}, catalog = [] } = {}) {
   if (!guestFresh(guest, now)) return { blob: s, summary: null };
   if (accountHasAnswers(s.log)) return { blob: s, summary: null };
-  const entries = trialEntries(s, guest, today);
+  const entries = trialEntries(s, guest, today, catalog);
   if (!entries.length) return { blob: s, summary: null };
   return importTrialLive(s, entries, { today, calibration });
 }

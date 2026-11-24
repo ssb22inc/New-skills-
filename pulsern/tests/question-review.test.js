@@ -204,6 +204,10 @@ describe("Today round and Review Misses pools", () => {
     const loaded = [{ id: 1, source: "bank", key: "bank:1", cat: "Pharmacology", type: "mc", stem: "Loaded" }];
     const review = reviewPools(loaded, log, {}).review;
     expect(review.map((item) => item.key)).toEqual(["bank:2500"]);
+    const corrected = [{ id: 2500, source: "bank", key: "bank:2500", cat: "Pharmacology", correct: true }];
+    const due = { "bank:2500": { interval: 3, due: "2026-11-24" } };
+    expect(reviewPools(loaded, corrected, due, "2026-11-24").review.map((item) => item.key)).toEqual(["bank:2500"]);
+    expect(reviewPools(loaded, corrected, due, "2026-11-23").review).toEqual([]);
     expect(review[0].catalogMiss).toBe(true);
     expect(reviewPools(loaded, log, {}, "2026-11-24").misses).toHaveLength(1);
     const focused = sessionPool(loaded, { log, schedule: {}, fresh: [], mode: "review", allow: (item) => item.cat === "Safety & Infection Control" });

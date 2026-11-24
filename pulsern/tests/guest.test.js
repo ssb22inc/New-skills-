@@ -4,7 +4,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import {
-  GUEST_KEY, GUEST_LIMIT, GUEST_HOLD_KEY, guestPool, emptyGuest, guestAnswer, guestRemaining, mergeGuestIntoBlob, loadGuest, saveGuest, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, linkBuiltInGuest, holdGuestTrial, clearHeldMemory, peekHeldGuest, releaseHeldGuest, readGuestForHandoff, guestFresh, guestSummary, guestImportIdentity, waitForFlush,
+  GUEST_KEY, GUEST_LIMIT, GUEST_HOLD_KEY, guestPool, emptyGuest, guestAnswer, guestRemaining, mergeGuestIntoBlob, loadGuest, saveGuest, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, linkBuiltInGuest, holdGuestTrial, clearHeldMemory, peekHeldGuest, releaseHeldGuest, readGuestForHandoff, guestFresh, guestSummary, guestImportIdentity, waitForFlush, applyProgressWrite,
 } from "../src/guest.js";
 import { QUESTIONS } from "../src/App.jsx";
 import { migrateBlob } from "../src/state.js";
@@ -15,6 +15,7 @@ import { authModeFromUrl } from "../src/app-routing.js";
 
 const CATS = ["Management of Care", "Safety & Infection Control", "Health Promotion & Maintenance", "Psychosocial Integrity", "Basic Care & Comfort", "Pharmacology", "Reduction of Risk", "Physiological Adaptation"];
 const mk = (id, extra = {}) => ({ id, cat: "Pharmacology", diff: 2, type: "mc", stem: "Which action should the nurse take first for this client?", options: ["a", "b", "c", "d"], answer: [0], rationale: "Because.", ...extra });
+const trialCatalog = [mk(1), mk(2, { cat: "Reduction of Risk" }), mk(3, { diff: 3 }), mk(4), mk(7), mk(9)];
 const memStore = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k), m }; };
 const NOW = new Date(2026, 10, 23, 18, 0).getTime();
 const TODAY = "2026-11-23";
@@ -54,7 +55,7 @@ describe("guest XP uses the same rules as an account", () => {
     const answered = guestAnswer(emptyGuest(NOW, TODAY), mk(1), true, { ms: 100, today: TODAY });
     expect(answered.guest.xp).toBe(0);
     expect(answered.guest.log[0].ms).toBe(100);
-    const merged = mergeGuestIntoBlob(migrateBlob({}, CATS), answered.guest, { today: TODAY, now: NOW });
+    const merged = mergeGuestIntoBlob(migrateBlob({}, CATS), answered.guest, { today: TODAY, now: NOW, catalog: trialCatalog });
     expect(merged.summary.xp).toBe(0);
     expect(merged.blob.xp).toBe(0);
     expect(merged.blob.log[0]).toMatchObject({ id: 1, key: "builtin:1", cat: "Pharmacology", diff: 2, correct: true });
@@ -175,7 +176,7 @@ describe("progress handoff into a new account", () => {
 
   it("carries answers, XP, ability, today's count and day 1 of the streak", () => {
     const blob = migrateBlob({}, CATS);
-    const { blob: out, summary } = mergeGuestIntoBlob(blob, played(), { today: TODAY, now: NOW, updateAbility });
+    const { blob: out, summary } = mergeGuestIntoBlob(blob, played(), { today: TODAY, now: NOW, updateAbility, catalog: trialCatalog });
     expect(summary).toMatchObject({ answers: 3, correct: 2, xp: 50, streak: 1, streakStarted: true });
     expect(out.log.map((l) => l.key)).toEqual(["builtin:1", "builtin:2", "builtin:3"]);
     expect(out.xp).toBe(50);
@@ -190,7 +191,7 @@ describe("progress handoff into a new account", () => {
 
   it("a built-in answer does not collide with a shared-bank answer of the same number", () => {
     const blob = { ...migrateBlob({}, CATS), log: [{ id: 1, source: "bank", key: "bank:1", cat: "Pharmacology", diff: 2, correct: false }] };
-    const { blob: out } = mergeGuestIntoBlob(blob, played(), { today: TODAY, now: NOW });
+    const { blob: out } = mergeGuestIntoBlob(blob, played(), { today: TODAY, now: NOW, catalog: trialCatalog });
     expect(out).toBe(blob);
     expect(out.log.map((l) => l.key)).toEqual(["bank:1"]);
     expect(out.missSchedule["builtin:2"]).toBeUndefined();
@@ -199,15 +200,15 @@ describe("progress handoff into a new account", () => {
 
   it("is idempotent: merging twice adds nothing the second time", () => {
     const g = played();
-    const once = mergeGuestIntoBlob(migrateBlob({}, CATS), g, { today: TODAY, now: NOW }).blob;
-    const twice = mergeGuestIntoBlob(once, g, { today: TODAY, now: NOW });
+    const once = mergeGuestIntoBlob(migrateBlob({}, CATS), g, { today: TODAY, now: NOW, catalog: trialCatalog }).blob;
+    const twice = mergeGuestIntoBlob(once, g, { today: TODAY, now: NOW, catalog: trialCatalog });
     expect(twice.summary).toBeNull();
     expect(twice.blob).toBe(once);
   });
 
   it("adds to an existing account without breaking its streak", () => {
     const blob = { ...migrateBlob({}, CATS), xp: 400, streak: { count: 12, lastDay: TODAY, shield: true } };
-    const { blob: out, summary } = mergeGuestIntoBlob(blob, played(), { today: TODAY, now: NOW });
+    const { blob: out, summary } = mergeGuestIntoBlob(blob, played(), { today: TODAY, now: NOW, catalog: trialCatalog });
     expect(out.xp).toBe(450);
     expect(out.streak.count).toBe(12);
     expect(summary.streakStarted).toBe(false);
@@ -215,14 +216,14 @@ describe("progress handoff into a new account", () => {
 
   it("ignores stale guest data", () => {
     const g = { ...played(), startedAt: NOW - 9 * 86400000, lastAt: NOW - 8 * 86400000 };
-    expect(mergeGuestIntoBlob(migrateBlob({}, CATS), g, { today: TODAY, now: NOW }).summary).toBeNull();
+    expect(mergeGuestIntoBlob(migrateBlob({}, CATS), g, { today: TODAY, now: NOW, catalog: trialCatalog }).summary).toBeNull();
   });
 
   it("credits each answer to the local day it was taken, including across midnight", () => {
     let g = emptyGuest(NOW, "2026-11-23");
     g = guestAnswer(g, mk(1), true, { ms: 9000, today: "2026-11-23" }).guest;
     g = guestAnswer(g, mk(2), false, { ms: 9000, today: "2026-11-24" }).guest;
-    const { blob, summary } = mergeGuestIntoBlob(migrateBlob({}, CATS), g, { today: "2026-11-24", now: new Date(2026, 10, 24, 18).getTime() });
+    const { blob, summary } = mergeGuestIntoBlob(migrateBlob({}, CATS), g, { today: "2026-11-24", now: new Date(2026, 10, 24, 18).getTime(), catalog: trialCatalog });
     expect(blob.rewards.days["2026-11-23"]).toMatchObject({ q: 1, ok: 1 });
     expect(blob.rewards.days["2026-11-24"]).toMatchObject({ q: 1, ok: 0 });
     expect(blob.streak).toMatchObject({ count: 2, lastDay: "2026-11-24" });
@@ -279,6 +280,14 @@ describe("progress handoff into a new account", () => {
       vi.useRealTimers();
     }
   });
+  it("a late older snapshot cannot replace the newer one", () => {
+    const rows = [{ userId: "u", key: "pulsern-v1", blob: { log: [] }, revision: 0 }];
+    const newer = applyProgressWrite(rows, { userId: "u", key: "pulsern-v1", blob: { log: [1, 2] }, expectedRevision: 0 });
+    const older = applyProgressWrite(rows, { userId: "u", key: "pulsern-v1", blob: { log: [1] }, expectedRevision: 0 });
+    expect(newer.revision).toBe(1);
+    expect(older.conflict).toBe(true);
+    expect(rows[0].blob.log).toEqual([1, 2]);
+  });
   it("says saved only after the merged write succeeds", () => {
     expect(handoffAfterSave({ ok: true, pending: true })).toBe("saved");
     expect(handoffAfterSave({ ok: false, pending: true })).toBe("error");
@@ -288,7 +297,7 @@ describe("progress handoff into a new account", () => {
     let g = emptyGuest(NOW, TODAY);
     g = guestAnswer(g, mk(2), false, { ms: 9000, today: TODAY }).guest;
     const blob = { ...migrateBlob({}, CATS), missSchedule: { 9: { interval: 7, due: "2026-12-01" } } };
-    const { blob: out } = mergeGuestIntoBlob(blob, g, { today: TODAY, now: NOW });
+    const { blob: out } = mergeGuestIntoBlob(blob, g, { today: TODAY, now: NOW, catalog: trialCatalog });
     expect(out.missSchedule[9]).toEqual({ interval: 7, due: "2026-12-01" });
     expect(out.missSchedule["builtin:2"].interval).toBe(1);
   });
@@ -313,7 +322,7 @@ describe("a trial cannot be lost, duplicated, or over-paid", () => {
     clearHeldMemory();
     expect(loadGuest(local)).toBeNull();
     expect(readGuestForHandoff(local, session)).toEqual(g);
-    const merged = mergeGuestIntoBlob(migrateBlob({}, CATS), readGuestForHandoff(local, session), { today: TODAY, now: NOW });
+    const merged = mergeGuestIntoBlob(migrateBlob({}, CATS), readGuestForHandoff(local, session), { today: TODAY, now: NOW, catalog: trialCatalog });
     expect(merged.summary.answers).toBe(1);
     expect(peekHeldGuest(session)).toEqual(g);
     releaseHeldGuest(session);
@@ -340,7 +349,7 @@ describe("a trial cannot be lost, duplicated, or over-paid", () => {
     clearHeldMemory();
     const chosen = readGuestForHandoff(local, session);
     expect(chosen).toEqual(later);
-    const merged = mergeGuestIntoBlob(migrateBlob({}, CATS), chosen, { today: TODAY, now: NOW + 1000 });
+    const merged = mergeGuestIntoBlob(migrateBlob({}, CATS), chosen, { today: TODAY, now: NOW + 1000, catalog: trialCatalog });
     expect(merged.blob.log).toHaveLength(1);
     releaseHeldGuest(session);
   });
@@ -349,8 +358,8 @@ describe("a trial cannot be lost, duplicated, or over-paid", () => {
     const first = trial(NOW, false);
     const second = trial(NOW + 5000, true);
     second.missSchedule = { 1: { interval: 3, due: "2026-11-27" } };
-    const once = mergeGuestIntoBlob(migrateBlob({}, CATS), first, { today: TODAY, now: NOW });
-    const twice = mergeGuestIntoBlob(once.blob, second, { today: TODAY, now: NOW + 5000 });
+    const once = mergeGuestIntoBlob(migrateBlob({}, CATS), first, { today: TODAY, now: NOW, catalog: trialCatalog });
+    const twice = mergeGuestIntoBlob(once.blob, second, { today: TODAY, now: NOW + 5000, catalog: trialCatalog });
     expect(twice.summary).toBeNull();
     expect(twice.blob.log.map((l) => l.key)).toEqual(["builtin:1"]);
     expect(twice.blob.xp).toBe(once.blob.xp);
@@ -362,7 +371,7 @@ describe("a trial cannot be lost, duplicated, or over-paid", () => {
     let g = emptyGuest(NOW, TODAY);
     g = guestAnswer(g, mk(1), false, { ms: 9000, today: TODAY }).guest;
     g = guestAnswer(g, mk(1), true, { ms: 9000, today: TODAY }).guest;
-    const merged = mergeGuestIntoBlob(migrateBlob({}, CATS), g, { today: TODAY, now: NOW });
+    const merged = mergeGuestIntoBlob(migrateBlob({}, CATS), g, { today: TODAY, now: NOW, catalog: trialCatalog });
     expect(merged.blob.log).toHaveLength(2);
     expect(merged.blob.xp).toBe(REVIEW_FIX_BONUS);
     expect(merged.blob.ability.Pharmacology.n).toBe(2);
@@ -371,8 +380,8 @@ describe("a trial cannot be lost, duplicated, or over-paid", () => {
 
   it("gives an old row without an attempt a stable id, so a retry does not duplicate it", () => {
     const g = { ...emptyGuest(NOW, TODAY), lastAt: NOW, log: [{ id: 4, cat: "Pharmacology", diff: 2, correct: true }] };
-    const once = mergeGuestIntoBlob(migrateBlob({}, CATS), g, { today: TODAY, now: NOW });
-    const twice = mergeGuestIntoBlob(once.blob, g, { today: TODAY, now: NOW });
+    const once = mergeGuestIntoBlob(migrateBlob({}, CATS), g, { today: TODAY, now: NOW, catalog: trialCatalog });
+    const twice = mergeGuestIntoBlob(once.blob, g, { today: TODAY, now: NOW, catalog: trialCatalog });
     expect(once.blob.log).toHaveLength(1);
     expect(once.blob.log[0].attempt).toBe(`${NOW}:0`);
     expect(twice.summary).toBeNull();
@@ -382,8 +391,8 @@ describe("a trial cannot be lost, duplicated, or over-paid", () => {
   it("pays a second correct attempt of the same question nothing", () => {
     const first = trial(NOW, true);
     const second = trial(NOW + 5000, true);
-    const once = mergeGuestIntoBlob(migrateBlob({}, CATS), first, { today: TODAY, now: NOW });
-    const twice = mergeGuestIntoBlob(once.blob, second, { today: TODAY, now: NOW + 5000 });
+    const once = mergeGuestIntoBlob(migrateBlob({}, CATS), first, { today: TODAY, now: NOW, catalog: trialCatalog });
+    const twice = mergeGuestIntoBlob(once.blob, second, { today: TODAY, now: NOW + 5000, catalog: trialCatalog });
     expect(twice.summary).toBeNull();
     expect(twice.blob.log).toHaveLength(1);
     expect(twice.blob.xp).toBe(once.blob.xp);
@@ -393,8 +402,8 @@ describe("a trial cannot be lost, duplicated, or over-paid", () => {
     let g = emptyGuest(NOW, TODAY);
     g = guestAnswer(g, mk(1), true, { ms: 9000, today: TODAY }).guest;
     g = guestAnswer(g, mk(2), false, { ms: 9000, today: TODAY }).guest;
-    const once = mergeGuestIntoBlob(migrateBlob({}, CATS), g, { today: TODAY, now: NOW });
-    const twice = mergeGuestIntoBlob(once.blob, g, { today: TODAY, now: NOW });
+    const once = mergeGuestIntoBlob(migrateBlob({}, CATS), g, { today: TODAY, now: NOW, catalog: trialCatalog });
+    const twice = mergeGuestIntoBlob(once.blob, g, { today: TODAY, now: NOW, catalog: trialCatalog });
     expect(twice.summary).toBeNull();
     expect(twice.blob.xp).toBe(once.blob.xp);
     expect(twice.blob.streak.count).toBe(once.blob.streak.count);
@@ -404,14 +413,14 @@ describe("a trial cannot be lost, duplicated, or over-paid", () => {
     let correct = emptyGuest(NOW, TODAY);
     correct = guestAnswer(correct, mk(7), true, { ms: 9000, today: TODAY }).guest;
     const account = { ...migrateBlob({}, CATS), log: [{ id: 7, source: "builtin", key: "builtin:7", cat: "Pharmacology", diff: 2, correct: true, origin: "recorded" }], xp: 20, streak: { count: 4, lastDay: "2026-11-22", shield: true } };
-    const paid = mergeGuestIntoBlob(account, correct, { today: TODAY, now: NOW });
+    const paid = mergeGuestIntoBlob(account, correct, { today: TODAY, now: NOW, catalog: trialCatalog });
     expect(paid.summary).toBeNull();
     expect(paid.blob.xp).toBe(20);
     expect(paid.blob.ability.Pharmacology.n).toBe(0);
     expect(paid.blob.streak.count).toBe(4);
     expect(paid.blob.log.map((row) => row.key)).toEqual(["builtin:7"]);
     const bankAccount = { ...account, log: [{ id: 7, source: "bank", key: "bank:7", cat: "Pharmacology", diff: 2, correct: true, origin: "recorded" }], xp: 20 };
-    const unrelated = mergeGuestIntoBlob(bankAccount, correct, { today: TODAY, now: NOW });
+    const unrelated = mergeGuestIntoBlob(bankAccount, correct, { today: TODAY, now: NOW, catalog: trialCatalog });
     expect(unrelated.summary).toBeNull();
     expect(unrelated.blob).toBe(bankAccount);
     expect(unrelated.blob.xp).toBe(20);

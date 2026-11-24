@@ -34,9 +34,13 @@ const questions = new Proxy({}, { get(_t, p) {
 const progress = new Proxy({}, { get(_t, p) {
   if (p === "then") return (res) => Promise.resolve(window.__readError ? { data: null, error: { message: "network" } } : window.__nullBlob ? { data: { blob: null }, error: null } : window.__row ? { data: { blob: window.__row }, error: null } : { data: null, error: null }).then(res);
   if (p === "delete") { window.__deletes = (window.__deletes || 0) + 1; return () => progress; }
-  if (p === "upsert") return (row) => {
+  if (p === "update" || p === "insert" || p === "upsert") return (row) => {
+    const kind = p;
+    const filters = [];
     let aborted = false;
     const thenable = {
+      eq(col, val) { filters.push([col, val]); return thenable; },
+      select() { return thenable; },
       abortSignal(signal) {
         if (signal?.aborted) aborted = true;
         else signal?.addEventListener?.("abort", () => { aborted = true; });
@@ -63,8 +67,19 @@ const progress = new Proxy({}, { get(_t, p) {
             err.code = "aborted";
             throw err;
           }
+          const expected = filters.find((pair) => pair[0] === "revision")?.[1];
+          const current = window.__revision || 0;
+          const exists = !!window.__row || (window.__upserts || []).length > 0;
+          if (kind === "insert") {
+            if (exists) return { data: [], error: { code: "23505", message: "duplicate" } };
+            window.__revision = 1;
+            (window.__upserts ||= []).push(row.blob);
+            return { data: [{ revision: 1 }], error: null };
+          }
+          if (!exists || expected !== current) return { data: [], error: null };
+          window.__revision = current + 1;
           (window.__upserts ||= []).push(row.blob);
-          return { error: null };
+          return { data: [{ revision: window.__revision }], error: null };
         })();
         return run.then(onFulfilled, onRejected);
       },

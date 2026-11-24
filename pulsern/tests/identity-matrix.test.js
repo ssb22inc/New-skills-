@@ -58,11 +58,16 @@ describe.each(Object.entries(questions))("%s", (name, q) => {
     expect(fixed.ability[q.cat].n).toBe(2);
     expect(fixed.rewards.days[TODAY].xp).toBe(REVIEW_FIX_BONUS);
     expect(fixed.rewards.days[TODAY].q).toBe(2);
-    const imported = mergeGuestIntoBlob(blank(), trialOf(q, [false, true]), { today: TODAY, now: Date.now() }).blob;
-    expect(imported.xp).toBe(fixed.xp);
-    expect(imported.ability[q.cat].n).toBe(fixed.ability[q.cat].n);
-    expect(imported.rewards.days[TODAY].xp).toBe(fixed.rewards.days[TODAY].xp);
-    expect(imported.log.map((row) => row.key)).toEqual(fixed.log.map((row) => row.key));
+    const imported = mergeGuestIntoBlob(blank(), trialOf(q, [false, true]), { today: TODAY, now: Date.now(), catalog: [q] }).blob;
+    if (q.source !== "builtin") {
+      expect(imported.log).toEqual([]);
+      expect(imported.xp).toBe(0);
+    } else {
+      expect(imported.xp).toBe(fixed.xp);
+      expect(imported.ability[q.cat].n).toBe(fixed.ability[q.cat].n);
+      expect(imported.rewards.days[TODAY].xp).toBe(fixed.rewards.days[TODAY].xp);
+      expect(imported.log.map((row) => row.key)).toEqual(fixed.log.map((row) => row.key));
+    }
   });
   it("a repeat pays nothing more and still updates ability", () => {
     const twice = live(live(blank(), q, true), q, true);
@@ -191,7 +196,7 @@ describe("review, restore, and import use the canonical key", () => {
 
   it("a new account imports the trial through the live answer function, in order", () => {
     const guest = trialOf(builtin, [false, true]);
-    const merged = mergeGuestIntoBlob(blank(), guest, { today: TODAY, now: Date.now() }).blob;
+    const merged = mergeGuestIntoBlob(blank(), guest, { today: TODAY, now: Date.now(), catalog: [builtin] }).blob;
     const liveOrder = live(live(blank(), builtin, false), builtin, true);
     expect(merged.log.map((row) => row.key)).toEqual(["builtin:7", "builtin:7"]);
     expect(merged.xp).toBe(liveOrder.xp);
