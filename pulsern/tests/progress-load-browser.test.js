@@ -140,6 +140,7 @@ describe("N1: a saved row the app cannot open", () => {
       expect(backup).toEqual([expect.objectContaining({ userId: "u1", raw: "null" })]);
       await page.getByRole("button", { name: "Study without saving" }).click();
       await page.getByRole("heading", { name: "This session isn't being saved" }).waitFor();
+      expect(await page.locator(".tour-card").count()).toBe(0); // no first-run tour over a student whose data we could not read
       await page.getByRole("button", { name: "Start today's round" }).first().waitFor();
       await page.waitForTimeout(1500);
       expect(await page.evaluate(() => window.__upserts.length)).toBe(0);

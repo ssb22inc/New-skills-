@@ -627,8 +627,8 @@ export default function App() {
        back to step 0 is what made Next look like a dead control for anyone
        who had not dismissed it yet. */
     if (locked && tourStep != null) setTourStep(null);
-    else if (tourStep == null && shouldAutoOpenTour({ loaded, tourSeen, ent, locked, sessionLive, firstAnswerOwed: activating })) { setTourMode("quick"); setTourStep(0); }
-  }, [loaded, tourSeen, ent, locked, tourStep, sessionLive, activating]);
+    else if (tourStep == null && !saveBlocked && shouldAutoOpenTour({ loaded, tourSeen, ent, locked, sessionLive, firstAnswerOwed: activating })) { setTourMode("quick"); setTourStep(0); }
+  }, [loaded, saveBlocked, tourSeen, ent, locked, tourStep, sessionLive, activating]);
 
   /* The tour shows the real screen for the step. Positioning runs again
      when that screen replaces a placeholder, such as the flashcard queue. */
