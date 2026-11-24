@@ -1,0 +1,103 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "da6c612a142b75910987b47f8e9e542896e96a3f",
+    "head": "aaeef5d443d8221af54fb32267e5a477e17f5b26",
+    "pr": "183"
+  },
+  "reviewedAt": "2026-11-24T01:53:24.191Z",
+  "filesReviewed": [
+    "pulsern/app/index.html",
+    "pulsern/ops/capture-fonts.css",
+    "pulsern/ops/capture-product-screenshots.mjs",
+    "pulsern/ops/product-screenshot-entry.jsx",
+    "pulsern/ops/test-signup-flow.mjs",
+    "pulsern/package-lock.json",
+    "pulsern/package.json",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/public/product/pulsern-adaptive-practice.png",
+    "pulsern/public/product/pulsern-lab-reference.png",
+    "pulsern/public/product/pulsern-today-dashboard.png",
+    "pulsern/src/App.jsx",
+    "pulsern/src/auth.jsx",
+    "pulsern/src/card-nav.js",
+    "pulsern/src/choice-state.js",
+    "pulsern/src/clinical-welcome.jsx",
+    "pulsern/src/first-answer.js",
+    "pulsern/src/float-pos.js",
+    "pulsern/src/focus-sheet.jsx",
+    "pulsern/src/focus-trap.js",
+    "pulsern/src/lab-fab.jsx",
+    "pulsern/src/lab-lookup.js",
+    "pulsern/src/lab-panel.jsx",
+    "pulsern/src/question-nav.jsx",
+    "pulsern/src/srs.js",
+    "pulsern/src/state.js",
+    "pulsern/src/study-keys.js",
+    "pulsern/src/tab-icons.jsx",
+    "pulsern/src/tour.js",
+    "pulsern/src/tour.jsx",
+    "pulsern/tests/browser/lab-fab-harness.jsx",
+    "pulsern/tests/browser/lab-fab.html",
+    "pulsern/tests/browser/question-nav-harness.jsx",
+    "pulsern/tests/card-nav.test.js",
+    "pulsern/tests/fixtures/lab-ai-prompt.txt",
+    "pulsern/tests/flagship-ux.test.js",
+    "pulsern/tests/float-pos.test.js",
+    "pulsern/tests/focus-trap.test.js",
+    "pulsern/tests/grade-contrast.test.js",
+    "pulsern/tests/lab-fab-browser.test.js",
+    "pulsern/tests/lab-lookup.test.js",
+    "pulsern/tests/question-nav-browser.test.js",
+    "pulsern/tests/seo-guardian.test.js",
+    "pulsern/tests/srs-daily-cap.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/src/lab-fab.jsx",
+      "line": 24,
+      "title": "The floating button can settle over clinically significant question text",
+      "problem": "The collision targets include controls but exclude question stems, rationales, exhibits, and chart text. On a phone, the edge-snapped button extends into the reading column. A position covering a line of the stem is therefore considered clear and can remain there indefinitely.",
+      "failure_scenario": "A student drags the button to the right edge beside a multi-line question stem. If no control occupies that vertical position, findClearSpot accepts it even though the button masks the end of the question text, potentially hiding a finding, value, or qualification needed to answer.",
+      "fix": "Protect the reading surfaces as well as controls when collecting collision rectangles, or reserve a dedicated area outside the reading column. Add a narrow-viewport browser test that drops the button beside a long stem and checks that the stem is unobscured.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/App.jsx",
+      "line": 2189,
+      "title": "Case reporting is no longer available after beginning a case",
+      "problem": "The new in-progress chartBody omits ReportIssue. The remaining ReportIssue instance is inside the introductory section, which is no longer rendered once step >= 0. Previously the chart section, including its reporting control, remained available during every step.",
+      "failure_scenario": "A student encounters an incorrect rationale or chart inconsistency after selecting Begin case. There is no longer a case-report control on that screen. Returning to All Cases and reopening the introduction discards the current case sitting just to reach the reporting feature.",
+      "fix": "Keep the case ReportIssue control available during the step workflow, such as in chartBody or alongside step feedback, retaining the same caseId. Test reporting availability after Begin case and after checking an answer.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/tests/card-nav.test.js",
+      "line": 118,
+      "title": "Undo tests perform the critical rollback themselves",
+      "problem": "The new tests exercise undoGrade navigation, then manually delete the schedule and subtract XP. They never execute Flashcards.undo, whose undoLog, schedule restoration, XP subtraction, and new-card refund are the actual new stateful implementation. The separate ledger tests likewise call refundNewCard directly.",
+      "failure_scenario": "A Flashcards undo handler that only clears the navigation grade—and leaves the persisted due date, XP, and daily allowance unchanged—would still pass these tests. Consequently the newly introduced schedule and XP rollback has no supplied test that would catch failure of its application wiring.",
+      "fix": "Mount the shipped Flashcards component with observable schedule, XP, and daily-ledger state. Grade a new card and an existing scheduled card, navigate Back, invoke Undo grade, and assert the exact restored schedule, XP, and allowance. Include an Again revisit followed by undo and regrading.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 168553,
+    "completionTokens": 9557,
+    "reasoningTokens": 8804,
+    "costUsd": 0.516951
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Changes are needed before release. The floating toolkit can obscure question text, case reporting disappears during the case workflow, and the new schedule/XP undo wiring is not exercised by the added tests. Review was limited to the supplied diffs and images; tests were not executed.",
+  "counts": {
+    "blocker": 0,
+    "major": 3,
+    "minor": 0
+  }
+}
