@@ -110,9 +110,26 @@ jobs:
         if: always()
         continue-on-error: true
         run: npm run seo:accessibility
+      - name: See whether a public marketing page changed
+        id: pages
+        if: always()
+        run: |
+          set -euo pipefail
+          names=""
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch -q --depth=1 origin "${{ github.event.pull_request.base.sha }}"
+            names=$(git diff --name-only FETCH_HEAD HEAD)
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            before="${{ github.event.before }}"
+            if [ -n "$before" ] && [ "$before" != "0000000000000000000000000000000000000000" ]; then
+              git fetch -q --depth=1 origin "$before"
+              names=$(git diff --name-only FETCH_HEAD HEAD)
+            fi
+          fi
+          printf '%s\n' "$names" | node ops/seo-page-change.mjs
       - name: Adversarial model review (advisory, owner decision 2026-10-29)
         id: adversary
-        if: always()
+        if: always() && steps.pages.outputs.changed == 'true'
         continue-on-error: true
         # The review's findings go into the log too, so a FAIL can be read
         # without downloading the evidence artifact.
@@ -149,9 +166,16 @@ jobs:
           test "${{ steps.commercial.outcome }}" = "success"
           test "${{ steps.exam_rules.outcome }}" = "success"
           test "${{ steps.accessibility.outcome }}" = "success"
-          # The model review is advisory by the owner's decision of
-          # 2026-10-29 (pulsern/CLAUDE.md): it must still run and leave a
-          # complete, valid report, or this gate fails. A completed FAIL
-          # verdict is reported as a warning instead of failing the gate.
+          # The model review is advisory (pulsern/CLAUDE.md). It runs only when
+          # a public marketing page changed. When it runs, a missing or
+          # malformed report fails this gate; a completed FAIL is a warning.
           # Every check above stays required.
-          npm run seo:enforce -- --advisory
+          if [ "${{ steps.pages.outcome }}" != "success" ]; then
+            echo "Could not tell whether a public marketing page changed"
+            exit 1
+          fi
+          if [ "${{ steps.pages.outputs.changed }}" = "true" ]; then
+            npm run seo:enforce -- --advisory
+          else
+            echo "adversarial review skipped: no public marketing page changed"
+          fi

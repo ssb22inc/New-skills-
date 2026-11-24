@@ -89,7 +89,7 @@ export function classifyPath(path) {
   return { mode: "review", why: null };
 }
 
-/* 2,000,000 characters is inside gpt-6.2-sol's 1,050,000-token context
+/* 2,000,000 characters fits DeepSeek V4 Pro's 1,048,576-token context
    (about four characters a token). A larger change is refused whole.
    Nothing is dropped to make it fit. */
 export const MAX_PROMPT_CHARS = 2_000_000;
@@ -491,6 +491,48 @@ FORMS YOU WILL SEE
    What the answer means
    --------------------------------------------------------------------------- */
 
+/* DeepSeek often wraps the verdict in a fence, or writes a thought before
+   the object. The object is the review. Anything that is not that object
+   is a failure, not a pass. */
+export function parseReviewText(text) {
+  if (typeof text !== "string" || !text.trim()) throw new Error("review result is empty");
+  const stripped = text.replace(/^\uFEFF/, "").trim();
+  const unfenced = stripped.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  const fenced = [...stripped.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)].map((m) => m[1].trim());
+  const attempts = [unfenced, ...fenced, ...jsonObjectSpans(unfenced).reverse()];
+  let last = null;
+  for (const candidate of attempts) {
+    if (!candidate) continue;
+    try { return validateResult(JSON.parse(candidate)); }
+    catch (e) { last = e; }
+  }
+  throw new Error(last?.message ?? "review result is not JSON");
+}
+
+/* Top-level {...} spans, ignoring braces that sit inside strings. */
+function jsonObjectSpans(s) {
+  const spans = [];
+  let depth = 0, start = -1, inString = false, escape = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inString) {
+      if (escape) escape = false;
+      else if (c === "\\") escape = true;
+      else if (c === "\"") inString = false;
+      continue;
+    }
+    if (c === "\"") { inString = true; continue; }
+    if (c === "{") {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (c === "}" && depth > 0) {
+      depth--;
+      if (depth === 0 && start >= 0) spans.push(s.slice(start, i + 1));
+    }
+  }
+  return spans;
+}
+
 export function validateResult(obj) {
   if (!obj || typeof obj !== "object") throw new Error("review result is not an object");
   if (typeof obj.assessment !== "string") throw new Error("review result has no assessment");
@@ -643,7 +685,7 @@ export async function runReview({ base, head, pr = null, outDir, rulesPath, cwd 
     }
 
     let parsed;
-    try { parsed = validateResult(JSON.parse(res.text)); }
+    try { parsed = parseReviewText(res.text); }
     catch (e) {
       report.error = `Astra's answer could not be read as a review (${e.message}). The raw answer is kept in the .raw.json report.`;
       report.rawAnswer = res.text;
@@ -666,7 +708,8 @@ export async function runReview({ base, head, pr = null, outDir, rulesPath, cwd 
   }
 }
 
-/* Empty keeps the standing 64000 cap. A dispatch can set a lower cap
+/* Empty keeps the standing 64000 cap. DeepSeek V4 Pro's listed completion
+   max is 943718, so 64000 is inside it. A dispatch can set a lower cap
    when the OpenRouter balance cannot reserve the standing one. */
 export function reviewMaxTokens() {
   const raw = process.env.ASTRA_REVIEW_MAX_TOKENS;

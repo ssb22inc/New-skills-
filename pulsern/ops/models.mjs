@@ -16,11 +16,12 @@
 
 export const GEN_MODEL = "anthropic/claude-sonnet-4.6";
 /* Owner decisions: GPT Astra until 2026-10-09, then GPT Luna, GPT 6.1 Sol
-   from 2026-10-28, and GPT 6.2 Sol from 2026-11-24. Earlier reviews stand
-   as recorded; every review, gate and audit from now on reads the reviewer
-   from here. OpenRouter only. */
-export const REVIEW_MODEL = "openai/gpt-6.2-sol";
-export const REVIEWER_NAME = "Sol";
+   from 2026-10-28, GPT 6.2 Sol briefly on 2026-11-24, then DeepSeek V4 Pro
+   (OpenRouter id deepseek/deepseek-v4-pro-0813) the same day for cost.
+   Earlier reviews stand as recorded; every review, gate and audit from now
+   on reads the reviewer from here. OpenRouter only. */
+export const REVIEW_MODEL = "deepseek/deepseek-v4-pro-0813";
+export const REVIEWER_NAME = "DeepSeek";
 
 /* Reasoning models reject or silently ignore sampling temperature. Sending
    0.7 to one is at best a no-op and at worst a 400 that would take a factory

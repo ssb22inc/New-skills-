@@ -53,6 +53,15 @@ function backoffMs(attempt, retryAfterHeader) {
 /* OpenRouter reports errors in several shapes depending on where the failure
    happened — the request, the gateway, or the upstream provider. Pull out
    whichever one is present rather than letting it fall through as "empty". */
+/* OpenRouter sometimes returns the answer as a string and sometimes as a
+   list of text parts. The reasoning field is not the verdict. */
+function completionText(message) {
+  const content = message?.content;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) return content.map((part) => (typeof part === "string" ? part : part?.text ?? "")).join("");
+  return "";
+}
+
 function errorText(data, status) {
   const e = data?.error;
   const msg = typeof e === "string" ? e : e?.message ?? data?.message;
@@ -134,7 +143,7 @@ export async function llmCall({
       throw err; // 400/401/403 and the like: retrying changes nothing
     }
 
-    const text = data?.choices?.[0]?.message?.content ?? "";
+    const text = completionText(data?.choices?.[0]?.message);
     if (text) {
       const u = data?.usage ?? {};
       return {

@@ -29,7 +29,7 @@ afterEach(() => vi.restoreAllMocks());
 describe("review()", () => {
   it("asks Astra, not the old reviewer", async () => {
     await review("judge this");
-    expect(sent[0].model).toBe("openai/gpt-6.2-sol");
+    expect(sent[0].model).toBe("deepseek/deepseek-v4-pro-0813");
   });
 
   /* Astra thinks before it answers and that thinking counts against
@@ -63,14 +63,14 @@ describe("review()", () => {
   });
 
   it("refuses to let a model review its own family's writing", async () => {
-    await expect(review("x", 8000, { writer: "openai/gpt-4.1" })).rejects.toThrow(/Same-family/);
+    await expect(review("x", 8000, { writer: "deepseek/deepseek-chat" })).rejects.toThrow(/Same-family/);
     expect(sent).toHaveLength(0); // refused before any money is spent
   });
 
   it("adds up what the run spent", async () => {
     await review("a"); await review("b");
     expect(reviewSpend()).toMatchObject({ calls: 2, costUsd: 0.13, uncosted: 0, promptTokens: 4000, completionTokens: 1800 });
-    expect(formatSpend()).toBe("Sol review spend: $0.1300 across 2 calls · 4,000 in / 1,800 out");
+    expect(formatSpend()).toBe("DeepSeek review spend: $0.1300 across 2 calls · 4,000 in / 1,800 out");
   });
 
   /* An unreported cost must show as unknown, never be silently counted as $0. */

@@ -41,8 +41,8 @@ async function settle(promise) {
 }
 
 describe("model registry", () => {
-  it("makes Sol the reviewer and keeps the writer in another family", () => {
-    expect(REVIEW_MODEL).toBe("openai/gpt-6.2-sol");
+  it("makes DeepSeek the reviewer and keeps the writer in another family", () => {
+    expect(REVIEW_MODEL).toBe("deepseek/deepseek-v4-pro-0813");
     expect(familyOf(GEN_MODEL)).not.toBe(familyOf(REVIEW_MODEL));
     expect(() => assertCrossFamily(GEN_MODEL, REVIEW_MODEL)).not.toThrow();
   });
@@ -58,9 +58,10 @@ describe("model registry", () => {
     expect(() => assertCrossFamily("", REVIEW_MODEL)).toThrow(/Cannot determine/);
   });
 
-  it("knows Sol takes no sampling temperature", () => {
+  it("knows which models take a sampling temperature", () => {
     expect(acceptsTemperature("openai/gpt-6.2-sol")).toBe(false);
     expect(acceptsTemperature("openai/gpt-6.1-sol")).toBe(false);
+    expect(acceptsTemperature("deepseek/deepseek-v4-pro-0813")).toBe(true);
     expect(acceptsTemperature("anthropic/claude-sonnet-4.6")).toBe(true);
   });
 });
@@ -68,16 +69,15 @@ describe("model registry", () => {
 describe("what goes over the wire", () => {
   it("never sends temperature to Sol, even when a caller asks for it", async () => {
     stubFetch(ok("fine"));
-    await llmCall({ model: REVIEW_MODEL, prompt: "x", temperature: 0.7 });
+    await llmCall({ model: "openai/gpt-6.2-sol", prompt: "x", temperature: 0.7 });
     expect(sent[0]).not.toHaveProperty("temperature");
   });
 
-  /* The wrapper the factories call still passes 0.7. This is the exact path
-     that would have broken when the reviewer switched. */
-  it("drops temperature on the legacy llm() path too", async () => {
+  /* The wrapper the factories call still passes 0.7. DeepSeek accepts it. */
+  it("sends temperature to DeepSeek on the legacy llm() path", async () => {
     stubFetch(ok("fine"));
     await llm(REVIEW_MODEL, "x");
-    expect(sent[0]).not.toHaveProperty("temperature");
+    expect(sent[0].temperature).toBe(0.7);
   });
 
   it("still sends temperature to a writer that accepts it", async () => {
@@ -102,6 +102,16 @@ describe("what goes over the wire", () => {
 });
 
 describe("what comes back", () => {
+  it("joins a DeepSeek answer that arrives as text parts", async () => {
+    stubFetch({
+      ok: true, status: 200, headers: { get: () => null },
+      json: async () => ({ id: "gen-1", model: "deepseek/deepseek-v4-pro-0813", choices: [{ finish_reason: "stop", message: { content: [{ type: "text", text: "{\"assessment\":\"clean\"}" }], reasoning: "ignore me" } }], usage: { prompt_tokens: 1, completion_tokens: 1, cost: 0 } }),
+    });
+    const r = await llmCall({ model: REVIEW_MODEL, prompt: "x" });
+    expect(r.text).toBe("{\"assessment\":\"clean\"}");
+    expect(r.text).not.toContain("ignore me");
+  });
+
   it("forwards finish_reason from a nonempty response", async () => {
     stubFetch({
       ok: true, status: 200, headers: { get: () => null },

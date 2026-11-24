@@ -292,9 +292,9 @@ jobs:
             STATE="${GATE_STATE:-failure}"; DESC="${GATE_WHY:-Review could not run}"
           else
             case "$RC" in
-              0) STATE=success; DESC="Sol: PASS" ;;
-              1) STATE=failure; DESC="Sol: FAIL — see the report" ;;
-              *) STATE=failure; DESC="Sol review did not complete — recorded as a failure" ;;
+              0) STATE=success; DESC="DeepSeek: PASS" ;;
+              1) STATE=failure; DESC="DeepSeek: FAIL — see the report" ;;
+              *) STATE=failure; DESC="DeepSeek review did not complete — recorded as a failure" ;;
             esac
           fi
           echo "$STATE: $DESC"

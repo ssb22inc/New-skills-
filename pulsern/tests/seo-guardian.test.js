@@ -9,6 +9,7 @@ import { PNG } from "pngjs";
 import { auditCommercialGovernance, auditGovernance, auditHtml } from "../ops/seo-guardian.mjs";
 import { candidateCommercialPagesFromDist, candidateGuidePagesFromDist, extractOutputText, guideCoverageFromEvidence, parseReview, runAdversary } from "../ops/seo-adversary-ai.mjs";
 import { adviseAdversary, enforceAdversary } from "../ops/seo-enforce-adversary.mjs";
+import { isMarketingPagePath, marketingPagesChanged } from "../ops/seo-page-change.mjs";
 import { articleJsonLd, related } from "../ops/build-learn.mjs";
 import { ARTICLES } from "../ops/learn-content.mjs";
 import { CLINICAL_ARTICLES } from "../ops/learn-clinical.mjs";
@@ -837,16 +838,24 @@ describe("SEO guardian", () => {
     await expect(adviseAdversary(badJson)).rejects.toThrow(/release blocker/i);
   });
 
-  /* Owner decision 2026-10-29: the model review is advisory. It must still
-     run on every change and its verdict must still be reported, while every
-     other check stays an explicit, required outcome. */
-  it("runs the advisory model review and keeps explicit outcome enforcement in workflow", async () => {
+  /* Owner decision 2026-11-24: the model review is advisory and runs only
+     when a public marketing page changed. A missing report still fails when
+     the review was required. Every other check stays required. */
+  it("runs the advisory model review only for a public marketing page change", async () => {
     const workflow = await fs.readFile(new URL("../../.github/workflows/pulsern-seo-guardian.yml", import.meta.url), "utf8");
     expect(workflow).toContain("Adversarial model review (advisory");
     expect(workflow).toContain("npm run seo:adversary");
+    expect(workflow).toContain("steps.pages.outputs.changed == 'true'");
     expect(workflow).not.toContain("env.OPENROUTER_API_KEY != ''");
     expect(workflow).toContain("npm run seo:enforce -- --advisory");
+    expect(workflow).toContain("adversarial review skipped: no public marketing page changed");
     expect(workflow).not.toMatch(/seo:enforce[^\n]*\|\|/);
+    expect(isMarketingPagePath("pulsern/public/learn/nclex-fees-and-payment/index.html")).toBe(true);
+    expect(isMarketingPagePath("pulsern/ops/learn-content.mjs")).toBe(true);
+    expect(isMarketingPagePath("pulsern/src/App.jsx")).toBe(false);
+    expect(isMarketingPagePath("pulsern/public/product/pulsern-today-dashboard.png")).toBe(false);
+    expect(marketingPagesChanged(["pulsern/src/App.jsx", "pulsern/ops/models.mjs"])).toBe(false);
+    expect(marketingPagesChanged(["pulsern/src/App.jsx", "pulsern/public/pricing/index.html"])).toBe(true);
     for (const id of ["tests", "build", "deterministic", "product_images", "app_boundary", "crawl", "crawl_live", "live_release", "indexnow", "sources", "commercial", "exam_rules", "accessibility"]) {
       expect(workflow).toContain(`test "\${{ steps.${id}.outcome }}" = "success"`);
     }

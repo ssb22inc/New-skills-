@@ -13,7 +13,7 @@ import { deflateSync } from "node:zlib";
 import {
   classifyPath, planContext, buildPrompt, validateResult, verdictFor, renderMarkdown, reportBaseName,
   FINDINGS_SCHEMA, MAX_PROMPT_CHARS, MAX_FULL_FILE_CHARS, pageDigest, lockDigest, textDiff, parseNameStatusZ,
-  collectChanges, runReview, exactText, reviewableImage, reviewText, fromReviewText,
+  collectChanges, runReview, parseReviewText, reviewMaxTokens, exactText, reviewableImage, reviewText, fromReviewText,
 } from "../ops/astra-review.mjs";
 import { encodeCanonicalPng, canonicalDeflate, canonicalPng } from "../ops/png-canonical.mjs";
 
@@ -776,7 +776,7 @@ describe("running a review end to end (Astra finding #5)", () => {
     const pending = runReview(opts(dir), { callModel: () => new Promise((r) => { release = r; }) });
     await new Promise((r) => setTimeout(r, 50));
     const md = readFileSync(join(dir, "2026-10-08-pr7-" + g("rev-parse", "HEAD").trim().slice(0, 7) + ".md"), "utf8");
-    expect(md).toContain("# Sol review — FAIL");
+    expect(md).toContain("# DeepSeek review — FAIL");
     expect(md).toContain("did not finish");
     release({ text: JSON.stringify({ assessment: "ok", findings: [] }), usage: { costUsd: 0.1 }, model: "openai/gpt-6.1-sol" });
     await pending;
@@ -789,7 +789,7 @@ describe("running a review end to end (Astra finding #5)", () => {
     expect(report.verdict).toBe("PASS");
     const [md] = readdirSync(dir).filter((f) => f.endsWith(".md"));
     const text = readFileSync(join(dir, md), "utf8");
-    expect(text).toContain("# Sol review — PASS");
+    expect(text).toContain("# DeepSeek review — PASS");
     expect(text).not.toContain("did not finish");
   });
 
@@ -811,6 +811,38 @@ describe("running a review end to end (Astra finding #5)", () => {
     expect(existsSync(dir)).toBe(true);
   });
 
+  it("reads a DeepSeek verdict wrapped in a fence, a thought, or a text part", () => {
+    const verdict = { assessment: "clean", findings: [{ severity: "minor", file: "pulsern/src/a.js", line: null, title: "A brace } in the title", problem: "says }", failure_scenario: "x", fix: "y", confidence: "low" }] };
+    const raw = JSON.stringify(verdict);
+    expect(parseReviewText(raw).assessment).toBe("clean");
+    expect(parseReviewText("```json\n" + raw + "\n```").findings).toHaveLength(1);
+    expect(parseReviewText("<think>maybe {not the verdict}</think>\n" + raw).findings[0].problem).toBe("says }");
+    expect(parseReviewText("Review follows.\n```json\n" + raw + "\n```\nDone.")).toBeTruthy();
+    expect(() => parseReviewText("not json")).toThrow();
+    expect(() => parseReviewText("")).toThrow(/empty/);
+    expect(reviewMaxTokens()).toBe(64000);
+  });
+
+  it("passes a fenced DeepSeek verdict and fails the same text when the cap cut it off", async () => {
+    const dir = out();
+    const text = "```json\n" + JSON.stringify({ assessment: "clean", findings: [] }) + "\n```";
+    const passed = await runReview(opts(dir), { callModel: async () => ({ text, finishReason: "stop", usage: {}, model: "deepseek/deepseek-v4-pro-0813" }) });
+    expect(passed.code).toBe(0);
+    expect(passed.report.verdict).toBe("PASS");
+    const cut = await runReview(opts(dir), { callModel: async () => ({ text, finishReason: "length", usage: {}, model: "deepseek/deepseek-v4-pro-0813" }) });
+    expect(cut.code).toBe(2);
+    expect(cut.report.verdict).toBe("FAIL");
+    expect(cut.report.error).toMatch(/truncated/i);
+  });
+
+  it("records an API error as a failure", async () => {
+    const dir = out();
+    const { code, report } = await runReview(opts(dir), { callModel: async () => { throw new Error("deepseek/deepseek-v4-pro-0813: 500 provider down"); } });
+    expect(code).toBe(2);
+    expect(report.verdict).toBe("FAIL");
+    expect(report.error).toMatch(/500/);
+  });
+
   it("does not pass a truncated answer that still parses as an empty review", async () => {
     const dir = out();
     const text = JSON.stringify({ assessment: "clean", findings: [] });
@@ -820,7 +852,7 @@ describe("running a review end to end (Astra finding #5)", () => {
     expect(report.rawAnswer).toBe(text);
     expect(report.error).toMatch(/truncated/i);
     const [md] = readdirSync(dir).filter((f) => f.endsWith(".md"));
-    expect(readFileSync(join(dir, md), "utf8")).toContain("# Sol review — FAIL");
+    expect(readFileSync(join(dir, md), "utf8")).toContain("# DeepSeek review — FAIL");
   });
 
   it("passes the same empty findings when the model actually finished", async () => {
@@ -845,7 +877,7 @@ describe("the saved report", () => {
   };
   it("leads with the verdict and records the cost", () => {
     const md = renderMarkdown({ ...base, verdict: "FAIL", counts: { blocker: 1, major: 0, minor: 0 }, assessment: "a", findings: [finding("blocker")] });
-    expect(md.split("\n")[0]).toBe("# Sol review — FAIL");
+    expect(md.split("\n")[0]).toBe("# DeepSeek review — FAIL");
     expect(md).toContain("$0.4123");
   });
   it("says the change was read as data by the trusted reviewer", () => {
