@@ -171,9 +171,11 @@ export function gradeCurrent(nav, grade) {
   if (!e || e.grade) return { nav, recorded: false };
   const entries = nav.entries.map((entry, i) => {
     if (entry.id !== e.id) return entry;
-    const cleared = { ...entry, skippedVisit: false };
-    if (i === nav.index) return { ...cleared, grade, show: false, typed: "" };
-    return cleared;
+    /* An earlier visit left ungraded by Undo is the same card. Lock it
+       with this grade so walking back cannot record a second schedule
+       change or a second XP award. */
+    if (i === nav.index || !entry.grade) return { ...entry, skippedVisit: false, grade, show: false, typed: i === nav.index ? "" : entry.typed };
+    return { ...entry, skippedVisit: false };
   });
   let queue = nav.queue.filter((id) => id !== e.id);
   if (grade === "again") queue = insertGap(queue, e.id, AGAIN_GAP);

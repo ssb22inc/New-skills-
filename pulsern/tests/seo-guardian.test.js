@@ -1032,5 +1032,7 @@ describe("product screenshot capture", () => {
     expect(src).toMatch(/export const CAPTURE_TIME = "\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"/);
     expect(src).toMatch(/Study toolkit/);
     expect(src).not.toMatch(/Open quick actions: lab values and help/);
+    expect(src).toMatch(/tabpanel", \{ name: "🧪 Labs & lookup" \}/);
+    expect(src).not.toMatch(/Normal lab and vital-sign reference ranges" \)/);
   });
 });

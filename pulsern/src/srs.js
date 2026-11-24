@@ -54,6 +54,22 @@ export function noteNewCard(fcNew, today = todayStr(), id) {
   return { day: today, count: used + 1, ids: [...ids, id] };
 }
 
+/* Undo of a card that had never been scheduled. The introduction is
+   withdrawn so the card can come back today even after the cap is full.
+   Grading it again records the charge once more. */
+export function refundNewCard(fcNew, today = todayStr(), id) {
+  if (!fcNew || fcNew.day !== today) return fcNew ?? { day: null, count: 0 };
+  const ids = Array.isArray(fcNew.ids) ? fcNew.ids.slice() : null;
+  if (ids) {
+    const at = id == null ? -1 : ids.indexOf(id);
+    if (at < 0) return fcNew;
+    ids.splice(at, 1);
+    const count = Math.max(0, (fcNew.count ?? 0) - 1);
+    return ids.length ? { day: today, count, ids } : { day: today, count };
+  }
+  return { day: today, count: Math.max(0, (fcNew.count ?? 0) - 1) };
+}
+
 /* Grade → next {interval, due}. Same ladder the app has always used:
    again = later today · hard = tomorrow · good = 3→7→15→31…60d · easy = 7→22…90d */
 export function nextSchedule(entry, grade) {

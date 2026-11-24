@@ -94,6 +94,41 @@ describe("card history", () => {
   });
 });
 
+describe("one grade per undone card", () => {
+  it("grades the requeued visit once: walking back cannot advance the schedule or XP again", () => {
+    let nav = startSession(["a", "b"]);
+    let srs = {};
+    let xp = 0;
+    const grade = (g) => {
+      const result = gradeCurrent(nav, g);
+      if (!result.recorded) return false;
+      const id = currentCard(nav).id;
+      srs = { ...srs, [id]: nextSchedule(srs[id], g) };
+      xp += g === "good" ? 5 : g === "easy" ? 8 : 0;
+      nav = result.nav;
+      return true;
+    };
+    expect(grade("good")).toBe(true);
+    nav = goBack(nav);
+    nav = undoGrade(nav);
+    delete srs.a;
+    xp -= 5;
+    nav = goForward(nav).nav;
+    expect(grade("good")).toBe(true);
+    expect(currentCard(nav).id).toBe("a");
+    expect(grade("good")).toBe(true);
+    expect(srs.a.interval).toBe(3);
+    const awarded = xp;
+    nav = goBack(nav);
+    nav = goBack(nav);
+    nav = goBack(nav);
+    expect(currentCard(nav)).toMatchObject({ id: "a", grade: "good" });
+    expect(grade("good")).toBe(false);
+    expect(srs.a.interval).toBe(3);
+    expect(xp).toBe(awarded);
+  });
+});
+
 describe("undo stays unfinished", () => {
   it("keeps an undone card in the queue when Next moves on", () => {
     let nav = startSession(["a", "b", "c"]);

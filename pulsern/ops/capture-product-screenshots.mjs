@@ -111,7 +111,7 @@ export async function captureProductScreenshots() {
     await page.getByRole("button", { name: /Study toolkit/ }).click();
     await page.getByRole("tab", { name: /Labs/ }).click();
     await page.getByRole("button", { name: "Electrolytes" }).click();
-    await page.getByRole("tabpanel", { name: "Normal lab and vital-sign reference ranges" }).waitFor();
+    await page.getByRole("tabpanel", { name: "🧪 Labs & lookup" }).waitFor();
     await page.waitForTimeout(500);
     images.push(await screenshot(page, "pulsern-lab-reference.png", ["Sodium", "Potassium"]));
 
