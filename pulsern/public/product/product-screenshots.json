@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-11-24T06:20:30.044Z",
-  "sourceCommitSha": "93ff1f8721de5be33bcd2a0b2ffb1f9381e1f408",
+  "capturedAt": "2026-11-24T06:45:25.858Z",
+  "sourceCommitSha": "bdbe2d1086daccef026052aadf1b984d0b9739ad",
   "renderer": "PulseRN App.jsx deterministic built-in-content harness",
   "browser": "151.0.7922.34",
   "containsLearnerData": false,
-  "sourceSetSha256": "caece71ab95bd8cf49cfb77b2d1d10da782cd914fdff42833b9be58fd73bf649",
+  "sourceSetSha256": "fe0f3937493755ad9b8a65f56368bd80d5660d256f3d8bc6851cb7469db2baad",
   "sourceFiles": {
-    "src/App.jsx": "6c4ab692547ddfd2f8e910b9e10c5d7d2073563c7fb7cbe58c19f2f94ce6a358",
+    "src/App.jsx": "b8a2e924b7127731affe1dface786e24eedc3e7eaad42c13f3ae0b73a624551d",
     "src/ability-engine.js": "a4a3c018359cf2128407cf31c3059f4bd2fcde84138aacb68c7614d963e3f462",
     "src/app-main.jsx": "6fb222a28909201dff7b23674d7bc3edad533a0ef27ae66094dd09f7e447167f",
     "src/app-routing.js": "0d647b806b66d963843cea66d9e2b1c989c23fe5ea43d9f9f7b9c36d47dbad40",
