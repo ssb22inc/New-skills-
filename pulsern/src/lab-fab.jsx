@@ -77,6 +77,27 @@ export function LabFab({ onOpen, hidden = false, open = false, settleKey = "", b
     settle();
   }, [settle]);
 
+  /* The toolkit hides this button while it is open, which is exactly when
+     Reset is on screen. The listener has to stay up through that, or the
+     click clears storage and the in-memory anchor never moves. */
+  useEffect(() => {
+    const onReset = () => {
+      anchor.current = { ...DEFAULT_ANCHOR };
+      setMoved(false);
+      settle();
+    };
+    window.addEventListener(LABFAB_RESET_EVENT, onReset);
+    return () => window.removeEventListener(LABFAB_RESET_EVENT, onReset);
+  }, [settle]);
+
+  /* Coming back from hidden, storage is the source of truth: Reset may
+     have cleared it while this button was not on screen. */
+  useEffect(() => {
+    if (hidden) return;
+    anchor.current = loadAnchor(storage());
+    settle();
+  }, [hidden, settle]);
+
   /* Re-settle whenever the screen under it changes: resize, scroll end,
      new question, opened sheet, a different tab. */
   useEffect(() => {
@@ -86,10 +107,8 @@ export function LabFab({ onOpen, hidden = false, open = false, settleKey = "", b
     soon(0);
     const onScroll = () => soon(180);
     const onResize = () => soon(60);
-    const onReset = () => { anchor.current = { ...DEFAULT_ANCHOR }; setMoved(false); soon(0); };
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onResize);
-    window.addEventListener(LABFAB_RESET_EVENT, onReset);
     const root = document.querySelector("main.body") || document.body;
     const mo = typeof MutationObserver === "function" ? new MutationObserver(() => soon(140)) : null;
     mo?.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style", "hidden"] });
@@ -97,7 +116,6 @@ export function LabFab({ onOpen, hidden = false, open = false, settleKey = "", b
       clearTimeout(t); cancelAnimationFrame(raf);
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onResize);
-      window.removeEventListener(LABFAB_RESET_EVENT, onReset);
       mo?.disconnect();
     };
   }, [hidden, settle, settleKey]);

@@ -153,6 +153,27 @@ describe("floating 🧪 study toolkit", () => {
     await ctx.close();
   }, 120_000);
 
+  it("reset while the toolkit is open returns the button to its default spot when the toolkit closes", async () => {
+    const { ctx, page } = await open({ width: 390, height: 844 });
+    const start = await fab(page).boundingBox();
+    await mouseDrag(page, { x: 30, y: 180 });
+    expect((await fab(page).boundingBox()).x).toBeLessThan(195);
+    await fab(page).click();
+    const dialog = page.getByRole("dialog", { name: "Study toolkit" });
+    await dialog.waitFor();
+    expect(await page.locator(".lab-fab").count()).toBe(0);
+    await dialog.getByRole("button", { name: /Reset 🧪 button position/ }).click();
+    await dialog.getByRole("button", { name: "Close study toolkit" }).click();
+    await page.locator(".lab-fab").waitFor();
+    await page.waitForFunction(() => document.querySelector(".lab-fab")?.dataset.x !== "");
+    await page.waitForTimeout(300);
+    const back = await fab(page).boundingBox();
+    expect(Math.abs(back.x - start.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(back.y - start.y)).toBeLessThanOrEqual(1);
+    expect(await page.evaluate(() => localStorage.getItem("pulsern-labfab-v1"))).toBeNull();
+    await ctx.close();
+  }, 120_000);
+
   it("arrow keys move it, so dragging is never the only way", async () => {
     const { ctx, page } = await open({ width: 390, height: 844 });
     await fab(page).focus();
