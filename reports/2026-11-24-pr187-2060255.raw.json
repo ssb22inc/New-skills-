@@ -1,0 +1,70 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "9f43c95a300abc5b2bb99c03161eaf16e0145674",
+    "head": "2060255f051e2a603ff5cf6eb2649480355ede3b",
+    "pr": "187"
+  },
+  "reviewedAt": "2026-11-24T22:18:40.358Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-astra-review.yml",
+    ".github/workflows/pulsern-seo-guardian.yml",
+    "pulsern/CLAUDE.md",
+    "pulsern/ops/astra-review.mjs",
+    "pulsern/ops/llm.mjs",
+    "pulsern/ops/models.mjs",
+    "pulsern/ops/seo-page-change.mjs",
+    "pulsern/tests/astra-review.test.js",
+    "pulsern/tests/content-gate.test.js",
+    "pulsern/tests/llm-client.test.js",
+    "pulsern/tests/seo-guardian.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/ops/astra-review.mjs",
+      "line": 513,
+      "title": "Malformed final reviews can fall back to an example PASS",
+      "problem": "JSON parse failures are silently discarded. If the response contains one valid example review and a malformed final review, only the example enters verdicts. The invalid flag catches schema-validation failures, but not JSON syntax failures, so the parser can return the example's empty findings as the completed review.",
+      "failure_scenario": "The model returns a fenced {\"assessment\":\"Example only\",\"findings\":[]} followed by a final blocker-bearing review containing a trailing comma, with finish_reason=\"stop\". The final object fails JSON.parse and is ignored; parseReviewText returns the example, and runReview returns code 0 and publishes PASS. The added multiple-verdict tests do not cover this case because their final objects are syntactically valid JSON.",
+      "fix": "Require one unambiguous final review payload rather than selecting any parseable object from the response. Fail closed when another review section is malformed or incomplete. Add end-to-end tests for a valid empty example followed by malformed and incomplete final reviews.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": ".github/workflows/pulsern-seo-guardian.yml",
+      "line": 143,
+      "title": "Synthetic reports bypass the standing per-change model-review requirement",
+      "problem": "The supplied project rules explicitly require the search model review to run on every change and leave a complete, valid report. This branch instead calls writeSkippedReview, which manufactures a PASS without calling the reviewer. The newly asserted 2026-11-24 amendment inside this same PR conflicts with the rules supplied for this review; it is not independent authorization to weaken that gate.",
+      "failure_scenario": "An app-only change to pulsern/src/App.jsx produces changed=false, skips seo:adversary, and writes a schema-valid PASS with model=null. Assuming the deterministic checks pass, seo:enforce accepts the run despite the required model review never occurring.",
+      "fix": "Restore the unconditional model invocation and genuine completed-report requirement under the supplied rules. Obtain explicit owner authorization separately before narrowing that requirement, and distinguish skipped execution from a reviewer-issued PASS.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": ".github/workflows/pulsern-seo-guardian.yml",
+      "line": 120,
+      "title": "Rename detection hides removal of a public marketing page",
+      "problem": "git diff --name-only uses rename detection and reports only the destination of a detected rename. The classifier therefore never sees the former public HTML path when a page is moved outside the marketing source set. This violates even the proposed narrower rule requiring review whenever a public marketing page changes.",
+      "failure_scenario": "Move an existing pulsern/public/campaign/index.html unchanged to an unreferenced pulsern/archive/retired-campaign.html. Git recognizes a 100% rename and emits only the archive destination. marketingPagesChanged returns false, so removing the published page skips the model review and produces the synthetic PASS. The push comparison has the same defect.",
+      "fix": "Use git diff --no-renames --name-only -z so moves appear as deletion and addition, or parse NUL-delimited name-status records and classify both rename paths. Add a real-git integration test that moves public HTML outside the marketing tree.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 67996,
+    "completionTokens": 11180,
+    "reasoningTokens": 10358,
+    "costUsd": 0.2817885
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Do not merge. The verdict parser can certify an example PASS while ignoring a malformed final review. The SEO changes also weaken the supplied review requirement and miss marketing-page removals represented as renames.",
+  "counts": {
+    "blocker": 2,
+    "major": 1,
+    "minor": 0
+  }
+}
