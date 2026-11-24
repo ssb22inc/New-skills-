@@ -15,6 +15,24 @@ export function navCoversCheck(box, stickTop, navHeight) {
   const slotBottom = stickTop + navHeight;
   return box.bottom > stickTop + 1 && box.top < slotBottom - 1;
 }
+
+/* Top of the stuck row: viewport minus the used bottom offset (tab bar plus
+   the safe-area inset) minus the row's own height. */
+export function stickySlotTop(viewportHeight, rowHeight, bottomOffset) {
+  return viewportHeight - bottomOffset - rowHeight;
+}
+
+/* The used bottom offset, in pixels, including env(safe-area-inset-bottom).
+   A fixed probe resolves the CSS variable; reading the custom property
+   itself would leave the calc() unresolved. */
+export function readStickBottom(el, viewHeight = window.innerHeight) {
+  const probe = document.createElement("div");
+  probe.style.cssText = "position:fixed;left:0;width:0;height:0;margin:0;padding:0;border:0;pointer-events:none;visibility:hidden;bottom:var(--q-nav-stick-bottom)";
+  el.appendChild(probe);
+  const offset = viewHeight - probe.getBoundingClientRect().bottom;
+  probe.remove();
+  return offset;
+}
 export function openLabs() {
   if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(OPEN_LABS_EVENT));
 }
@@ -48,7 +66,9 @@ export function QuestionNav({
       frame = 0;
       el.classList.add("q-nav-flat");
       const natural = el.getBoundingClientRect();
-      const stickTop = window.innerHeight - 62 - natural.height;
+      const bottomOffset = readStickBottom(el);
+      el.dataset.stickBottom = String(Math.round(bottomOffset));
+      const stickTop = stickySlotTop(window.innerHeight, natural.height, bottomOffset);
       const checks = [...(el.parentElement?.querySelectorAll("button") ?? [])].filter((node) => !el.contains(node) && /check answer/i.test(node.textContent || ""));
       const coversCheck = checks.some((node) => navCoversCheck(node.getBoundingClientRect(), stickTop, natural.height));
       el.classList.toggle("q-nav-flat", coversCheck);

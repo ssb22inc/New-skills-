@@ -213,15 +213,34 @@ describe("floating 🧪 study toolkit", () => {
     await ctx.close();
   }, 120_000);
 
+  it("keeps Check answer clear when the sticky row includes a safe-area inset", async () => {
+    const { ctx, page } = await open({ width: 390, height: 844 });
+    await page.evaluate(() => {
+      document.querySelector(".q-nav-wrap").style.setProperty("--q-nav-stick-bottom", "96px");
+      window.dispatchEvent(new Event("resize"));
+    });
+    await page.waitForFunction(() => document.querySelector(".q-nav-wrap")?.dataset.stickBottom === "96");
+    const check = await page.getByRole("button", { name: "Check answer" }).boundingBox();
+    const nav = await page.locator(".q-nav-wrap").boundingBox();
+    expect(overlaps(check, nav)).toBe(false);
+    await ctx.close();
+  }, 120_000);
+
   it("does not answer the question underneath an open toolkit", async () => {
     const { ctx, page } = await open({ width: 390, height: 844 });
     await page.locator(".lab-fab").click();
     await page.waitForSelector(".toolkit.open");
-    await page.getByLabel("Search a lab value or ask any NCLEX question").fill("potassium");
-    await page.getByRole("button", { name: "Clear search" }).click();
+    /* Focus is on the document, not inside the dialog and not in the search
+       field. Only the open-toolkit guard can stop 1 and Enter from scoring. */
+    await page.evaluate(() => {
+      document.body.tabIndex = -1;
+      document.body.focus();
+    });
     await page.keyboard.press("1");
     await page.keyboard.press("Enter");
     expect(await page.locator("[aria-checked='true']").count()).toBe(0);
+    expect(await page.evaluate(() => window.T.pick)).toBeNull();
+    expect(await page.evaluate(() => window.T.checked)).toBe(false);
     await ctx.close();
   }, 120_000);
 

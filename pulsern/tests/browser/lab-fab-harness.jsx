@@ -17,11 +17,22 @@ function Screen() {
   const [section, setSection] = useState("labs");
   const [focusOpen, setFocusOpen] = useState(false);
   const [stemText, setStemText] = useState("Which client should the nurse see first? STEM-ONE The finding that decides priority is written out to the end of this line.");
+  const [checked, setChecked] = useState(false);
   const keys = useRef({});
   useStudyKeys(keys);
-  keys.current = { pick: (i) => { if (!open && i < OPTIONS.length) setPick(i); } };
+  /* Picks and Check answer stay live while the toolkit is open. The study
+     shortcut guard is what stops them; this fixture must not. */
+  keys.current = {
+    pick: (i) => { if (i < OPTIONS.length) setPick(i); },
+    primary: () => setChecked(true),
+  };
   const [crowded, setCrowded] = useState(true);
-  useEffect(() => { window.T.setStem = setStemText; window.T.setCrowded = setCrowded; }, []);
+  useEffect(() => {
+    window.T.setStem = setStemText;
+    window.T.setCrowded = setCrowded;
+    window.T.checked = checked;
+    window.T.pick = pick;
+  }, [checked, pick]);
   return (
     <div className="app tab-qbank in-session" data-theme={window.__theme || "light"}>
       <Style />
