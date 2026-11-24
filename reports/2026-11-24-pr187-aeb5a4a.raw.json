@@ -1,0 +1,57 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "9f43c95a300abc5b2bb99c03161eaf16e0145674",
+    "head": "aeb5a4aa95c91ecab133e4836714ef0ca5df4dd3",
+    "pr": "187"
+  },
+  "reviewedAt": "2026-11-24T23:02:38.649Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-astra-review.yml",
+    "pulsern/ops/astra-review.mjs",
+    "pulsern/ops/llm.mjs",
+    "pulsern/ops/models.mjs",
+    "pulsern/ops/review.mjs",
+    "pulsern/tests/astra-review.test.js",
+    "pulsern/tests/content-gate.test.js",
+    "pulsern/tests/llm-client.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/ops/astra-review.mjs",
+      "line": 650,
+      "title": "Save the selected image reviewer before starting the paid call",
+      "problem": "The failure checkpoint is saved before reviewerFor() selects the vision model. At that point, report.model is still REVIEW_MODEL (DeepSeek). The subsequent assignment to Sol exists only in memory until the request returns and another save occurs.",
+      "failure_scenario": "A PR changes a PNG and the runner is killed or times out while awaiting the Sol request. The surviving Markdown and raw JSON checkpoint incorrectly identify DeepSeek as the reviewer, leaving no accurate record of which model received the paid request.",
+      "fix": "Select and cross-family-check the model, assign report.model, and then save the pre-call checkpoint. Add an image-review test that inspects the saved checkpoint while the model call remains pending.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/review.mjs",
+      "line": 65,
+      "title": "Propagate the actual reviewer to publication provenance",
+      "problem": "review() now selects Sol for images but returns only the response text. Meanwhile, the supplied content-gate test still requires publishing scripts, including seed-visuals, to persist review_model: REVIEW_MODEL, which now means DeepSeek. That assertion no longer establishes that the recorded model actually performed the review. The publisher implementations were not supplied, so I could not verify which publishing calls currently provide images.",
+      "failure_scenario": "An image-backed item passes review(..., { images }) and is published through a caller retaining review_model: REVIEW_MODEL. Sol performed the review, but the published audit metadata names DeepSeek, and the existing provenance test passes despite the mismatch.",
+      "fix": "Expose the actual reviewer identity alongside the review result and persist that identity in publication metadata. Replace the constant-matching provenance assertion with a runtime test covering an image review through publication.",
+      "confidence": "medium"
+    }
+  ],
+  "usage": {
+    "promptTokens": 45037,
+    "completionTokens": 6722,
+    "reasoningTokens": 6214,
+    "costUsd": 0.179811
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "The routing and stricter JSON parsing generally fail closed. However, the new text/vision reviewer split is not consistently reflected in audit records, so image reviews can be attributed to DeepSeek when Sol actually handled them.",
+  "counts": {
+    "blocker": 0,
+    "major": 2,
+    "minor": 0
+  }
+}
