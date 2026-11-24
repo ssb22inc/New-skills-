@@ -1,0 +1,36 @@
+{
+  "model": "deepseek/deepseek-v4-pro-0813",
+  "mode": "trusted",
+  "meta": {
+    "base": "7ec72ea65a3f5ebf92a9fb215af4f30d6375df1a",
+    "head": "b25229ef23a7682ff590bd6b2c8cd78fe996b3dc",
+    "pr": "188"
+  },
+  "reviewedAt": "2026-11-24T23:26:33.710Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-seo-guardian.yml",
+    "pulsern/CLAUDE.md",
+    "pulsern/ops/astra-review.mjs",
+    "pulsern/ops/models.mjs",
+    "pulsern/ops/seo-page-change.mjs",
+    "pulsern/tests/astra-review.test.js",
+    "pulsern/tests/content-gate.test.js",
+    "pulsern/tests/seo-guardian.test.js"
+  ],
+  "skipped": [],
+  "findings": [],
+  "usage": {
+    "promptTokens": 38561,
+    "completionTokens": 56016,
+    "reasoningTokens": 56000,
+    "costUsd": 0.252991311
+  },
+  "error": null,
+  "verdict": "PASS",
+  "assessment": "ok",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}
