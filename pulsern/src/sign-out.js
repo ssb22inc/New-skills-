@@ -2,12 +2,12 @@
    any try-before-sign-up answers on this device, so the next person on a
    shared computer never inherits them (REVIEW-2 M2, REVIEW-3 N2). */
 import { clearGuest, releaseHeldGuest, GUEST_KEY } from "./guest.js";
-import { clearLegacyProgressBackup, clearPlainPending } from "./progress-load.js";
+import { clearLegacyProgressBackup, sweepPendingProgress } from "./progress-load.js";
 
-export function signOutAndForgetTrial({ auth, storage, holdStorage, userId = null }) {
+export function signOutAndForgetTrial({ auth, storage, holdStorage }) {
   try { clearGuest(storage); releaseHeldGuest(storage, holdStorage); } catch { /* storage blocked */ }
   clearLegacyProgressBackup(storage);
-  clearPlainPending(storage, userId);
+  sweepPendingProgress(storage);
   return auth.signOut();
 }
 

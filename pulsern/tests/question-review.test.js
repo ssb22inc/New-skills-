@@ -121,6 +121,16 @@ describe("Today round and Review Misses pools", () => {
     expect(todayPool(bank, log, schedule, fresh).map((x) => x.id)).toContain(2);
   });
 
+  it("a deferred unresolved due card falls through to new questions", () => {
+    const fresh = [q(4, CATS[2]), q(5, CATS[3])];
+    const log = [{ id: 7, unclassified: true, key: null, correct: false, cat: "Pharmacology" }];
+    const schedule = { 7: { interval: 1, due: "2026-10-16" } };
+    const due = sessionPool(fresh, { log, schedule, fresh, mode: "today", held: [] });
+    expect(due.map((item) => item.id)).toEqual(["unresolved:7"]);
+    const next = sessionPool(fresh, { log, schedule, fresh, mode: "today", deferred: ["unresolved:7"] });
+    expect(next.map((item) => item.id)).toEqual([4, 5]);
+  });
+
   it("drops a skipped due review before the due-only shortcut, so new questions remain", () => {
     const pool = sessionPool(bank, { log, schedule, fresh, mode: "today", held: [1, 3] });
     expect(pool.map((x) => x.id)).toEqual([4, 5]);

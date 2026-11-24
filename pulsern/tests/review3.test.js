@@ -32,11 +32,15 @@ describe("Codex P2 wiring", () => {
     expect(app).toContain("undoLog.current[id] = { prev: srsMap[id], xp: xpGain, day: todayStr() }");
     expect(app).toContain("onUngrade?.(rec.xp, rec.day)");
     expect(app).toContain("reverseCardDay(r, credited, cardXpGain)");
-    const signOut = app.slice(app.indexOf("const signOutAndForgetTrial"), app.indexOf("const signOutAndForgetTrial") + 1800);
+    const signOut = app.slice(app.indexOf("const signOutAndForgetTrial"), app.indexOf("const signOutAndForgetTrial") + 1200);
     expect(signOut.indexOf("waitForFlush(() => saveQueue.current.flush())")).toBeGreaterThan(-1);
     expect(signOut.indexOf("saved.timedOut")).toBeGreaterThan(-1);
-    expect(signOut.indexOf("stashPendingProgress")).toBeGreaterThan(-1);
-    expect(signOut.indexOf("saved.timedOut")).toBeLessThan(signOut.indexOf("saveQueue.current.invalidate()"));
+    expect(signOut.indexOf("setSaveStall(true)")).toBeGreaterThan(-1);
+    expect(signOut).not.toContain("stashPendingProgress");
+    expect(signOut.indexOf("saved.timedOut")).toBeLessThan(signOut.indexOf("return"));
+    expect(app).toContain("Still saving your progress.");
+    expect(app).toContain("Sign out anyway");
+    expect(app).toContain("Welcome back.");
     expect(app).toContain("setRewards((r) => maybeGrantCover(r, today).rewards)");
     expect(app).not.toContain("setRewards(g.rewards)");
     expect(app).toContain("stampedQuestion(");
@@ -178,9 +182,9 @@ describe("N8-N10 quick fixes", () => {
     expect(app).toContain('qToday.known ? qToday.count : "—"');
     expect(app).toMatch(/vital-lab">Q TODAY/);
   });
-  it("N9: the consent card does not call the student 'someone'", () => {
+  it("N9: a returning account is told the trial was not added, and is not called 'someone'", () => {
     expect(app).not.toContain("Someone answered");
-    expect(app).toContain("If they were yours, add them. If someone else used this device, discard them.");
+    expect(app).toContain("Your account already has progress, so the practice answers weren't added.");
   });
   it("N10: undo restarts the card-XP time floor", () => {
     expect(app).toMatch(/flipAt\.current = Date\.now\(\);[^\n]*\n\s*setSession\(\(s\) => undoGrade\(s\)\);/);

@@ -318,12 +318,12 @@ import {
   RewardsStyle, StreakGlyph, EcgBeat, ComboChip, MomentSheet, streakMoment, ShiftCard, CareerCard,
   BadgeGrid, RoundsCard, BestsCard, SessionRecap, EffectsCard, comboSpeech, useAnnouncer,
 } from "./rewards-ui.jsx";
-import { loadGuest, mergeGuestIntoBlob, clearGuest, guestSummary, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, readGuestForHandoff, releaseHeldGuest, waitForFlush } from "./guest.js";
+import { mergeGuestIntoBlob, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, readGuestForHandoff, releaseHeldGuest, waitForFlush } from "./guest.js";
 import { applyAnswer, commitLiveAnswer, stampedQuestion, newAttemptId } from "./answer-apply.js";
 import { classifyLog, rekeySchedule } from "./question-key.js";
 import { stampCatalogQuestion, stampLoadedCatalog } from "./question-identity.js";
 import { signOutAndForgetTrial as signOut } from "./sign-out.js";
-import { readProgress, parseProgress, clearLegacyProgressBackup, guestHandoff, sessionReadDecision, stashPendingProgress, readPendingProgress, clearPendingProgress, clearPlainPending, sweepExpiredPending, unsavedAnswers, applyUnsavedAnswers } from "./progress-load.js";
+import { readProgress, parseProgress, clearLegacyProgressBackup, guestHandoff, sessionReadDecision, sweepPendingProgress } from "./progress-load.js";
 
 const STORE_KEY = "pulsern-v1";
 
@@ -514,8 +514,9 @@ export default function App() {
   rewardsRef.current = rewards;
   const [moments, setMoments] = useState([]);       // celebrations waiting for a natural break
   const [liveRegion, announce] = useAnnouncer();    // persistent screen-reader live region (combos)
-  const [guestNote, setGuestNote] = useState(null); // shown only after the merged save succeeds
+  const [guestNote, setGuestNote] = useState(null); // shown only after the merged save succeeds, or when a returning account skips a trial
   const [guestSaveError, setGuestSaveError] = useState(false);
+  const [saveStall, setSaveStall] = useState(false);
   const [saveAttempt, setSaveAttempt] = useState(0);
   const pendingGuestClear = useRef(false);
   const pendingHandoff = useRef(null);
@@ -523,17 +524,18 @@ export default function App() {
   const accountId = useRef(null);
   if (!saveQueue.current) saveQueue.current = createSaveQueue();
   useEffect(() => () => { saveQueue.current?.invalidate(); }, []);
+  const finishSignOut = () => {
+    saveQueue.current.invalidate();
+    accountId.current = null;
+    setSaveStall(false);
+    setMenuOpen(false);
+    signOut({ auth: supabase.auth, storage: window.localStorage, holdStorage: window.sessionStorage });
+  };
   const signOutAndForgetTrial = async () => {
     const saved = await waitForFlush(() => saveQueue.current.flush());
-    const userId = accountId.current;
     if (saved.timedOut) {
-      const answers = unsavedAnswers(confirmedLogRef.current, log);
-      sweepExpiredPending(window.localStorage);
-      clearPlainPending(window.localStorage, userId);
-      await stashPendingProgress(window.localStorage, { userId, answers });
-      saveQueue.current.invalidate();
-      accountId.current = null;
-      signOut({ auth: supabase.auth, storage: window.localStorage, holdStorage: window.sessionStorage, userId });
+      setMenuOpen(false);
+      setSaveStall(true);
       return;
     }
     if (!saved.ok || pendingHandoff.current) {
@@ -542,18 +544,19 @@ export default function App() {
         : "Your trial answers are not in this account yet. Sign out anyway? They will be removed from this device.";
       if (typeof window.confirm === "function" && !window.confirm(message)) return;
     }
-    saveQueue.current.invalidate();
-    accountId.current = null;
-    signOut({ auth: supabase.auth, storage: window.localStorage, holdStorage: window.sessionStorage, userId });
+    finishSignOut();
+  };
+  const retrySignOut = async () => {
+    const saved = await waitForFlush(() => saveQueue.current.flush());
+    if (saved.timedOut) return;
+    if (!saved.ok && typeof window.confirm === "function" && !window.confirm("The latest answers have not saved. Sign out anyway? They will be lost.")) return;
+    finishSignOut();
   };
 
   /* ---- load saved progress (retryable; never treats a failed read as new) ---- */
   const [loadState, setLoadState] = useState("loading"); // loading | ok | error | corrupt
   const [saveBlocked, setSaveBlocked] = useState(false); // saved row could not be opened: study, but never write over it
   const unreadableRaw = useRef(null);
-  const confirmedLogRef = useRef(null);
-  const pendingRestore = useRef(false);
-  const [guestOffer, setGuestOffer] = useState(null);     // trial answers waiting for this account's consent
   const applyBlob = (s) => {
     setTheme(s.theme);
     setXp(s.xp);
@@ -583,7 +586,7 @@ export default function App() {
   };
   const loadProgress = useCallback(async () => {
     setLoadState("loading");
-    try { clearLegacyProgressBackup(window.localStorage); sweepExpiredPending(window.localStorage); } catch { /* storage blocked */ }
+    try { clearLegacyProgressBackup(window.localStorage); sweepPendingProgress(window.localStorage); } catch { /* storage blocked */ }
     const read = await readProgress(() => store.get(STORE_KEY));
     /* Failed read: stay unloaded. Autosave and the trial merge both wait
        for `loaded`, so nothing is written over the real row. */
@@ -605,20 +608,14 @@ export default function App() {
     try { guest = readGuestForHandoff(window.localStorage, window.sessionStorage); } catch { /* storage blocked */ }
     let createdAt = null;
     try { const { data } = await supabase.auth.getSession(); createdAt = data?.session?.user?.created_at ?? null; accountId.current = data?.session?.user?.id ?? null; } catch { /* unknown = ask */ }
-    confirmedLogRef.current = s?.log ?? [];
-    clearPlainPending(window.localStorage, accountId.current);
-    const pending = await readPendingProgress(window.localStorage, accountId.current);
-    if (pending?.answers?.length && parsed.status !== "corrupt") {
-      s = applyUnsavedAnswers(s ?? migrateBlob({}, CATS), pending.answers, { today: todayStr(), calibration });
-      pendingRestore.current = true;
-    } else pendingRestore.current = false;
     const handoff = guestHandoff({ guest, accountCreatedAt: createdAt, hasSavedProgress: !!read.raw });
     if (handoff === "merge") {
       const merged = mergeGuestIntoBlob(s ?? migrateBlob({}, CATS), guest, { today: todayStr(), calibration });
       if (merged.summary) { s = merged.blob; pendingHandoff.current = merged.summary; }
       pendingGuestClear.current = true;
     } else if (handoff === "ask") {
-      setGuestOffer({ guest, summary: guestSummary(guest) });
+      try { clearGuest(window.localStorage); releaseHeldGuest(window.sessionStorage); } catch { /* storage blocked */ }
+      setGuestNote({ skipped: true });
     } else if (handoff === "expired") {
       try { clearGuest(window.localStorage); releaseHeldGuest(window.sessionStorage); } catch { /* storage blocked */ }
     }
@@ -629,26 +626,6 @@ export default function App() {
   }, []);
   useEffect(() => { loadProgress(); }, [loadProgress]);
 
-  /* Consent for trial answers found on this device for an existing account.
-     Discard is the default: nothing merges unless the student taps Add.
-     Either way the device copy is removed. */
-  const resolveGuestOffer = (add) => {
-    const offer = guestOffer;
-    setGuestOffer(null);
-    if (!offer) return;
-    if (add && loaded) {
-      const merged = mergeGuestIntoBlob({ log, xp, bestRun, ability, streak, rewards, daily, missSchedule }, offer.guest, { today: todayStr(), calibration });
-      if (merged.summary) {
-        const b = merged.blob;
-        setLog(b.log); setXp(b.xp); setBestRun(b.bestRun); setAbility(b.ability); setStreak(b.streak); setRewards(b.rewards); setDaily(b.daily); setMissSchedule(b.missSchedule ?? {});
-        pendingHandoff.current = merged.summary;
-        pendingGuestClear.current = true; // removed after the merged copy is saved
-        return;
-      }
-    }
-    try { clearGuest(window.localStorage); releaseHeldGuest(window.sessionStorage); } catch { /* storage blocked */ }
-  };
-
   /* ---- autosave on change ---- */
   useEffect(() => {
     if (!loaded || saveBlocked) return;
@@ -657,7 +634,7 @@ export default function App() {
     const pendingAtStart = pendingGuestClear.current === true;
     const note = pendingHandoff.current;
     const userId = accountId.current;
-    saveQueue.current.enqueue(seq, () => store.set(STORE_KEY, payload, userId)).then(async (res) => {
+    saveQueue.current.enqueue(seq, () => store.set(STORE_KEY, payload, userId)).then((res) => {
       if (!res || res.stale || res.error?.code === "account-changed") return;
       if (res.error?.code === "signed-out") {
         if (pendingAtStart) setGuestSaveError(true);
@@ -670,8 +647,6 @@ export default function App() {
         return;
       }
       if (guestClearOnSave(pendingAtStart)) { pendingGuestClear.current = false; clearGuest(window.localStorage); releaseHeldGuest(window.sessionStorage); }
-      confirmedLogRef.current = log;
-      if (pendingRestore.current) { await clearPendingProgress(window.localStorage, userId); pendingRestore.current = false; }
       if (outcome === "saved" && note) {
         setGuestNote(note);
         setGuestSaveError(false);
@@ -1413,14 +1388,13 @@ export default function App() {
             <button type="button" className="btn ghost" onClick={downloadUnreadable}>Download a copy</button>
           </section>
         )}
-        {guestOffer && loaded && (
-          <section className="card rw-saved rw-offer" aria-labelledby="guest-offer-title">
-            <p className="eyebrow">Trial answers on this device</p>
-            <h2 id="guest-offer-title" className="h2">Add your {guestOffer.summary.n} trial answer{guestOffer.summary.n === 1 ? "" : "s"} to this account?</h2>
-            <p className="small">{guestOffer.summary.n} free question{guestOffer.summary.n === 1 ? " was" : "s were"} answered on this device before signing in ({guestOffer.summary.ok} correct). If they were yours, add them. If someone else used this device, discard them. Either way, they're removed from this device.</p>
+        {saveStall && (
+          <section className="card rw-saved" role="dialog" aria-labelledby="save-stall-title">
+            <h2 id="save-stall-title" className="h2">Still saving your progress.</h2>
+            <p className="small">Unsaved changes from the last few seconds may be lost.</p>
             <div className="row">
-              <button type="button" className="btn ghost" onClick={() => resolveGuestOffer(false)}>Discard</button>
-              <button type="button" className="btn" onClick={() => resolveGuestOffer(true)}>Add to my account</button>
+              <button type="button" className="btn" onClick={retrySignOut}>Retry</button>
+              <button type="button" className="btn ghost" onClick={finishSignOut}>Sign out anyway</button>
             </div>
           </section>
         )}
@@ -1435,10 +1409,10 @@ export default function App() {
         {guestNote && !guestSaveError && !locked && (
           <section className="card rw-saved" role="status">
             <p className="eyebrow">Progress saved</p>
-            <h2 className="h2">{guestNote.recorded ? "Your trial answers are in your account" : "Trial progress was added"}</h2>
-            <p className="small">{guestNote.recorded
-              ? `${guestNote.answers} answer${guestNote.answers === 1 ? "" : "s"}, ${guestNote.correct} correct, +${guestNote.xp} XP${guestNote.streakStarted ? `, and day ${guestNote.streak} of your streak` : ""}. They count toward your stats, badges, and readiness estimate.`
-              : `+${guestNote.xp} XP for questions this account had not answered. ${guestNote.reviews} miss${guestNote.reviews === 1 ? "" : "es"} scheduled for review. Existing answers, ability, and streak are unchanged, so readiness is unchanged.`}
+            <h2 className="h2">{guestNote.skipped ? "Welcome back." : "Your trial answers are in your account"}</h2>
+            <p className="small">{guestNote.skipped
+              ? "Your account already has progress, so the practice answers weren't added."
+              : `${guestNote.answers} answer${guestNote.answers === 1 ? "" : "s"}, ${guestNote.correct} correct, +${guestNote.xp} XP${guestNote.streakStarted ? `, and day ${guestNote.streak} of your streak` : ""}. They count toward your stats, badges, and readiness estimate.`}
             </p>
             <button type="button" className="btn ghost" onClick={() => setGuestNote(null)}>Got it</button>
           </section>
@@ -2021,9 +1995,10 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
     const which = poolMode ?? (auto ? "today" : (mode === "review" ? "review" : "new"));
     /* Held questions are dropped inside sessionPool, before a due-only
        pool can hide everything else. */
+    const deferred = [...resolvedLegacy.current].map((id) => `unresolved:${id}`);
     let pool = sessionPool(focused, {
-      log, schedule: missSchedule, fresh: freshPool, mode: which, held: heldIds(trail),
-    }).filter((item) => !(item?.unresolved && resolvedLegacy.current.has(String(item.legacyId))));
+      log, schedule: missSchedule, fresh: freshPool, mode: which, held: heldIds(trail), deferred,
+    });
     if (!pool.length) {
       const fb = fallbackSkip(trail);
       if (fb) { reveal(fb); return; }

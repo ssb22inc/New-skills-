@@ -9,6 +9,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createServer } from "vite";
 import react from "@vitejs/plugin-react";
 import { launchBrowser } from "../ops/browser.mjs";
+import { todayStr } from "../src/dates.js";
 
 const STUB = `
 const offline = { data: null, error: { message: "offline" } };
@@ -16,7 +17,7 @@ const q = new Proxy({}, { get(_t, p) { if (p === "then") return (res) => Promise
 const progress = new Proxy({}, { get(_t, p) {
   if (p === "then") return (res) => Promise.resolve(window.__readError ? { data: null, error: { message: "network" } } : window.__nullBlob ? { data: { blob: null }, error: null } : window.__row ? { data: { blob: window.__row }, error: null } : { data: null, error: null }).then(res);
   if (p === "delete") { window.__deletes = (window.__deletes || 0) + 1; return () => progress; }
-  if (p === "upsert") return async (row) => { (window.__upserts ||= []).push(row.blob); return { error: null }; };
+  if (p === "upsert") return async (row) => { if (window.__stallSave) await new Promise(() => {}); (window.__upserts ||= []).push(row.blob); return { error: null }; };
   return () => progress;
 } });
 export const supabase = {
@@ -55,17 +56,18 @@ const guest = (startedAt) => ({ v: 1, startedAt, lastAt: startedAt + 60_000, day
 ], xp: 20, run: 0, bestRun: 1, ability: null, missSchedule: {} });
 const existingRow = { theme: "light", tourSeen: true, xp: 500, bestRun: 7, log: Array.from({ length: 30 }, (_, i) => ({ id: 1000 + i, cat: "Pharmacology", diff: 1, correct: true })), streak: { count: 20, lastDay: "2020-01-01", shield: true } };
 
-async function open({ session, row = null, readError = false, guestData = null, nullBlob = false, oldBackup = false }) {
+async function open({ session, row = null, readError = false, guestData = null, nullBlob = false, oldBackup = false, stallSave = false, pendingKey = false }) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await ctx.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   await page.route("**/api/**", (r) => r.fulfill({ status: 503, contentType: "application/json", body: "{}" }));
-  await page.addInitScript(({ session, row, readError, guestData, nullBlob, oldBackup }) => {
+  await page.addInitScript(({ session, row, readError, guestData, nullBlob, oldBackup, stallSave, pendingKey }) => {
     if (oldBackup && !sessionStorage.getItem("backupSeeded")) { localStorage.setItem("pulsern-progress-backup-v1", JSON.stringify([{ userId: "someone-else", raw: "{}" }])); sessionStorage.setItem("backupSeeded", "1"); }
-    window.__session = session; window.__row = row; window.__readError = readError; window.__nullBlob = nullBlob; window.__upserts = [];
+    if (pendingKey) localStorage.setItem("pulsern-pending-progress-v1:leftover", JSON.stringify({ log: [{ id: 1, correct: true }] }));
+    window.__session = session; window.__row = row; window.__readError = readError; window.__nullBlob = nullBlob; window.__upserts = []; window.__stallSave = stallSave;
     if (guestData && !sessionStorage.getItem("seeded")) { localStorage.setItem("pulsern-guest-v1", JSON.stringify(guestData)); sessionStorage.setItem("seeded", "1"); }
-  }, { session, row, readError, guestData, nullBlob, oldBackup });
+  }, { session, row, readError, guestData, nullBlob, oldBackup, stallSave, pendingKey });
   await page.goto(`${base}ops/product-screenshot.html`, { waitUntil: "networkidle" });
   return { ctx, page, errors };
 }
@@ -81,11 +83,13 @@ describe("M6: a failed progress read never overwrites the account", () => {
       expect(await page.evaluate(() => localStorage.getItem("pulsern-guest-v1"))).not.toBeNull();
       await page.evaluate(() => { window.__readError = false; });
       await page.getByRole("button", { name: "Try again" }).click();
-      await page.getByRole("heading", { name: /Add your 2 trial answers to this account\?/ }).waitFor({ timeout: 15_000 });
+      await page.getByRole("heading", { name: "Welcome back." }).waitFor({ timeout: 15_000 });
+      await page.getByText("the practice answers weren't added").waitFor();
       await page.waitForTimeout(800);
       const saved = await page.evaluate(() => window.__upserts.at(-1));
       expect(saved.xp).toBe(500);
       expect(saved.log).toHaveLength(30);
+      expect(await page.evaluate(() => localStorage.getItem("pulsern-guest-v1"))).toBeNull();
       expect(errors).toEqual([]);
     } finally { await ctx.close(); }
   }, 120_000);
@@ -95,12 +99,11 @@ describe("M2: trial answers and an existing account", () => {
   it("asks first; Discard merges nothing and clears the device copy", async () => {
     const { ctx, page } = await open({ session: sessionFor(NOW - 90 * 86400000), row: existingRow, guestData: guest(NOW - 3600_000) });
     try {
-      await page.getByRole("heading", { name: /Add your 2 trial answers to this account\?/ }).waitFor({ timeout: 30_000 });
-      await page.getByRole("button", { name: "Discard" }).click();
-      await page.waitForTimeout(800);
+      await page.getByRole("heading", { name: "Welcome back." }).waitFor({ timeout: 30_000 });
+      await page.getByText("the practice answers weren't added").waitFor();
       expect(await page.evaluate(() => localStorage.getItem("pulsern-guest-v1"))).toBeNull();
       const saved = await page.evaluate(() => window.__upserts.at(-1));
-      expect(saved.log.some((l) => String(l.id).startsWith("guest-"))).toBe(false);
+      expect(saved.log).toHaveLength(30);
       expect(saved.xp).toBe(500);
       expect(saved.streak.count).toBe(20);
     } finally { await ctx.close(); }
@@ -109,20 +112,13 @@ describe("M2: trial answers and an existing account", () => {
   it("Add merges once, then clears the device copy after the save", async () => {
     const { ctx, page } = await open({ session: sessionFor(NOW - 90 * 86400000), row: existingRow, guestData: guest(NOW - 3600_000) });
     try {
-      await page.getByRole("button", { name: "Add to my account" }).click({ timeout: 30_000 });
-      await page.getByRole("heading", { name: "Trial progress was added" }).waitFor();
-      await page.getByText("readiness is unchanged").waitFor();
-      expect(await page.getByText("readiness estimate").count()).toBe(0);
+      await page.getByRole("heading", { name: "Welcome back." }).waitFor({ timeout: 30_000 });
       await page.waitForTimeout(800);
       const saved = await page.evaluate(() => window.__upserts.at(-1));
       expect(saved.log).toHaveLength(30);
-      expect(saved.xp).toBe(520);
-      expect(saved.missSchedule["builtin:2"].interval).toBe(1);
-      expect(saved.streak.count).toBe(20);
-      expect(saved.ability?.Pharmacology?.n ?? 0).toBe(0);
+      expect(saved.xp).toBe(500);
+      expect(saved.missSchedule?.["builtin:2"]).toBeUndefined();
       expect(await page.evaluate(() => localStorage.getItem("pulsern-guest-v1"))).toBeNull();
-      await page.getByRole("button", { name: "Practice", exact: true }).click();
-      await page.getByRole("button", { name: "Review misses (1)" }).waitFor({ timeout: 15_000 });
     } finally { await ctx.close(); }
   }, 120_000);
 
@@ -205,8 +201,8 @@ describe("N2: every sign-out path forgets the trial on this device", () => {
   it("from the menu", async () => {
     const { ctx, page } = await open({ session: sessionFor(NOW - 90 * 86400000), row: existingRow, guestData: guest(NOW - 3600_000) });
     try {
-      await page.getByRole("heading", { name: /trial answers to this account\?/ }).waitFor({ timeout: 30_000 });
-      expect(await trialKey(page)).not.toBeNull();
+      await page.getByRole("heading", { name: "Welcome back." }).waitFor({ timeout: 30_000 });
+      expect(await trialKey(page)).toBeNull();
       await page.locator("header .menu-btn").click();
       await page.getByRole("button", { name: /Sign out/ }).first().click();
       await page.waitForFunction(() => (window.__signOuts || 0) === 1);
@@ -217,7 +213,7 @@ describe("N2: every sign-out path forgets the trial on this device", () => {
   it("from Stats", async () => {
     const { ctx, page } = await open({ session: sessionFor(NOW - 90 * 86400000), row: existingRow, guestData: guest(NOW - 3600_000) });
     try {
-      await page.getByRole("heading", { name: /trial answers to this account\?/ }).waitFor({ timeout: 30_000 });
+      await page.getByRole("heading", { name: "Welcome back." }).waitFor({ timeout: 30_000 });
       await page.getByRole("button", { name: "Stats", exact: true }).click();
       await page.getByRole("button", { name: "Sign out", exact: true }).click();
       await page.waitForFunction(() => (window.__signOuts || 0) === 1);
@@ -254,6 +250,49 @@ describe("REVIEW-4", () => {
       await page.getByRole("button", { name: /Reset all progress/ }).click();
       await page.getByRole("button", { name: /Yes, erase everything/ }).click();
       await page.waitForFunction(() => (window.__deletes || 0) === 1);
+    } finally { await ctx.close(); }
+  }, 120_000);
+});
+
+describe("sign-out waits, then asks before leaving a stalled save", () => {
+  it("does not sign out until Sign out anyway, and a leftover journal is already gone", async () => {
+    const { ctx, page } = await open({ session: sessionFor(NOW - 90 * 86400000), row: existingRow, stallSave: true, pendingKey: true });
+    try {
+      await page.getByRole("button", { name: "Stats", exact: true }).waitFor({ timeout: 30_000 });
+      expect(await page.evaluate(() => localStorage.getItem("pulsern-pending-progress-v1:leftover"))).toBeNull();
+      await page.locator("header .menu-btn").click();
+      await page.getByRole("button", { name: /Sign out/ }).first().click();
+      await page.getByRole("heading", { name: "Still saving your progress." }).waitFor({ timeout: 15_000 });
+      expect(await page.evaluate(() => window.__signOuts || 0)).toBe(0);
+      await page.getByRole("button", { name: "Sign out anyway" }).click();
+      await page.waitForFunction(() => (window.__signOuts || 0) === 1);
+      const keys = await page.evaluate(() => Object.keys(localStorage));
+      expect(keys.some((key) => key.startsWith("pulsern-pending-progress-v1"))).toBe(false);
+    } finally { await ctx.close(); }
+  }, 120_000);
+});
+
+describe("Today leaves an unresolved due miss and continues", () => {
+  it("Leave unresolved serves a new question instead of the same card", async () => {
+    const row = {
+      theme: "light", tourSeen: true, xp: 40, bestRun: 1,
+      log: [
+        { id: 7, unclassified: true, key: null, cat: "Pharmacology", diff: 2, correct: false },
+        { id: 1001, cat: "Pharmacology", diff: 1, correct: true },
+      ],
+      streak: { count: 2, lastDay: "2020-01-01", shield: true },
+      missSchedule: { 7: { interval: 1, due: "2020-01-02" } },
+      fcNew: { day: todayStr(), count: 20 },
+      srsMap: {},
+    };
+    const { ctx, page } = await open({ session: sessionFor(NOW - 90 * 86400000), row });
+    try {
+      await page.getByRole("button", { name: /Start today's round/ }).click({ timeout: 30_000 });
+      await page.getByRole("heading", { name: "Which question was this?" }).waitFor({ timeout: 15_000 });
+      await page.getByRole("button", { name: "Leave unresolved" }).click();
+      await page.getByRole("button", { name: "Check answer" }).waitFor({ timeout: 15_000 });
+      expect(await page.getByRole("heading", { name: "Which question was this?" }).count()).toBe(0);
+      expect(await page.getByText("Loading a question").count()).toBe(0);
     } finally { await ctx.close(); }
   }, 120_000);
 });

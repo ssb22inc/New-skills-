@@ -13,7 +13,6 @@
        created after the trial started (no saved progress yet). Any other
        account is asked first, and nothing merges unless the student says so. */
 import { guestFresh } from "./guest.js";
-import { applyAnswer } from "./answer-apply.js";
 
 /* A session lookup that errors, or returns no user, is not "no saved row".
    Only a confirmed signed-in user with an empty SELECT is a new account. */
@@ -56,142 +55,25 @@ export function parseProgress(raw, migrate) {
    untouched and "Download a copy" uses the in-memory copy. Any old copy is
    removed on load and on sign-out. */
 export const LEGACY_PROGRESS_BACKUP_KEY = "pulsern-progress-backup-v1";
-/* Answers that could not be written before sign-out. Only those answers
-   are stored, under a hash of the account, and only until they expire.
-   The next sign-in replays them onto whatever the server has now. */
+/* Older builds of this branch kept a recovery journal under this prefix.
+   Nothing writes it now. Load and sign-out delete every leftover copy so
+   study history does not stay on the device. */
 export const PENDING_PROGRESS_KEY = "pulsern-pending-progress-v1";
-export const PENDING_PROGRESS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-export async function accountTag(userId) {
-  const bytes = new TextEncoder().encode(String(userId ?? ""));
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)].slice(0, 16).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-export function pendingProgressKey(tag) {
-  return tag ? `${PENDING_PROGRESS_KEY}:${tag}` : PENDING_PROGRESS_KEY;
-}
-
-/* An answer already in the confirmed log is not unsaved. Attempts match
-   first. A row that gained a key during classification still matches the
-   copy that was saved without one. */
-export function unsavedAnswers(confirmed, current) {
-  const pool = [...(confirmed ?? [])];
-  const extra = [];
-  for (const row of current ?? []) {
-    if (!row || typeof row.correct !== "boolean") continue;
-    const i = pool.findIndex((kept) => sameSavedAnswer(kept, row));
-    if (i >= 0) pool.splice(i, 1);
-    else extra.push(pendingAnswer(row));
-  }
-  return extra;
-}
-
-function sameSavedAnswer(a, b) {
-  if (a?.attempt != null && b?.attempt != null) return String(a.attempt) === String(b.attempt);
-  if (a?.key && b?.key && a.key !== b.key) return false;
-  return String(a?.id) === String(b?.id) && !!a.correct === !!b.correct && (a?.day ?? null) === (b?.day ?? null);
-}
-
-function pendingAnswer(row) {
-  return {
-    id: row.id,
-    ...(row.key ? { key: row.key } : {}),
-    ...(row.source ? { source: row.source } : {}),
-    ...(row.cat ? { cat: row.cat } : {}),
-    ...(row.diff != null ? { diff: row.diff } : {}),
-    correct: !!row.correct,
-    ...(row.attempt != null ? { attempt: String(row.attempt) } : {}),
-    ...(row.day ? { day: row.day } : {}),
-    ...(Number.isFinite(row.ms) ? { ms: row.ms } : {}),
-    ...(Number.isFinite(row.words) ? { words: row.words } : {}),
-    ...(Number.isFinite(row.rating) ? { rating: row.rating } : {}),
-    ...(row.schedule === false ? { schedule: false } : {}),
-    ...(row.pop ? { pop: row.pop } : {}),
-  };
-}
-
-/* Replay only the unsaved answers onto the current server blob. An
-   attempt the server already has is left as it is, so a save that
-   landed after the timeout does not get scored twice. */
-export function applyUnsavedAnswers(blob, answers, { today, calibration = {} } = {}) {
-  let state = blob ?? {};
-  for (const row of answers ?? []) {
-    const stem = Number.isFinite(row.words) && row.words > 0 ? Array.from({ length: row.words }, () => "w").join(" ") : "";
-    const ownCalibration = Number.isFinite(row.rating) ? { [row.id]: { rating: row.rating } } : {};
-    const applied = applyAnswer(state, {
-      q: { id: row.id, key: row.key, source: row.source, cat: row.cat, diff: row.diff, stem, population: row.pop },
-      correct: !!row.correct,
-      ms: Number.isFinite(row.ms) ? row.ms : Infinity,
-      today: row.day ?? today,
-      attempt: row.attempt,
-      schedule: row.schedule !== false,
-      words: row.words,
-      rating: row.rating,
-      calibration: { ...calibration, ...ownCalibration },
-    });
-    if (!applied.duplicate) state = applied.state;
-  }
-  return state;
-}
-
-export async function stashPendingProgress(storage, { userId, answers, now = Date.now() } = {}) {
-  const rows = unsavedAnswers([], answers ?? []);
-  if (!rows.length || !userId) return false;
-  const tag = await accountTag(userId);
-  try {
-    storage.setItem(pendingProgressKey(tag), JSON.stringify({
-      v: 2, accountTag: tag, expiresAt: now + PENDING_PROGRESS_TTL_MS, answers: rows,
-    }));
-    return true;
-  } catch { return false; }
-}
-
-export async function readPendingProgress(storage, userId, now = Date.now()) {
-  if (!userId) return null;
-  const tag = await accountTag(userId);
-  const key = pendingProgressKey(tag);
-  try {
-    const parsed = JSON.parse(storage?.getItem(key) ?? "null");
-    if (!parsed || parsed.v !== 2 || parsed.accountTag !== tag || !Array.isArray(parsed.answers)) return null;
-    if (!Number.isFinite(parsed.expiresAt) || parsed.expiresAt <= now) {
-      storage.removeItem(key);
-      return null;
-    }
-    return parsed;
-  } catch { return null; }
-}
-
-export async function clearPendingProgress(storage, userId) {
-  if (!userId) return;
-  try { storage?.removeItem(pendingProgressKey(await accountTag(userId))); } catch { /* storage blocked */ }
-}
-
-/* The previous recovery key held the whole account blob and named the
-   account in the key. Drop that copy when this account signs in or out. */
-/* Drop journals whose week is up, whoever is using the device. A
-   journal is only read for its own account, so this is what actually
-   removes an abandoned one. */
-export function sweepExpiredPending(storage, now = Date.now()) {
-  if (!storage || typeof storage.length !== "number" || typeof storage.key !== "function") return;
+export function sweepPendingProgress(storage) {
+  if (!storage) return;
   const keys = [];
-  for (let i = 0; i < storage.length; i += 1) {
-    const key = storage.key(i);
-    if (typeof key === "string" && key.startsWith(PENDING_PROGRESS_KEY)) keys.push(key);
+  const take = (key) => {
+    if (key === PENDING_PROGRESS_KEY || (typeof key === "string" && key.startsWith(`${PENDING_PROGRESS_KEY}:`))) keys.push(key);
+  };
+  if (typeof storage.length === "number" && typeof storage.key === "function") {
+    for (let i = 0; i < storage.length; i += 1) take(storage.key(i));
+  } else if (storage.m && typeof storage.m.keys === "function") {
+    for (const key of storage.m.keys()) take(key);
   }
   for (const key of keys) {
-    try {
-      const parsed = JSON.parse(storage.getItem(key) ?? "null");
-      if (!parsed || parsed.v !== 2 || !Number.isFinite(parsed.expiresAt) || parsed.expiresAt <= now) storage.removeItem(key);
-    } catch { storage.removeItem(key); }
+    try { storage.removeItem(key); } catch { /* storage blocked */ }
   }
-}
-
-export function clearPlainPending(storage, userId) {
-  try {
-    storage?.removeItem(PENDING_PROGRESS_KEY);
-    if (userId) storage?.removeItem(`${PENDING_PROGRESS_KEY}:${userId}`);
-  } catch { /* storage blocked */ }
 }
 
 export function clearLegacyProgressBackup(storage) {

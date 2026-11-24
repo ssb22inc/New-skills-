@@ -257,16 +257,30 @@ export function reviewPools(questions, log, schedule, today = todayStr()) {
    new questions plus any current miss that has no future date yet. Misses
    scheduled for a later day wait for that day (they stay available on demand
    in Review Misses). */
-export function todayPool(questions, log, schedule, freshPool, today = todayStr()) {
+function asSkip(skip) {
+  if (skip instanceof Set) return skip;
+  return heldKeys(skip);
+}
+
+function reviewWaiting(q, schedule, questions, log, index, peers, today) {
+  const entry = q?.unresolved
+    ? (schedule?.[q.legacyId] ?? schedule?.[Number(q.legacyId)] ?? null)
+    : scheduleEntry(q, schedule, questions, log, index, peers);
+  return !!entry && !(typeof entry.due === "string" && entry.due <= today);
+}
+
+export function todayPool(questions, log, schedule, freshPool, today = todayStr(), skip = null) {
+  const held = asSkip(skip);
   const index = historyIndex(log);
   const peers = peerCounts(questions);
   const { due, misses } = reviewPools(questions, log, schedule, today);
-  if (due.length) return due;
-  const waiting = (q) => {
-    const entry = scheduleEntry(q, schedule, questions, log, index, peers);
-    return !!entry && !(typeof entry.due === "string" && entry.due <= today);
-  };
-  return [...misses.filter((q) => !waiting(q)), ...freshPool];
+  /* Held and deferred cards, including ones synthesized from an old
+     number, are removed before a due-only list can hide everything else. */
+  const openDue = due.filter((q) => stillOpen(q, held));
+  if (openDue.length) return openDue;
+  const waiting = (q) => reviewWaiting(q, schedule, questions, log, index, peers, today);
+  const fresh = (freshPool ?? []).filter((q) => stillOpen(q, held));
+  return [...misses.filter((q) => stillOpen(q, held) && !waiting(q)), ...fresh];
 }
 
 /* The questions a sitting may draw next. Ids already opened this sitting
@@ -281,16 +295,14 @@ function stillOpen(q, skip) {
   return q && !skip.has(String(answerIdentity(q) ?? q.id));
 }
 
-export function sessionPool(questions, { log, schedule, fresh, mode, held = [], today = todayStr() } = {}) {
-  const skip = heldKeys(held);
-  const visible = (questions ?? []).filter((q) => stillOpen(q, skip));
+export function sessionPool(questions, { log, schedule, fresh, mode, held = [], deferred = [], today = todayStr() } = {}) {
+  const skip = heldKeys([...(held ?? []), ...(deferred ?? [])]);
   if (mode === "review") {
-    const { due, review } = reviewPools(visible, log, schedule, today);
-    return due.length ? due : review;
+    const { due, review } = reviewPools(questions, log, schedule, today);
+    const openDue = due.filter((q) => stillOpen(q, skip));
+    if (openDue.length) return openDue;
+    return review.filter((q) => stillOpen(q, skip));
   }
-  if (mode === "today") {
-    const visibleFresh = (fresh ?? []).filter((q) => stillOpen(q, skip));
-    return todayPool(visible, log, schedule, visibleFresh, today);
-  }
+  if (mode === "today") return todayPool(questions, log, schedule, fresh, today, skip);
   return (fresh ?? []).filter((q) => stillOpen(q, skip));
 }

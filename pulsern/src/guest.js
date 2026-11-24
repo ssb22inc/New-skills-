@@ -7,15 +7,14 @@
    items (RLS: signed-in with access, migration 018), AI items, readiness
    exam items, and case studies are never used here.
 
-   Handoff: the guest's answers live in localStorage on this device. When an
-   account loads on the same device, mergeGuestIntoBlob folds them into the
-   existing per-user progress blob (no new table, no migration). Each trial
-   answer is stored as builtin:<id>. A shared-bank question with the same
-   number is bank:<id> and is a different question. */
-import { answerXp, answerCountsForRun, bumpDay } from "./rewards.js";
+   Handoff: the guest's answers live in localStorage on this device. A
+   brand-new account imports them through the live answer function. An
+   account that already has answer history does not take the trial.
+   Each trial answer is stored as builtin:<id>. A shared-bank question
+   with the same number is bank:<id> and is a different question. */
+import { answerXp, answerCountsForRun } from "./rewards.js";
 import { applyAnswer, stampedQuestion } from "./answer-apply.js";
-import { canonicalKey, questionIdentity } from "./question-key.js";
-import { updateMissSchedule } from "./question-review.js";
+import { canonicalKey } from "./question-key.js";
 
 export const GUEST_KEY = "pulsern-guest-v1";
 export const GUEST_HOLD_KEY = "pulsern-guest-hold-v1";
@@ -263,19 +262,9 @@ export function guestImportIdentity(entry) {
   return stampedQuestion({ ...entry, id, source, key: entry?.key ?? canonicalKey(source, id) });
 }
 
-const TRIAL_ATTEMPTS = "__trialAttempts";
-const TRIAL_REWARDED = "__trialRewarded";
-
-function rememberedAttempts(s) {
+function trialEntries(s, guest, today) {
   const have = new Set();
   for (const row of s.log ?? []) if (row?.attempt != null) have.add(String(row.attempt));
-  const marked = s.missSchedule?.[TRIAL_ATTEMPTS];
-  if (Array.isArray(marked)) for (const id of marked) have.add(String(id));
-  return have;
-}
-
-function trialEntries(s, guest, today) {
-  const have = rememberedAttempts(s);
   return guest.log
     .filter((l) => l && (typeof l.id === "number" || typeof l.id === "string") && typeof l.cat === "string" && typeof l.correct === "boolean")
     .slice(0, GUEST_LIMIT)
@@ -299,15 +288,13 @@ export function accountHasAnswers(log) {
 
 /* A brand-new account has nothing to merge with, so the trial is scored
    by the live answer function, in the order it was taken. An account that
-   already has answers keeps its rows, ability, and streak. The trial can
-   only add a review for a miss the account has never seen, and XP for a
-   question it has never answered. */
+   already has answer history is left untouched: no XP, no reviews, no markers. */
 export function mergeGuestIntoBlob(s, guest, { today, now = Date.now(), calibration = {} } = {}) {
   if (!guestFresh(guest, now)) return { blob: s, summary: null };
+  if (accountHasAnswers(s.log)) return { blob: s, summary: null };
   const entries = trialEntries(s, guest, today);
   if (!entries.length) return { blob: s, summary: null };
-  if (!accountHasAnswers(s.log)) return importTrialLive(s, entries, { today, calibration });
-  return importTrialOntoHistory(s, entries, today);
+  return importTrialLive(s, entries, { today, calibration });
 }
 
 function importTrialLive(s, entries, { today, calibration }) {
@@ -338,60 +325,6 @@ function importTrialLive(s, entries, { today, calibration }) {
   if (!accepted) return { blob: s, summary: null };
   return {
     blob: { ...s, log: state.log, xp: state.xp, bestRun: state.bestRun, ability: state.ability, streak: state.streak, rewards: state.rewards, daily: state.daily, missSchedule: state.missSchedule, run: state.run },
-    summary: { answers: accepted, correct, xp: xpGain, streak: state.streak?.count ?? 0, streakStarted: state.streak?.lastDay !== beforeDay, recorded: true, reviews: 0 },
-  };
-}
-
-function rewardedKeys(s) {
-  const keys = new Set();
-  for (const row of s.log ?? []) {
-    const key = questionIdentity(row);
-    if (key) keys.add(key);
-  }
-  const marked = s.missSchedule?.[TRIAL_REWARDED];
-  if (Array.isArray(marked)) for (const key of marked) keys.add(String(key));
-  return keys;
-}
-
-function importTrialOntoHistory(s, entries, today) {
-  const known = rewardedKeys(s);
-  const attempts = rememberedAttempts(s);
-  for (const e of entries) attempts.add(e.attempt);
-  const latest = new Map();
-  for (const e of entries) {
-    if (!e.key || known.has(e.key)) continue;
-    latest.set(e.key, e);
-  }
-  const schedule = {
-    ...(s.missSchedule ?? {}),
-    [TRIAL_ATTEMPTS]: [...attempts],
-    [TRIAL_REWARDED]: [...known, ...latest.keys()],
-  };
-  if (!latest.size) {
-    const changed = JSON.stringify(schedule[TRIAL_ATTEMPTS]) !== JSON.stringify(s.missSchedule?.[TRIAL_ATTEMPTS] ?? []);
-    return changed ? { blob: { ...s, missSchedule: schedule }, summary: null } : { blob: s, summary: null };
-  }
-  let xp = s.xp ?? 0;
-  let rewards = s.rewards;
-  let nextSchedule = schedule;
-  let xpGain = 0;
-  let correct = 0;
-  let reviews = 0;
-  for (const e of latest.values()) {
-    const stem = e.words ? Array.from({ length: e.words }, () => "w").join(" ") : "";
-    const q = { id: e.id, key: e.key, source: e.source, cat: e.cat, diff: e.diff, stem, population: e.pop };
-    const res = answerXp({ q, correct: e.correct, ms: Number.isFinite(e.ms) ? e.ms : Infinity, log: [] });
-    xpGain += res.xp || 0;
-    xp += res.xp || 0;
-    if (res.xp) rewards = bumpDay(rewards, today, { xp: res.xp });
-    if (e.correct) correct += 1;
-    else {
-      nextSchedule = updateMissSchedule(nextSchedule, e.key, false, today);
-      reviews += 1;
-    }
-  }
-  return {
-    blob: { ...s, xp, rewards, missSchedule: nextSchedule },
-    summary: { answers: latest.size, correct, xp: xpGain, streak: s.streak?.count ?? 0, streakStarted: false, recorded: false, reviews },
+    summary: { answers: accepted, correct, xp: xpGain, streak: state.streak?.count ?? 0, streakStarted: state.streak?.lastDay !== beforeDay, recorded: true },
   };
 }

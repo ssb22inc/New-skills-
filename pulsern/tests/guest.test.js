@@ -9,7 +9,7 @@ import {
 import { QUESTIONS } from "../src/App.jsx";
 import { migrateBlob } from "../src/state.js";
 import { answerXp, REVIEW_FIX_BONUS } from "../src/rewards.js";
-import { newAttemptId, applyAnswer } from "../src/answer-apply.js";
+import { newAttemptId } from "../src/answer-apply.js";
 import { emptyAbility, updateAbility } from "../src/ability-engine.js";
 import { authModeFromUrl } from "../src/app-routing.js";
 
@@ -73,7 +73,7 @@ describe("guest XP uses the same rules as an account", () => {
     expect(again.guest.bestRun).toBe(1);
     expect(again.guest.run).toBe(0);
   });
-  it("a save that never finishes does not block sign-out, and the progress stays on the device", async () => {
+  it("a stalled save reports a timeout and sign-out then drops leftover recovery keys", async () => {
     const queue = createSaveQueue();
     let release;
     const gate = new Promise((resolve) => { release = resolve; });
@@ -84,46 +84,22 @@ describe("guest XP uses the same rules as an account", () => {
     const session = memStore();
     saveGuest(storage, guestAnswer(emptyGuest(NOW, TODAY), mk(1), true, { ms: 9000, today: TODAY }).guest);
     holdGuestTrial(loadGuest(storage), session);
-    const { stashPendingProgress, readPendingProgress, clearPendingProgress, unsavedAnswers, applyUnsavedAnswers, PENDING_PROGRESS_TTL_MS } = await import("../src/progress-load.js");
+    storage.setItem("pulsern-pending-progress-v1", "{\"log\":[]}");
+    storage.setItem("pulsern-pending-progress-v1:abc", "{\"examDate\":\"2026-12-01\"}");
+    storage.setItem("pulsern-theme", "dim");
     const { signOutAndForgetTrial } = await import("../src/sign-out.js");
-    const answers = unsavedAnswers(
-      [{ id: 1, key: "builtin:1", source: "builtin", cat: "Pharmacology", correct: true, attempt: "one", day: TODAY }],
-      [{ id: 1, key: "builtin:1", source: "builtin", cat: "Pharmacology", correct: true, attempt: "one", day: TODAY }, { id: 2, key: "builtin:2", source: "builtin", cat: "Pharmacology", diff: 1, correct: false, attempt: "two", day: TODAY }],
-    );
-    expect(answers.map((row) => row.attempt)).toEqual(["two"]);
-    expect(await stashPendingProgress(storage, { userId: "u1", answers })).toBe(true);
-    storage.setItem("pulsern-pending-progress-v1:u1", JSON.stringify({ v: 1, payload: "{\"examDate\":\"2026-12-01\",\"log\":[]}" }));
-    await signOutAndForgetTrial({ auth: { signOut: async () => {} }, storage, holdStorage: session, userId: "u1" });
+    const { sweepPendingProgress } = await import("../src/progress-load.js");
+    await signOutAndForgetTrial({ auth: { signOut: async () => {} }, storage, holdStorage: session });
     expect(loadGuest(storage)).toBeNull();
     expect(peekHeldGuest(session)).toBeNull();
-    const pending = await readPendingProgress(storage, "u1");
-    expect(pending.answers.map((row) => row.attempt)).toEqual(["two"]);
-    const stored = [...storage.m.values()].join("\n");
-    expect(stored).not.toContain("examDate");
-    expect(stored).not.toContain("\"u1\"");
-    expect(await readPendingProgress(storage, "someone-else")).toBeNull();
-    await clearPendingProgress(storage, "someone-else");
-    expect((await readPendingProgress(storage, "u1")).answers).toHaveLength(1);
-    const server = { ...migrateBlob({}, CATS), log: [{ id: 1, key: "builtin:1", source: "builtin", cat: "Pharmacology", correct: true, attempt: "one", day: TODAY }], xp: 20 };
-    const restored = applyUnsavedAnswers(server, pending.answers, { today: TODAY });
-    expect(restored.log.map((row) => row.attempt)).toEqual(["one", "two"]);
-    expect(restored.ability.Pharmacology.n).toBe(1);
-    const again = applyUnsavedAnswers(restored, pending.answers, { today: TODAY });
-    expect(again.log).toHaveLength(2);
-    expect(await readPendingProgress(storage, "u1", Date.now() + PENDING_PROGRESS_TTL_MS + 1)).toBeNull();
-    const first = newAttemptId();
-    const second = newAttemptId();
-    expect(first).not.toBe(second);
-    expect(first).not.toContain("u1");
-    const stem = Array.from({ length: 80 }, () => "word").join(" ");
-    const q = { id: 9, source: "bank", key: "bank:9", cat: "Pharmacology", diff: 2, stem };
-    const base = migrateBlob({}, CATS);
-    const live = applyAnswer(base, { q, correct: true, ms: 4000, today: TODAY, attempt: "bank-9", calibration: { 9: { rating: 1800 } }, words: 80, rating: 1800 }).state;
-    const journal = unsavedAnswers([], live.log);
-    const recovered = applyUnsavedAnswers(base, journal, { today: TODAY });
-    expect(recovered.xp).toBe(live.xp);
-    expect(recovered.xp).toBe(0);
-    expect(recovered.ability.Pharmacology.theta).toBe(live.ability.Pharmacology.theta);
+    expect([...storage.m.keys()].some((key) => String(key).startsWith("pulsern-pending-progress-v1"))).toBe(false);
+    expect(storage.getItem("pulsern-theme")).toBe("dim");
+    storage.setItem("pulsern-pending-progress-v1:later", "{}");
+    sweepPendingProgress(storage);
+    expect(storage.getItem("pulsern-pending-progress-v1:later")).toBeNull();
+    const firstId = newAttemptId();
+    expect(firstId).not.toBe(newAttemptId());
+    expect(firstId.startsWith("live:")).toBe(true);
     release();
   });
   it("flush finishes the newest queued save before sign-out can drop it", async () => {
@@ -215,10 +191,10 @@ describe("progress handoff into a new account", () => {
   it("a built-in answer does not collide with a shared-bank answer of the same number", () => {
     const blob = { ...migrateBlob({}, CATS), log: [{ id: 1, source: "bank", key: "bank:1", cat: "Pharmacology", diff: 2, correct: false }] };
     const { blob: out } = mergeGuestIntoBlob(blob, played(), { today: TODAY, now: NOW });
+    expect(out).toBe(blob);
     expect(out.log.map((l) => l.key)).toEqual(["bank:1"]);
-    expect(out.missSchedule["builtin:2"]).toBeTruthy();
-    expect(out.xp).toBeGreaterThan(0);
-    expect(out.ability).toEqual(blob.ability);
+    expect(out.missSchedule["builtin:2"]).toBeUndefined();
+    expect(out.xp).toBe(blob.xp);
   });
 
   it("is idempotent: merging twice adds nothing the second time", () => {
@@ -398,9 +374,11 @@ describe("a trial cannot be lost, duplicated, or over-paid", () => {
     expect(paid.blob.ability.Pharmacology.n).toBe(0);
     expect(paid.blob.streak.count).toBe(4);
     expect(paid.blob.log.map((row) => row.key)).toEqual(["builtin:7"]);
-    const bankAccount = { ...account, log: [{ id: 7, source: "bank", key: "bank:7", cat: "Pharmacology", diff: 2, correct: true, origin: "recorded" }] };
+    const bankAccount = { ...account, log: [{ id: 7, source: "bank", key: "bank:7", cat: "Pharmacology", diff: 2, correct: true, origin: "recorded" }], xp: 20 };
     const unrelated = mergeGuestIntoBlob(bankAccount, correct, { today: TODAY, now: NOW });
-    expect(unrelated.blob.xp).toBe(40);
+    expect(unrelated.summary).toBeNull();
+    expect(unrelated.blob).toBe(bankAccount);
+    expect(unrelated.blob.xp).toBe(20);
     expect(guestImportIdentity({ id: 7 }).key).toBe("builtin:7");
     expect(guestImportIdentity({ id: 7, source: "bank" }).key).toBe("bank:7");
   });

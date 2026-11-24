@@ -4,7 +4,7 @@
 import { describe, it, expect } from "vitest";
 import { applyAnswer, commitLiveAnswer } from "../src/answer-apply.js";
 import { emptyGuest, guestAnswer, mergeGuestIntoBlob, holdGuestTrial, peekHeldGuest, releaseHeldGuest, GUEST_KEY, GUEST_HOLD_KEY } from "../src/guest.js";
-import { classifyLog, resolveLegacyRow, canonicalKey } from "../src/question-key.js";
+import { classifyLog, resolveLegacyRow, canonicalKey, rekeySchedule } from "../src/question-key.js";
 import { stampCatalogQuestion, stampLoadedCatalog, questionIdentity } from "../src/question-identity.js";
 import { reviewPools, todayPool, sessionPool, unseenQuestions, questionByIdentity, latestResults, expandTrialQuestions, settledResult, legacyCandidates } from "../src/question-review.js";
 import { emptyNav, appendQuestion, goBack, present } from "../src/question-nav.js";
@@ -216,31 +216,15 @@ describe("review, restore, and import use the canonical key", () => {
         { id: 9, key: "builtin:9", source: "builtin", cat: "Pharmacology", diff: 1, correct: true, day: yesterday, attempt: "old-9" },
       ],
     };
-    const merged = mergeGuestIntoBlob(account, guest, { today: TODAY, now: Date.now() }).blob;
-    expect(merged.ability).toEqual(ability);
-    expect(merged.streak).toEqual(streak);
-    expect(merged.daily).toEqual({ day: TODAY, answered: 8 });
-    expect(merged.log).toEqual(account.log);
-    expect(merged.missSchedule["builtin:7"]).toBeUndefined();
-    expect(merged.missSchedule["builtin:8"].interval).toBe(1);
-    expect(merged.missSchedule["builtin:8"].due > TODAY).toBe(true);
-    expect(merged.xp).toBe(account.xp + 10);
-    const bankOnly = [{ id: 8, source: "bank", key: "bank:8", cat: "Pharmacology", diff: 2, stem: "Bank 8." }];
-    const bundled = [{ id: 8, source: "builtin", key: "builtin:8", cat: "Pharmacology", diff: 2, stem: "Built-in 8." }];
-    const restored = reviewPools(expandTrialQuestions(bankOnly, merged.log, bundled, merged.missSchedule), merged.log, merged.missSchedule, TODAY);
-    expect(restored.review.map(questionIdentity)).toEqual(["builtin:8"]);
-    const again = mergeGuestIntoBlob(merged, guest, { today: TODAY, now: Date.now() });
-    expect(again.summary).toBeNull();
-    expect(again.blob.xp).toBe(merged.xp);
-    const secondTrial = {
-      ...guest,
-      startedAt: Date.now() - 1000,
-      log: guest.log.map((row, index) => ({ ...row, attempt: `again-${index}` })),
-    };
-    const repeated = mergeGuestIntoBlob(merged, secondTrial, { today: TODAY, now: Date.now() });
-    expect(repeated.summary).toBeNull();
-    expect(repeated.blob.xp).toBe(merged.xp);
-    expect(repeated.blob.log).toEqual(merged.log);
+    const merged = mergeGuestIntoBlob(account, guest, { today: TODAY, now: Date.now() });
+    expect(merged.summary).toBeNull();
+    expect(merged.blob).toBe(account);
+    expect(merged.blob.ability).toEqual(ability);
+    expect(merged.blob.streak).toEqual(streak);
+    expect(merged.blob.daily).toEqual({ day: TODAY, answered: 8 });
+    expect(merged.blob.log).toEqual(account.log);
+    expect(merged.blob.missSchedule["builtin:8"]).toBeUndefined();
+    expect(merged.blob.xp).toBe(account.xp);
   });
 
   it("a legacy numeric miss still reaches Review Misses when the catalog has one question with that number", () => {
@@ -309,6 +293,29 @@ describe("review, restore, and import use the canonical key", () => {
     todayPool(questions, log, {}, [], TODAY);
     expect(performance.now() - started).toBeLessThan(250);
     expect(pools.misses.map(questionIdentity)).toEqual(["bank:11"]);
+  });
+
+  it("a numeric review date follows the latest built-in or bank answer, and stays put when that answer has no single home", () => {
+    const before = [
+      { id: 7, cat: "Pharmacology", correct: true },
+      { id: 7, cat: "Management of Care", correct: false },
+    ];
+    const after = [
+      { id: 7, source: "builtin", key: "builtin:7", cat: "Pharmacology", correct: true },
+      { id: 7, source: "bank", key: "bank:7", cat: "Management of Care", correct: false },
+    ];
+    const schedule = { 7: { interval: 1, due: "2026-11-25" } };
+    const moved = rekeySchedule(schedule, before, after);
+    expect(moved["bank:7"]).toEqual(schedule[7]);
+    expect(moved[7]).toBeUndefined();
+    expect(moved["builtin:7"]).toBeUndefined();
+    const ambiguous = rekeySchedule(schedule, before, [
+      { id: 7, source: "builtin", key: "builtin:7", cat: "Pharmacology", correct: true },
+      { id: 7, unclassified: true, key: null, cat: "Management of Care", correct: false },
+    ]);
+    expect(ambiguous[7]).toEqual(schedule[7]);
+    expect(ambiguous["builtin:7"]).toBeUndefined();
+    expect(ambiguous["bank:7"]).toBeUndefined();
   });
 
   it("a correct review moves a legacy numeric schedule onto the canonical key", () => {

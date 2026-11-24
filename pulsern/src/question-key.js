@@ -82,24 +82,35 @@ export function classifyLog(log, catalogs = {}) {
   });
 }
 
-/* Copy a review date that was stored under the old number onto the
-   key the catalogs just assigned. */
+/* A numeric review date belongs to the latest answer that can own a
+   review: a classified built-in or bank row. A later case step, or a
+   row that still has no single home, leaves the number where it is. */
+function ownsReview(row) {
+  if (!row || row.unclassified || row.schedule === false || !row.key) return false;
+  return row.source === "builtin" || row.source === "bank";
+}
+
 export function rekeySchedule(schedule, before, after) {
   const map = schedule && typeof schedule === "object" && !Array.isArray(schedule) ? { ...schedule } : {};
-  (before ?? []).forEach((row, i) => {
-    const next = after?.[i];
-    if (!next?.key || row?.key === next.key) return;
-    const prev = map[row?.id];
-    if (prev && map[next.key] == null) {
-      map[next.key] = prev;
-      const id = String(row?.id);
-      const stillShared = (after ?? []).some((other, j) => j !== i && String(other?.id) === id && !other?.key);
-      if (!stillShared) {
-        delete map[row.id];
-        delete map[id];
-      }
-    }
+  const groups = new Map();
+  (after ?? []).forEach((row, i) => {
+    const id = before?.[i]?.id ?? row?.id;
+    if (id == null) return;
+    const raw = map[id] ?? map[String(id)];
+    if (!raw || typeof raw !== "object" || Array.isArray(raw) || typeof raw.due !== "string") return;
+    const key = String(id);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(i);
   });
+  for (const [id, indexes] of groups) {
+    const latest = after[indexes[indexes.length - 1]];
+    if (!ownsReview(latest)) continue;
+    const raw = map[id] ?? map[Number(id)];
+    if (map[latest.key] != null && map[latest.key] !== raw) continue;
+    if (map[latest.key] == null) map[latest.key] = raw;
+    delete map[id];
+    delete map[Number(id)];
+  }
   return map;
 }
 
