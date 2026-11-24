@@ -152,6 +152,16 @@ describe("floating 🧪 study toolkit", () => {
     await ctx.close();
   }, 120_000);
 
+  it("keeps Check answer clear of the question navigation at the screenshot size", async () => {
+    const { ctx, page } = await open({ width: 720, height: 620 });
+    const check = await page.getByRole("button", { name: "Check answer" }).boundingBox();
+    const nav = await page.locator(".q-nav-wrap").boundingBox();
+    expect(check && nav).toBeTruthy();
+    expect(overlaps(check, nav)).toBe(false);
+    expect(check.y + check.height).toBeLessThanOrEqual(nav.y + 0.5);
+    await ctx.close();
+  }, 120_000);
+
   it("never covers the stem, rationale, or chart after a drag or a snap", async () => {
     const { ctx, page } = await open({ width: 390, height: 844 });
     const reading = async () => {
