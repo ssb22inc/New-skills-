@@ -1,0 +1,37 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "9f43c95a300abc5b2bb99c03161eaf16e0145674",
+    "head": "38a64abc66161d5e177dec147f9247042652faaa",
+    "pr": "187"
+  },
+  "reviewedAt": "2026-11-24T23:07:39.461Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-astra-review.yml",
+    "pulsern/ops/astra-review.mjs",
+    "pulsern/ops/llm.mjs",
+    "pulsern/ops/models.mjs",
+    "pulsern/ops/review-diagrams.mjs",
+    "pulsern/ops/review.mjs",
+    "pulsern/tests/astra-review.test.js",
+    "pulsern/tests/content-gate.test.js",
+    "pulsern/tests/llm-client.test.js"
+  ],
+  "skipped": [],
+  "findings": [],
+  "usage": {
+    "promptTokens": 49823,
+    "completionTokens": 3071,
+    "reasoningTokens": 3017,
+    "costUsd": 0.155266
+  },
+  "error": null,
+  "verdict": "PASS",
+  "assessment": "No concrete defects found in the supplied changes. Static review only: I could not run the tests or verify the live OpenRouter models' availability and support for the requested parameters.",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}
