@@ -51,16 +51,22 @@ function replayCategory(log, cat) {
    Days already inside the streak, including a shielded gap, stay. */
 function reconcileStreak(streak, log) {
   if (!streak?.lastDay || !(streak.count > 0)) return streak;
-  const studied = new Set();
-  for (const row of log ?? []) if (typeof row?.day === "string") studied.add(row.day);
-  let count = streak.count;
-  let start = shiftDay(streak.lastDay, 1 - count);
-  while (studied.has(shiftDay(start, -1))) {
+  /* Count is studied days, not a calendar span. A shield bridges a gap
+     without adding that day, so walking lastDay-(count-1) would treat
+     the bridge as a study day and count the real one twice. Walk the
+     studied dates instead, and never shrink a streak the shield built. */
+  const studied = new Set([streak.lastDay]);
+  for (const row of log ?? []) {
+    if (typeof row?.day === "string" && row.day <= streak.lastDay) studied.add(row.day);
+  }
+  let count = 0;
+  let day = streak.lastDay;
+  while (studied.has(day)) {
     count += 1;
-    start = shiftDay(start, -1);
+    day = shiftDay(day, -1);
     if (count > 10000) break;
   }
-  if (count === streak.count) return streak;
+  if (count <= streak.count) return streak;
   let shield = streak.shield;
   for (let n = streak.count + 1; n <= count; n += 1) if (n % 7 === 0) shield = true;
   return { ...streak, count, shield };
@@ -79,7 +85,7 @@ function adoptRawSchedule(schedule, q, log) {
   if (!raw) return map;
   const id = String(q.id);
   const claimed = Object.keys(map).some((key) => key !== q.key && key.endsWith(`:${id}`));
-  const otherSource = (log ?? []).some((row) => String(row?.id) === id && row.source && row.source !== q.source);
+  const otherSource = (log ?? []).some((row) => String(row?.id) === id && ((row.source && row.source !== q.source) || row.unclassified));
   if (claimed || otherSource) return map;
   map[q.key] = raw;
   delete map[q.id];
@@ -175,7 +181,7 @@ export function applyAnswer(state, input) {
   let streakNote = null;
   if (!streakDayCounted(streak, null, today)) {
     const adv = advanceStreak(streak, rewards, today);
-    streak = reconcileStreak(adv.streak, placed);
+    streak = historical ? reconcileStreak(adv.streak, placed) : adv.streak;
     rewards = { ...adv.rewards, best: { ...adv.rewards.best, streak: Math.max(adv.rewards.best?.streak ?? 0, streak.count), run: Math.max(adv.rewards.best?.run ?? 0, run) } };
     const crossed = crossedMilestones(rewards, streak.count);
     if (crossed.length) rewards = { ...rewards, milestones: [...(rewards.milestones ?? []), ...crossed] };
@@ -207,4 +213,12 @@ export function applyAnswer(state, input) {
     duplicate: false,
     streakNote,
   };
+}
+
+/* The screen can score two answers before React renders again. Each
+   call has to read the progress the previous call just wrote. */
+export function commitLiveAnswer(holder, input) {
+  const applied = applyAnswer(holder.current, input);
+  holder.current = applied.state;
+  return applied;
 }

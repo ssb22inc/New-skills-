@@ -56,9 +56,13 @@ export function settledResult(question, log, questions = null) {
   const latest = latestResults(log);
   if (id != null && Object.prototype.hasOwnProperty.call(latest, id)) return { state: "known", correct: !!latest[id] };
   const raw = unscopedRows(log, question?.id);
-  if (!raw.length) return { state: "none" };
-  if (numericPeers(pool, question.id).length === 1) return { state: "known", correct: !!raw[raw.length - 1].correct };
-  return { state: "unresolved" };
+  if (raw.length) {
+    if (numericPeers(pool, question.id).length === 1) return { state: "known", correct: !!raw[raw.length - 1].correct };
+    return { state: "unresolved", correct: !!raw[raw.length - 1].correct };
+  }
+  const unresolved = (log ?? []).filter((row) => row?.unclassified && question?.id != null && String(row.id) === String(question.id));
+  if (unresolved.length) return { state: "unresolved", correct: !!unresolved[unresolved.length - 1].correct };
+  return { state: "none" };
 }
 
 /* Review date for this question. A date stored under the old number
@@ -71,9 +75,10 @@ export function scheduleEntry(question, schedule, questions = null, log = null) 
   if (!raw) return null;
   if (!questionIdentity(question)) return raw;
   const pool = questions ?? [question];
-  if (numericPeers(pool, question.id).length !== 1) return null;
   const namedUnresolved = (log ?? []).some((row) => row?.unclassified && String(row.id) === String(question.id));
-  return namedUnresolved ? null : raw;
+  if (namedUnresolved) return raw;
+  if (numericPeers(pool, question.id).length !== 1) return null;
+  return raw;
 }
 
 /* Legacy saves predate the schedule. Every question whose latest logged
@@ -141,7 +146,7 @@ export function reviewPools(questions, log, schedule, today = todayStr()) {
   const dueIds = new Set(due.map(idOf));
   const misses = questions.filter((q) => {
     const settled = settledResult(q, log, questions);
-    return settled.state === "known" && settled.correct === false;
+    return (settled.state === "known" || settled.state === "unresolved") && settled.correct === false;
   });
   const review = [...due, ...misses.filter((q) => !dueIds.has(idOf(q)))];
   return { due, misses, review };

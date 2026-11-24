@@ -43,3 +43,14 @@ export function stampCatalogQuestion(q, bundled = []) {
   const key = canonicalKey(source, q.id);
   return key ? { ...q, source, key } : q;
 }
+
+/* A loaded bank row stays a bank row even when its id and stem were
+   seeded from the bundled set. The origin is decided at the boundary
+   that loaded the row, not by guessing from the text. */
+export function stampLoadedCatalog(rows, origin) {
+  return (rows ?? []).map((q) => {
+    if (!q) return q;
+    if (QUESTION_SOURCES.includes(q.source)) return stampCatalogQuestion(q);
+    return stampCatalogQuestion({ ...q, source: origin });
+  });
+}

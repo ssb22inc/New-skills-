@@ -319,9 +319,9 @@ import {
   BadgeGrid, RoundsCard, BestsCard, SessionRecap, EffectsCard, comboSpeech, useAnnouncer,
 } from "./rewards-ui.jsx";
 import { loadGuest, mergeGuestIntoBlob, clearGuest, guestSummary, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, readGuestForHandoff, releaseHeldGuest } from "./guest.js";
-import { applyAnswer, stampedQuestion } from "./answer-apply.js";
+import { applyAnswer, commitLiveAnswer, stampedQuestion } from "./answer-apply.js";
 import { classifyLog, rekeySchedule } from "./question-key.js";
-import { stampCatalogQuestion } from "./question-identity.js";
+import { stampCatalogQuestion, stampLoadedCatalog } from "./question-identity.js";
 import { signOutAndForgetTrial as signOut } from "./sign-out.js";
 import { readProgress, parseProgress, clearLegacyProgressBackup, guestHandoff, sessionReadDecision } from "./progress-load.js";
 
@@ -454,6 +454,7 @@ export default function App() {
   const [run, setRun] = useState(0);        // consecutive correct answers (session)
   const runRef = useRef(run);
   useEffect(() => { runRef.current = run; }, [run]);
+  const progressRef = useRef(null);
   const [bestRun, setBestRun] = useState(0);
   const [log, setLog] = useState([]);        // {id, cat, diff, correct}
   /* Flagging was removed from the UI in favour of Report a problem. These two
@@ -951,14 +952,18 @@ export default function App() {
      XP follows src/rewards.js answerXp: considered, correct, first-time
      retrievals earn it; repeats, skips, and too-fast taps earn none.
      Returns the XP result so the feedback line shows exactly what was earned. */
+  progressRef.current = {
+    log, xp, ability, streak, rewards: rewardsRef.current, daily, missSchedule, run: runRef.current, bestRun,
+  };
   const record = (q, correct, opts = {}) => {
     const source = q.source === "case" || q.source === "bank" || q.source === "builtin"
       ? q.source
       : (String(q.id).startsWith("case-") ? "case" : (BUNDLED_QUESTIONS.some((item) => item.id === q.id && item.stem === q.stem) ? "builtin" : "bank"));
     const item = stampedQuestion({ ...q, source });
-    const applied = applyAnswer({
-      log, xp, ability, streak, rewards: rewardsRef.current, daily, missSchedule, run: runRef.current, bestRun,
-    }, { q: item, correct, ms: opts.ms ?? Infinity, today: todayStr(), schedule: opts.schedule !== false, calibration });
+    const beforeAbility = progressRef.current.ability;
+    const applied = commitLiveAnswer(progressRef, {
+      q: item, correct, ms: opts.ms ?? Infinity, today: todayStr(), schedule: opts.schedule !== false, calibration,
+    });
     const next = applied.state;
     const res = applied.result;
     setLog(next.log);
@@ -975,7 +980,7 @@ export default function App() {
     const note = applied.streakNote;
     if (note?.milestone) setMoments((m) => [...m, streakMoment(note.milestone)]);
     if (note?.event === "cover") setMoments((m) => [...m, { kind: "cover-used", title: "Your streak is protected", line: `A shift cover covered the day you missed. Day ${note.streak.count} today.`, next: `${note.rewards.covers} cover${note.rewards.covers === 1 ? "" : "s"} left` }]);
-    const { itemDelta } = updateAbility(ability, item, correct, calibration);
+    const { itemDelta } = updateAbility(beforeAbility, item, correct, calibration);
     if (source === "bank" && calibration[q.id] !== undefined) {
       fetch("/api/telemetry", {
         method: "POST",
@@ -1028,7 +1033,10 @@ export default function App() {
   const onNewCard = (id) => setFcNew((f) => noteNewCard(f, todayStr(), id));
   const onRefundNewCard = (id) => setFcNew((f) => refundNewCard(f, todayStr(), id));
   const allQuestions = useMemo(
-    () => [...(bankQs ?? BUNDLED_QUESTIONS), ...customQs].map((q) => stampCatalogQuestion(q, BUNDLED_QUESTIONS)),
+    () => [
+      ...stampLoadedCatalog(bankQs ?? BUNDLED_QUESTIONS, bankQs ? "bank" : "builtin"),
+      ...stampLoadedCatalog(customQs, "bank"),
+    ],
     [bankQs, customQs]
   );
   const addQuestions = (qs) => setCustomQs((c) => [...c, ...qs]);
@@ -1037,7 +1045,7 @@ export default function App() {
   const today = todayStr();
   const board = useMemo(() => badgeBoard(log, CATS, rewards.badgesSeen), [log, rewards.badgesSeen]);
   const career = useMemo(() => careerStatus({ xp, log, cats: CATS, rankHigh: rewards.rankHigh }), [xp, log, rewards.rankHigh]);
-  const missesOpen = useMemo(() => reviewPools(expandTrialQuestions(allQuestions, log, QUESTIONS), log, missSchedule, today).review.length, [allQuestions, log, missSchedule, today]);
+  const missesOpen = useMemo(() => reviewPools(expandTrialQuestions(allQuestions, log, BUNDLED_QUESTIONS), log, missSchedule, today).review.length, [allQuestions, log, missSchedule, today]);
   const qToday = todayQuestionCount({ rewards, daily, today });
   const shift = shiftStatus({ day: rewards.days[today], answeredToday: qToday.known ? qToday.count : 0, questionsKnown: qToday.known, dueCount, missesOpen });
   const week = weekRounds(rewards, today);

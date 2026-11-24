@@ -2,10 +2,10 @@
    Legacy numbers are named only when exactly one catalog contains
    them. Import and a live answer share applyAnswer. */
 import { describe, it, expect } from "vitest";
-import { applyAnswer } from "../src/answer-apply.js";
+import { applyAnswer, commitLiveAnswer } from "../src/answer-apply.js";
 import { emptyGuest, guestAnswer, mergeGuestIntoBlob, holdGuestTrial, peekHeldGuest, releaseHeldGuest, GUEST_KEY, GUEST_HOLD_KEY } from "../src/guest.js";
 import { classifyLog, resolveLegacyRow, canonicalKey } from "../src/question-key.js";
-import { stampCatalogQuestion, questionIdentity } from "../src/question-identity.js";
+import { stampCatalogQuestion, stampLoadedCatalog, questionIdentity } from "../src/question-identity.js";
 import { reviewPools, todayPool, sessionPool, unseenQuestions, questionByIdentity, latestResults, expandTrialQuestions, settledResult } from "../src/question-review.js";
 import { emptyNav, appendQuestion, goBack, present } from "../src/question-nav.js";
 import { itemRating } from "../src/ability-engine.js";
@@ -234,7 +234,7 @@ describe("review, restore, and import use the canonical key", () => {
     const bankQ = stampCatalogQuestion({ id: 7, stem: "Bank stem.", cat: "Pharmacology", diff: 2 }, [{ id: 7, stem: "Bundled stem." }]);
     const ambiguous = [{ id: 7, correct: false }];
     expect(settledResult(bankQ, ambiguous, [bankQ, bundled]).state).toBe("unresolved");
-    expect(reviewPools([bankQ, bundled], ambiguous, { 7: { interval: 1, due: "2026-01-16" } }, "2026-01-16").review).toEqual([]);
+    expect(reviewPools([bankQ, bundled], ambiguous, { 7: { interval: 1, due: "2026-01-16" } }, "2026-01-16").review.map(questionIdentity)).toEqual(["bank:7", "builtin:7"]);
     expect(unseenQuestions([bankQ, bundled], ambiguous)).toEqual([]);
   });
 
@@ -281,9 +281,12 @@ describe("review, restore, and import use the canonical key", () => {
   it("does not treat an unclassified case row as the bank question with the same number", () => {
     const bankQ = stampCatalogQuestion({ id: 101, stem: "Bank stem.", cat: "Pharmacology", diff: 2 }, []);
     const log = [{ id: 101, cat: "Physiological Adaptation", correct: false, unclassified: true, key: null }];
-    expect(settledResult(bankQ, log, [bankQ]).state).toBe("none");
-    expect(reviewPools([bankQ], log, { 101: { interval: 1, due: "2026-01-16" } }, "2026-01-16").review).toEqual([]);
-    expect(unseenQuestions([bankQ], log)).toEqual([bankQ]);
+    expect(settledResult(bankQ, log, [bankQ]).state).toBe("unresolved");
+    expect(reviewPools([bankQ], log, { 101: { interval: 1, due: "2026-01-16" } }, "2026-01-16").review.map(questionIdentity)).toEqual(["bank:101"]);
+    expect(unseenQuestions([bankQ], log)).toEqual([]);
+    const bundled = stampCatalogQuestion({ id: 101, stem: "Bundled 101.", cat: "Pharmacology", diff: 2 }, [{ id: 101, stem: "Bundled 101." }]);
+    expect(reviewPools([bankQ, bundled], log, { 101: { interval: 1, due: "2026-01-16" } }, "2026-01-16").review.map(questionIdentity)).toEqual(["bank:101", "builtin:101"]);
+    expect(unseenQuestions([bankQ, bundled], log)).toEqual([]);
   });
 
   it("a correct review moves a legacy numeric schedule onto the canonical key", () => {
@@ -394,6 +397,53 @@ describe("review, restore, and import use the canonical key", () => {
     };
     const merged = mergeGuestIntoBlob(account, guest, { today: "2026-11-24", now: Date.now() }).blob;
     expect(merged.streak).toMatchObject({ count: 3, lastDay: "2026-11-24" });
+  });
+
+  it("a shielded gap is not counted as another studied day", () => {
+    const monday = applyAnswer(blank(), {
+      q: { ...builtin, id: 1 }, correct: true, ms: 9000, today: "2026-11-23", attempt: "mon",
+    }).state;
+    expect(monday.streak).toMatchObject({ count: 1, lastDay: "2026-11-23" });
+    const wednesday = applyAnswer(monday, {
+      q: { ...builtin, id: 2 }, correct: true, ms: 9000, today: "2026-11-25", attempt: "wed",
+    }).state;
+    expect(wednesday.streak).toMatchObject({ count: 2, lastDay: "2026-11-25", shield: false });
+  });
+
+  it("two answers scored before the next render both stay on the book", () => {
+    const holder = { current: blank() };
+    const first = { id: 1, source: "builtin", cat: "Pharmacology", diff: 2, stem: STEM };
+    const second = { id: 2, source: "builtin", cat: "Pharmacology", diff: 1, stem: `${STEM} second` };
+    commitLiveAnswer(holder, { q: first, correct: true, ms: 9000, today: TODAY, attempt: "a" });
+    commitLiveAnswer(holder, { q: second, correct: true, ms: 9000, today: TODAY, attempt: "b" });
+    expect(holder.current.log.map((row) => row.key)).toEqual(["builtin:1", "builtin:2"]);
+    expect(holder.current.xp).toBe(30);
+    expect(holder.current.ability.Pharmacology.n).toBe(2);
+    expect(holder.current.daily).toEqual({ day: TODAY, answered: 2 });
+  });
+
+  it("a bank row keeps its calibration when its stem matches a bundled question", () => {
+    const bundled = { id: 7, stem: STEM, cat: "Pharmacology", diff: 2 };
+    const loaded = stampLoadedCatalog([{ ...bundled, elo: 1600 }], "bank");
+    expect(loaded[0].source).toBe("bank");
+    expect(loaded[0].key).toBe("bank:7");
+    expect(itemRating(loaded[0], { 7: { rating: 1600 } })).toBe(1600);
+    const fallback = stampLoadedCatalog([bundled], "builtin");
+    expect(fallback[0].source).toBe("builtin");
+    expect(itemRating(fallback[0], { 7: { rating: 1600 } })).toBe(1300);
+  });
+
+  it("Today and Review Misses both restore a bundled calculation miss after the bank loads", async () => {
+    const { CALC_SAMPLES } = await import("../src/ngn-samples.js");
+    const { expandTrialQuestions } = await import("../src/question-review.js");
+    const calc = CALC_SAMPLES[0];
+    const stamped = stampCatalogQuestion({ ...calc, source: "builtin" });
+    const log = [{ id: calc.id, key: stamped.key, source: "builtin", cat: calc.cat, diff: calc.diff, correct: false, day: TODAY }];
+    const bank = stampLoadedCatalog([{ id: 50, stem: "A different bank stem.", cat: "Pharmacology", diff: 1 }], "bank");
+    const review = reviewPools(expandTrialQuestions(bank, log, [calc, ...bank]), log, {}, TODAY);
+    const narrow = reviewPools(expandTrialQuestions(bank, log, bank), log, {}, TODAY);
+    expect(review.misses.map(questionIdentity)).toContain(stamped.key);
+    expect(narrow.misses.map(questionIdentity)).not.toContain(stamped.key);
   });
 });
 
