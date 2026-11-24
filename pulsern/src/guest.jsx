@@ -26,6 +26,7 @@ function initialGuest() {
 
 export default function GuestTrial({ onSignUp, onSignIn }) {
   const [guest, setGuest] = useState(initialGuest);
+  const [deviceSaved, setDeviceSaved] = useState(true);
   const [stage, setStage] = useState(() => (guestRemaining(guest) === 0 ? "save" : "quiz"));
   const [limit] = useState(() => guestRemaining(guest));
   const [labOpen, setLabOpen] = useState(false);
@@ -35,7 +36,7 @@ export default function GuestTrial({ onSignUp, onSignIn }) {
   const motion = motionAllowed(GUEST_PREFS);
   const [liveRegion, announce] = useAnnouncer();
 
-  useEffect(() => { saveGuest(window.localStorage, guest); }, [guest]);
+  useEffect(() => { setDeviceSaved(saveGuest(window.localStorage, guest)); }, [guest]);
   useEffect(() => {
     const open = () => { setSection("labs"); setLabOpen(true); };
     window.addEventListener(OPEN_LABS_EVENT, open);
@@ -91,7 +92,7 @@ export default function GuestTrial({ onSignUp, onSignIn }) {
               auto autoLimit={limit} onDone={() => setStage("save")} guest onGuestSignIn={onSignUp} />
           </div>
         ) : (
-          <SaveProgress guest={guest} onSignUp={onSignUp} onSignIn={onSignIn} motion={motion} />
+          <SaveProgress guest={guest} onSignUp={onSignUp} onSignIn={onSignIn} motion={motion} deviceSaved={deviceSaved} />
         )}
       </main>
       <footer className="guest-legal">
@@ -104,7 +105,7 @@ export default function GuestTrial({ onSignUp, onSignIn }) {
   );
 }
 
-export function SaveProgress({ guest, onSignUp, onSignIn, motion = true }) {
+export function SaveProgress({ guest, onSignUp, onSignIn, motion = true, deviceSaved = true }) {
   const sum = guestSummary(guest);
   const next = CAREER[1];
   const days = (() => { try { return freePassPlan().days; } catch { return 7; } })();
@@ -145,7 +146,7 @@ export function SaveProgress({ guest, onSignUp, onSignIn, motion = true }) {
           <button type="button" className="btn" onClick={onSignUp}>Create free account</button>
           <button type="button" className="btn ghost" onClick={onSignIn}>I have an account</button>
         </div>
-        <p className="small tip">Saved on this device for 7 days after your last answer. Create your account on this browser to keep it.</p>
+        <p className="small tip">{deviceSaved ? "Saved on this device for 7 days after your last answer. Create your account on this browser to keep it." : "This browser could not store the trial. Create your account before you leave this tab, or the answers are gone."}</p>
       </section>
     </div>
   );

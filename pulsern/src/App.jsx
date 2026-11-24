@@ -440,6 +440,8 @@ export default function App() {
   const [tab, setTab] = useState("today");
   const [xp, setXp] = useState(0);
   const [run, setRun] = useState(0);        // consecutive correct answers (session)
+  const runRef = useRef(run);
+  useEffect(() => { runRef.current = run; }, [run]);
   const [bestRun, setBestRun] = useState(0);
   const [log, setLog] = useState([]);        // {id, cat, diff, correct}
   /* Flagging was removed from the UI in favour of Report a problem. These two
@@ -942,7 +944,8 @@ export default function App() {
     if (res.xp) setXp((x) => x + res.xp);
     /* A too-fast tap never builds a run, even when the XP reason is "repeat". */
     const counts = answerCountsForRun({ correct, q: item, ms: opts.ms ?? Infinity });
-    const nextRun = counts ? run + 1 : 0;
+    const nextRun = counts ? runRef.current + 1 : 0;
+    runRef.current = nextRun;
     const newBest = nextRun >= 3 && nextRun > bestRun;
     setRun(nextRun);
     if (counts) setBestRun((b) => Math.max(b, nextRun));

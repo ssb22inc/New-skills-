@@ -37,6 +37,8 @@ describe("Codex P2 wiring", () => {
     expect(app).toContain("setRewards((r) => maybeGrantCover(r, today).rewards)");
     expect(app).not.toContain("setRewards(g.rewards)");
     expect(app).toContain("linkBuiltInGuest(q, QUESTIONS)");
+    expect(app).toContain("const nextRun = counts ? runRef.current + 1 : 0");
+    expect(app).toContain("runRef.current = nextRun");
     expect(app).toContain("linkBuiltInGuest(x, QUESTIONS)");
     expect(app).toContain("createSaveQueue");
     expect(save).toContain("saveQueue.current.enqueue");

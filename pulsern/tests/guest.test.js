@@ -2,6 +2,7 @@
    question limit, the same XP rules as an account, and a one-time,
    collision-free handoff into the account blob. */
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   GUEST_KEY, GUEST_LIMIT, guestPool, emptyGuest, guestAnswer, guestRemaining, mergeGuestIntoBlob, loadGuest, saveGuest, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, linkBuiltInGuest, guestFresh, guestSummary,
 } from "../src/guest.js";
@@ -113,6 +114,11 @@ describe("guest XP uses the same rules as an account", () => {
 });
 
 describe("storage", () => {
+  it("reports a failed device write instead of pretending the trial was stored", () => {
+    const s = { getItem: () => null, setItem() { throw new Error("quota"); }, removeItem() {} };
+    expect(saveGuest(s, emptyGuest(NOW, TODAY))).toBe(false);
+    expect(readFileSync("src/guest.jsx", "utf8")).toContain("setDeviceSaved(saveGuest");
+  });
   it("round-trips through localStorage and clears", () => {
     const s = memStore();
     const g = guestAnswer(emptyGuest(NOW, TODAY), mk(1), true, { ms: 9000, today: TODAY }).guest;
