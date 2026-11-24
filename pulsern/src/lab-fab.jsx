@@ -37,7 +37,7 @@ const TARGETS = [
   ".stem", ".rationale", ".exhibit", ".exhibit-body", ".exhibit-tab", ".chart", ".case-chart", ".note", ".fc-text",
   ".exh-wrap", ".exh-svg", ".dg-wrap", ".dg-svg", ".fc-scale", ".ngn-matrix", ".mx-row",
   "figure", "img", "svg", "table", "canvas", "video",
-  "p", "li", "td", "th", "dt", "dd", "h1", "h2", "h3", ".rw-next-head > span", ".rw-best",
+  "p", "li", "td", "th", "dt", "dd", "h1", "h2", "h3", ".rw-next-head > span", ".rw-best", "span.mono",
 ].join(",");
 
 function storage() {
