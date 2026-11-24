@@ -7,7 +7,7 @@ import App from "./App.jsx";
 import InstallCard, { isStandalone } from "./install.jsx";
 import { APP_ROOT, APP_SIGN_IN, APP_SIGN_UP, APP_TRY, authModeFromUrl, authRedirectUrl, cohortFromUrl } from "./app-routing.js";
 import GuestTrial from "./guest.jsx";
-import { GUEST_LIMIT, loadGuest, guestFresh, guestSummary } from "./guest.js";
+import { GUEST_LIMIT, loadGuest, guestFresh, guestSummary, storageOrNull } from "./guest.js";
 import { forgetTrialOnRemoteSignOut, remoteSignOutStorageEvent } from "./sign-out.js";
 import { suggestEmail } from "./email-typo.js";
 import { explainAuthError } from "./auth-messages.js";
@@ -42,13 +42,13 @@ export function AuthScreen({ initialMode = "signin", onBack, cohort = null, onTr
   const clinical = cohort === CLINICAL_COHORT;
   /* A guest trial saved on this device: say exactly what signing up keeps. */
   const [trial] = useState(() => {
-    try { const g = loadGuest(window.localStorage); return guestFresh(g) ? guestSummary(g) : null; } catch { return null; }
+    try { const g = loadGuest(storageOrNull(() => window.localStorage)); return guestFresh(g) ? guestSummary(g) : null; } catch { return null; }
   });
 
   /* Same-tab OAuth and magic-link returns sometimes drop the query string.
      The redirect URL still carries ?cohort=clinicals; this is the backup. */
   useEffect(() => {
-    if (clinical) rememberCohort(window.sessionStorage);
+    if (clinical) rememberCohort(storageOrNull(() => window.sessionStorage));
   }, [clinical]);
 
   /* Messages render above the form, but the buttons that produce them sit at
@@ -67,7 +67,7 @@ export function AuthScreen({ initialMode = "signin", onBack, cohort = null, onTr
     setBusy(true); setError(""); setNotice("");
     try {
       if (mode === "signup") {
-        if (clinical) rememberCohort(window.sessionStorage);
+        if (clinical) rememberCohort(storageOrNull(() => window.sessionStorage));
         const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: authRedirectUrl() } });
         if (error) throw error;
         if (data.user && !data.session) setNotice("Check your email to confirm your account, then sign in.");
@@ -115,7 +115,7 @@ export function AuthScreen({ initialMode = "signin", onBack, cohort = null, onTr
   const sendMagicLink = async () => {
     setError(""); setNotice("");
     if (!email) { setError("Enter your email first, then tap the link button."); return; }
-    if (clinical) rememberCohort(window.sessionStorage);
+    if (clinical) rememberCohort(storageOrNull(() => window.sessionStorage));
     setLinkBusy(true);
     try {
       const { error } = await supabase.auth.signInWithOtp({
@@ -134,7 +134,7 @@ export function AuthScreen({ initialMode = "signin", onBack, cohort = null, onTr
 
   const signInWithGoogle = async () => {
     setError(""); setNotice("");
-    if (clinical) rememberCohort(window.sessionStorage);
+    if (clinical) rememberCohort(storageOrNull(() => window.sessionStorage));
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: authRedirectUrl() },
@@ -370,9 +370,11 @@ export class ErrorBoundary extends React.Component {
 
 function initialEntry() {
   if (typeof window === "undefined") return "booting";
-  const cohort = cohortFromUrl(window.location.href) || rememberedCohort(window.sessionStorage);
+  const session = storageOrNull(() => window.sessionStorage);
+  const local = storageOrNull(() => window.localStorage);
+  const cohort = cohortFromUrl(window.location.href) || rememberedCohort(session);
   if (cohort === CLINICAL_COHORT) return "booting";
-  if (welcomeStillPending(window.localStorage, isStandalone())) return "welcome";
+  if (welcomeStillPending(local, isStandalone())) return "welcome";
   return "ready";
 }
 
@@ -389,14 +391,14 @@ export default function AuthGate() {
   const [screenMode, setScreenMode] = useState(() => (authMode === "try" ? "signup" : authMode));
   const [authKey, setAuthKey] = useState(0);
   const screenCohort = cohortFromUrl(typeof window !== "undefined" ? window.location.href : "")
-    || rememberedCohort(typeof window !== "undefined" ? window.sessionStorage : null);
+    || rememberedCohort(typeof window !== "undefined" ? storageOrNull(() => window.sessionStorage) : null);
 
   useEffect(() => {
     /* An ad can point straight at /app/, so the tags must be captured here too
        and not only on the marketing site. */
     captureAttribution();
     supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null));
-    const forgetTrial = () => forgetTrialOnRemoteSignOut("SIGNED_OUT", { storage: window.localStorage, holdStorage: window.sessionStorage });
+    const forgetTrial = () => forgetTrialOnRemoteSignOut("SIGNED_OUT", { storage: storageOrNull(() => window.localStorage), holdStorage: storageOrNull(() => window.sessionStorage) });
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       if (event === "PASSWORD_RECOVERY") setRecovering(true);
       if (event === "SIGNED_OUT") forgetTrial();
@@ -423,12 +425,12 @@ export default function AuthGate() {
     const userId = session?.user?.id;
     if (!userId || recovering) return;
     let cancel = false;
-    const cohort = cohortFromUrl(window.location.href) || rememberedCohort(window.sessionStorage);
+    const cohort = cohortFromUrl(window.location.href) || rememberedCohort(storageOrNull(() => window.sessionStorage));
     if (cohort !== CLINICAL_COHORT) {
       if (window.location.pathname !== APP_ROOT) {
         window.history.replaceState({}, "", signedInPath(window.location.href, APP_ROOT));
       }
-      if (!cancel) setEntry(welcomeStillPending(window.localStorage, isStandalone()) ? "welcome" : "ready");
+      if (!cancel) setEntry(welcomeStillPending(storageOrNull(() => window.localStorage), isStandalone()) ? "welcome" : "ready");
       return;
     }
     (async () => {
@@ -438,10 +440,10 @@ export default function AuthGate() {
         const decision = completeClinicalClaim({
           status: result?.status,
           href: window.location.href,
-          storage: window.localStorage,
+          storage: storageOrNull(() => window.localStorage),
           standalone: isStandalone(),
         });
-        forgetCohort(window.sessionStorage);
+        forgetCohort(storageOrNull(() => window.sessionStorage));
         window.history.replaceState({}, "", decision.path);
         setEntry(decision.showWelcome ? "welcome" : "ready");
       } catch {
@@ -481,7 +483,7 @@ export default function AuthGate() {
     );
   }
   if (entry === "welcome") {
-    return <ClinicalWelcome onStart={() => { dismissClinicalWelcome(window.localStorage); setEntry("ready"); }} />;
+    return <ClinicalWelcome onStart={() => { dismissClinicalWelcome(storageOrNull(() => window.localStorage)); setEntry("ready"); }} />;
   }
   /* The study app stays unmounted until the claim returns, so its first
      entitlement read already includes the 30-day pass. */

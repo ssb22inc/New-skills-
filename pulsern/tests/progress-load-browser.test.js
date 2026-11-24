@@ -25,6 +25,15 @@ const questions = new Proxy({}, { get(_t, p) {
   if (p === "then") return (res) => {
     const script = window.__questionPages;
     if (!Array.isArray(script)) return Promise.resolve(offline).then(res);
+    if (window.__holdCatalog) {
+      const held = window.__holdCatalog;
+      window.__holdCatalog = null;
+      return held.then(() => {
+        const page = script[window.__questionPageIndex || 0] || { data: null, error: { message: "page failed" } };
+        window.__questionPageIndex = (window.__questionPageIndex || 0) + 1;
+        return Promise.resolve(page).then(res);
+      });
+    }
     const page = script[window.__questionPageIndex || 0] || { data: null, error: { message: "page failed" } };
     window.__questionPageIndex = (window.__questionPageIndex || 0) + 1;
     return Promise.resolve(page).then(res);
@@ -48,6 +57,11 @@ const progress = new Proxy({}, { get(_t, p) {
       },
       then(onFulfilled, onRejected) {
         const run = (async () => {
+          let releaseAfter = null;
+          if (window.__holdNextSave) {
+            window.__holdNextSave = false;
+            releaseAfter = new Promise((resolve) => { window.__releaseSave = resolve; });
+          }
           if (window.__stallSave || (window.__stallSaves || 0) > 0) {
             if ((window.__stallSaves || 0) > 0) window.__stallSaves -= 1;
             await new Promise((resolve, reject) => {
@@ -75,14 +89,18 @@ const progress = new Proxy({}, { get(_t, p) {
             if (exists) return { data: [], error: { code: "23505", message: "duplicate" } };
             window.__hasRow = true;
             window.__revision = 1;
+            window.__row = row.blob;
             (window.__upserts ||= []).push(row.blob);
             return { data: [{ revision: 1 }], error: null };
           }
           if (!exists || expected !== current) return { data: [], error: null };
           window.__hasRow = true;
           window.__revision = current + 1;
+          window.__row = row.blob;
           (window.__upserts ||= []).push(row.blob);
-          return { data: [{ revision: window.__revision }], error: null };
+          const result = { data: [{ revision: window.__revision }], error: null };
+          if (releaseAfter) await releaseAfter;
+          return result;
         })();
         return run.then(onFulfilled, onRejected);
       },
@@ -127,18 +145,19 @@ const guest = (startedAt) => ({ v: 1, startedAt, lastAt: startedAt + 60_000, day
 ], xp: 20, run: 0, bestRun: 1, ability: null, missSchedule: {} });
 const existingRow = { theme: "light", tourSeen: true, xp: 500, bestRun: 7, log: Array.from({ length: 30 }, (_, i) => ({ id: 1000 + i, cat: "Pharmacology", diff: 1, correct: true })), streak: { count: 20, lastDay: "2020-01-01", shield: true } };
 
-async function open({ session, row = null, readError = false, guestData = null, nullBlob = false, oldBackup = false, stallSave = false, pendingKey = false, questionPages = null, casesOk = false }) {
+async function open({ session, row = null, readError = false, guestData = null, nullBlob = false, oldBackup = false, stallSave = false, pendingKey = false, questionPages = null, casesOk = false, holdCatalog = false }) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await ctx.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   await page.route("**/api/**", (r) => r.fulfill({ status: 503, contentType: "application/json", body: "{}" }));
-  await page.addInitScript(({ session, row, readError, guestData, nullBlob, oldBackup, stallSave, pendingKey, questionPages, casesOk }) => {
+  await page.addInitScript(({ session, row, readError, guestData, nullBlob, oldBackup, stallSave, pendingKey, questionPages, casesOk, holdCatalog }) => {
     if (oldBackup && !sessionStorage.getItem("backupSeeded")) { localStorage.setItem("pulsern-progress-backup-v1", JSON.stringify([{ userId: "someone-else", raw: "{}" }])); sessionStorage.setItem("backupSeeded", "1"); }
     if (pendingKey) localStorage.setItem("pulsern-pending-progress-v1:leftover", JSON.stringify({ log: [{ id: 1, correct: true }] }));
     window.__session = session; window.__row = row; window.__readError = readError; window.__nullBlob = nullBlob; window.__upserts = []; window.__stallSave = stallSave; window.__questionPages = questionPages; window.__questionPageIndex = 0; window.__casesOk = casesOk;
+    if (holdCatalog) window.__holdCatalog = new Promise((resolve) => { window.__releaseCatalog = resolve; });
     if (guestData && !sessionStorage.getItem("seeded")) { localStorage.setItem("pulsern-guest-v1", JSON.stringify(guestData)); sessionStorage.setItem("seeded", "1"); }
-  }, { session, row, readError, guestData, nullBlob, oldBackup, stallSave, pendingKey, questionPages, casesOk });
+  }, { session, row, readError, guestData, nullBlob, oldBackup, stallSave, pendingKey, questionPages, casesOk, holdCatalog });
   await page.goto(`${base}ops/product-screenshot.html`, { waitUntil: "networkidle" });
   return { ctx, page, errors };
 }
@@ -568,6 +587,62 @@ describe("a loaded catalog that omits a saved miss can be left", () => {
       expect(await page.getByRole("heading", { name: "This question didn't load" }).count()).toBe(0);
       const saved = await page.evaluate(() => window.__upserts.at(-1));
       expect(saved.log.some((item) => item.key === "bank:2500" && item.correct === false)).toBe(true);
+    } finally { await ctx.close(); }
+  }, 120_000);
+});
+
+describe("reset survives a save that finishes late", () => {
+  it("a new answer persists after a pre-reset write responds", async () => {
+    const { ctx, page } = await open({ session: sessionFor(NOW - 90 * 86400000), row: existingRow });
+    try {
+      await page.getByRole("button", { name: "Stats", exact: true }).waitFor({ timeout: 30_000 });
+      await page.waitForFunction(() => (window.__upserts || []).length >= 1);
+      await page.getByRole("button", { name: "Menu" }).click();
+      await page.evaluate(() => { window.__holdNextSave = true; });
+      await page.getByRole("button", { name: /Night mode/ }).click();
+      await page.getByRole("button", { name: /Settings & Stats/ }).click();
+      await page.getByRole("button", { name: /Reset all progress/ }).click();
+      await page.getByRole("button", { name: /Yes, erase everything/ }).click();
+      await page.waitForFunction(() => (window.__deletes || 0) >= 1);
+      await page.evaluate(() => { if (window.__releaseSave) window.__releaseSave(); });
+      await page.getByRole("button", { name: "Practice", exact: true }).click();
+      await page.getByRole("button", { name: /New questions/ }).click();
+      await page.getByRole("radio").first().click();
+      await page.getByRole("button", { name: "Check answer" }).click();
+      await page.waitForFunction(() => (window.__upserts || []).some((blob) => Array.isArray(blob.log) && blob.log.length === 1));
+    } finally { await ctx.close(); }
+  }, 120_000);
+});
+
+describe("an open unresolved card learns a late catalog candidate", () => {
+  it("shows the bank question when the catalog arrives without leaving the card", async () => {
+    const row = {
+      theme: "light", tourSeen: true, xp: 10, bestRun: 1,
+      log: [{ id: 7, unclassified: true, cat: "Management of Care", diff: 1, correct: false }],
+      streak: { count: 1, lastDay: "2020-01-01", shield: true },
+      missSchedule: { 7: { interval: 1, due: "2020-01-02" } },
+      fcNew: { day: todayStr(), count: 20 },
+      srsMap: {},
+    };
+    const questionPages = [{
+      data: [{
+        id: 7, cat: "Management of Care", diff: 1, type: "mc",
+        stem: "Shared bank stem for the late catalog question seven.",
+        options: ["Alpha choice", "Beta choice", "Gamma choice"], answer: 0,
+        rationale: "A rationale long enough to pass the catalog validator for this row.",
+        elo_rating: 1200,
+      }],
+      error: null,
+    }];
+    const { ctx, page } = await open({ session: sessionFor(NOW - 90 * 86400000), row, questionPages, casesOk: true, holdCatalog: true });
+    try {
+      await page.getByRole("button", { name: "Practice", exact: true }).click({ timeout: 30_000 });
+      await page.getByRole("button", { name: /Review misses/ }).click();
+      await page.getByRole("heading", { name: "Which question was this?" }).waitFor({ timeout: 15_000 });
+      expect(await page.getByRole("button", { name: /Shared bank stem/ }).count()).toBe(0);
+      await page.evaluate(() => { window.__releaseCatalog(); });
+      await page.getByRole("button", { name: /Shared bank stem/ }).waitFor({ timeout: 15_000 });
+      expect(await page.getByRole("heading", { name: "Which question was this?" }).count()).toBe(1);
     } finally { await ctx.close(); }
   }, 120_000);
 });

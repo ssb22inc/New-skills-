@@ -349,6 +349,17 @@ function catalogMissCards(log, questions, schedule, today) {
   return cards;
 }
 
+/* The card on screen was built before the catalog arrived. When the
+   same miss now has more candidates, the open card takes that list. */
+export function refreshedUnresolved(open, pool) {
+  if (!open?.unresolved) return open ?? null;
+  const next = (pool ?? []).find((item) => item?.unresolved && String(item.legacyId) === String(open.legacyId));
+  if (!next) return open;
+  const sig = (list) => (list ?? []).map((item) => String(item?.key ?? item?.id ?? "")).join("|");
+  if (sig(open.candidates) === sig(next.candidates)) return open;
+  return next;
+}
+
 export function reviewPools(questions, log, schedule, today = todayStr()) {
   const index = historyIndex(log);
   const peers = peerCounts(questions);

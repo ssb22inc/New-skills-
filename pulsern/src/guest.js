@@ -12,7 +12,7 @@
    account that already has answer history does not take the trial.
    Each trial answer is stored as builtin:<id>. A shared-bank question
    with the same number is bank:<id> and is a different question. */
-import { answerXp, answerCountsForRun } from "./rewards.js";
+import { answerXp, answerCountsForRun, emptyRewards } from "./rewards.js";
 import { applyAnswer, stampedQuestion } from "./answer-apply.js";
 import { canonicalKey } from "./question-key.js";
 
@@ -134,6 +134,107 @@ export function applyProgressWrite(rows, { userId, key, blob, expectedRevision }
   row.blob = blob;
   row.revision = expected + 1;
   return { revision: row.revision, rows: list };
+}
+
+function progressRowKey(row) {
+  if (!row || typeof row !== "object") return "";
+  if (row.attempt != null && row.attempt !== "") return `a:${row.attempt}`;
+  return `r:${row.key ?? ""}:${row.id ?? ""}:${row.correct}:${row.day ?? ""}:${row.at ?? ""}`;
+}
+
+/* The server row wins. Answers that exist only on this device are applied
+   on top of it, through the same live-answer function, so the other
+   device's blob is not replaced. */
+export function reconcileProgress(serverBlob, localBlob) {
+  const server = serverBlob && typeof serverBlob === "object" && !Array.isArray(serverBlob) ? serverBlob : {};
+  const local = localBlob && typeof localBlob === "object" && !Array.isArray(localBlob) ? localBlob : {};
+  const serverLog = Array.isArray(server.log) ? server.log : [];
+  const localLog = Array.isArray(local.log) ? local.log : [];
+  const seen = new Set(serverLog.map(progressRowKey));
+  const pending = localLog.filter((row) => row && !seen.has(progressRowKey(row)));
+  let state = {
+    log: serverLog,
+    xp: server.xp ?? 0,
+    ability: server.ability ?? {},
+    streak: server.streak,
+    rewards: server.rewards ?? emptyRewards(),
+    daily: server.daily,
+    missSchedule: server.missSchedule,
+    run: server.run ?? 0,
+    bestRun: server.bestRun ?? 0,
+  };
+  for (const row of pending) {
+    const applied = applyAnswer(state, {
+      q: {
+        id: row.id, key: row.key, source: row.source, cat: row.cat, diff: row.diff,
+        stem: row.stem, population: row.pop, unclassified: row.unclassified,
+      },
+      correct: !!row.correct,
+      ms: Number.isFinite(row.ms) ? row.ms : Infinity,
+      today: row.day || "2026-11-24",
+      attempt: row.attempt,
+      words: row.words,
+      schedule: row.schedule !== false,
+    });
+    if (!applied.duplicate) state = applied.state;
+  }
+  return {
+    ...server,
+    log: state.log,
+    xp: state.xp,
+    ability: state.ability,
+    streak: state.streak,
+    rewards: state.rewards,
+    daily: state.daily,
+    missSchedule: state.missSchedule,
+    run: state.run,
+    bestRun: state.bestRun,
+  };
+}
+
+/* knownRevision matches: this device still owns the row, so its blob lands.
+   It does not: keep the server row and fold in only this device's new answers. */
+export function recoverProgressWrite(row, localBlob, knownRevision) {
+  const expected = Number(knownRevision) || 0;
+  if (Number(row?.revision) === expected) {
+    row.blob = localBlob;
+    row.revision = expected + 1;
+    return { revision: row.revision, blob: row.blob };
+  }
+  const merged = reconcileProgress(row?.blob, localBlob);
+  row.blob = merged;
+  row.revision = (Number(row?.revision) || 0) + 1;
+  return { revision: row.revision, blob: merged, reconciled: true };
+}
+
+/* A reset starts a new epoch. A save that began in the old epoch must
+   not put its revision back. */
+export function createProgressEpoch() {
+  let revision = 0;
+  let epoch = 0;
+  return {
+    epoch: () => epoch,
+    revision: () => revision,
+    note(next, seen) {
+      if (seen !== epoch) return false;
+      revision = Number(next) || 0;
+      return true;
+    },
+    abandon() {
+      epoch += 1;
+      revision = 0;
+    },
+  };
+}
+
+/* window.localStorage itself can throw. Callers get null and keep going. */
+export function storageOrNull(read) {
+  try {
+    const storage = typeof read === "function" ? read() : read;
+    return storage ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export function persistDecision(session, expectedUserId) {

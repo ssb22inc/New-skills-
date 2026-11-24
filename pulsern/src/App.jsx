@@ -269,7 +269,7 @@ import {
   sessionProgress as cardProgress, canUndoGrade, undoGrade,
 } from "./card-nav.js";
 import { pickCategory, seededRandom, seedFrom, STARVE_WINDOW } from "./weak-spots.js";
-import { updateMissSchedule, reviewPools, sessionPool, expandTrialQuestions, unseenQuestions, questionByIdentity, answerIdentity, legacyCandidates } from "./question-review.js";
+import { updateMissSchedule, reviewPools, sessionPool, expandTrialQuestions, unseenQuestions, questionByIdentity, answerIdentity, legacyCandidates, refreshedUnresolved } from "./question-review.js";
 import {
   emptyNav, appendQuestion, saveDraft, markAnswered, canGoBack, goBack, present,
   forward, fallbackSkip, jumpToSkipped, skippedCount, currentEntry, nextUnvisited,
@@ -317,7 +317,7 @@ import {
   RewardsStyle, StreakGlyph, EcgBeat, ComboChip, MomentSheet, streakMoment, ShiftCard, CareerCard,
   BadgeGrid, RoundsCard, BestsCard, SessionRecap, EffectsCard, comboSpeech, useAnnouncer,
 } from "./rewards-ui.jsx";
-import { mergeGuestIntoBlob, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, readGuestForHandoff, releaseHeldGuest, waitForFlush, accountHasAnswers } from "./guest.js";
+import { mergeGuestIntoBlob, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, readGuestForHandoff, releaseHeldGuest, waitForFlush, accountHasAnswers, reconcileProgress, createProgressEpoch, storageOrNull } from "./guest.js";
 import { applyAnswer, commitLiveAnswer, stampedQuestion, newAttemptId } from "./answer-apply.js";
 import { claimLegacyAt, claimLegacySchedule } from "./question-key.js";
 import { stampCatalogQuestion, stampLoadedCatalog } from "./question-identity.js";
@@ -338,7 +338,7 @@ const STORE_KEY = "pulsern-v1";
    • Cloud sync:       Supabase/Firebase row keyed by user id
    Each method returns/accepts a JSON string and is async-safe.
 ------------------------------------------------------------------------ */
-let progressRevision = 0;
+const progressGate = createProgressEpoch();
 const store = {
   async get(key) {
     const result = await supabase.auth.getSession();
@@ -354,21 +354,22 @@ const store = {
     /* A read error must never look like "no saved progress": the caller
        would treat the account as new and autosave defaults over it. */
     if (error) throw new Error(error.message || "Could not read saved progress");
-    if (!data) { progressRevision = 0; return null; }
-    progressRevision = Number(data.revision) || 0;
+    if (!data) { progressGate.note(0, progressGate.epoch()); return null; }
+    progressGate.note(Number(data.revision) || 0, progressGate.epoch());
     return JSON.stringify(data.blob);
   },
   async set(key, value, expectedUserId, ctx = {}) {
     const signal = ctx?.signal;
-    const current = () => !signal?.aborted && (ctx?.isCurrent ? ctx.isCurrent() : true);
+    const epoch = progressGate.epoch();
+    const current = () => !signal?.aborted && epoch === progressGate.epoch() && (ctx?.isCurrent ? ctx.isCurrent() : true);
     const aborted = () => {
       const err = new Error("aborted");
       err.code = "aborted";
       return err;
     };
-    if (!current()) throw aborted();
+    if (epoch !== progressGate.epoch()) throw aborted();
     const { data: { session } } = await supabase.auth.getSession();
-    if (!current()) throw aborted();
+    if (epoch !== progressGate.epoch()) throw aborted();
     const decision = persistDecision(session, expectedUserId);
     if (decision !== "write") {
       const err = new Error(decision);
@@ -376,41 +377,56 @@ const store = {
       throw err;
     }
     const blob = JSON.parse(value);
-    const writeAt = (expected) => {
-      const patch = { blob, revision: expected + 1, updated_at: new Date().toISOString() };
+    const writeAt = (expected, payload) => {
+      const patch = { blob: payload, revision: expected + 1, updated_at: new Date().toISOString() };
       return supabase.from("progress").update(patch)
         .eq("user_id", session.user.id).eq("key", key).eq("revision", expected)
         .select("revision");
     };
     const finish = async (request) => {
       if (signal && request && typeof request.abortSignal === "function") request = request.abortSignal(signal);
-      if (!current()) throw aborted();
       const { data, error } = await request ?? {};
       const revision = Array.isArray(data) ? Number(data[0]?.revision) || null : null;
-      if (revision) progressRevision = revision;
+      if (revision) progressGate.note(revision, epoch);
       if (error) throw new Error(error.message || "Could not save progress");
-      if (!current()) throw aborted();
+      if (epoch !== progressGate.epoch()) throw aborted();
       return revision;
     };
-    let revision = await finish(writeAt(progressRevision));
-    if (!revision && progressRevision === 0 && current()) {
-      const inserted = supabase.from("progress").insert({
-        user_id: session.user.id, key, blob, revision: 1, updated_at: new Date().toISOString(),
-      }).select("revision");
-      try { revision = await finish(inserted); } catch { revision = null; }
+    const insertAt = (payload) => supabase.from("progress").insert({
+      user_id: session.user.id, key, blob: payload, revision: 1, updated_at: new Date().toISOString(),
+    }).select("revision");
+    let revision = await finish(writeAt(progressGate.revision(), blob));
+    if (!revision && progressGate.revision() === 0 && epoch === progressGate.epoch()) {
+      try { revision = await finish(insertAt(blob)); } catch { revision = null; }
+    }
+    if (!revision && epoch === progressGate.epoch()) {
+      const { data: fresh, error: readError } = await supabase.from("progress")
+        .select("blob, revision").eq("user_id", session.user.id).eq("key", key).maybeSingle();
+      if (readError) throw new Error(readError.message || "Could not read saved progress");
+      if (epoch !== progressGate.epoch()) throw aborted();
+      if (!fresh) {
+        try { revision = await finish(insertAt(blob)); } catch { revision = null; }
+      } else {
+        const merged = reconcileProgress(fresh.blob, blob);
+        const unchanged = JSON.stringify(merged) === JSON.stringify(fresh.blob);
+        if (unchanged) {
+          progressGate.note(Number(fresh.revision) || 0, epoch);
+          return;
+        }
+        revision = await finish(writeAt(Number(fresh.revision) || 0, merged));
+      }
     }
     if (!revision) {
       const err = new Error("conflict");
       err.code = "conflict";
       throw err;
     }
-    progressRevision = revision;
   },
   async delete(key) {
+    progressGate.abandon();
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     await supabase.from("progress").delete().eq("user_id", session.user.id).eq("key", key);
-    progressRevision = 0;
   },
 };
 
@@ -1156,6 +1172,7 @@ export default function App() {
   const resetAll = async () => {
     /* Never while not saving: the only server copy is the row we couldn't open (REVIEW-4 R4-1). */
     if (saveBlocked) return;
+    saveQueue.current?.invalidate();
     try { await store.delete(STORE_KEY); } catch (e) { /* nothing saved */ }
     setXp(0); setRun(0); setBestRun(0); setLog([]); setFlagged([]); setCustomQs([]);
     touchedDay.current = null;
@@ -2010,6 +2027,10 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
     && questionByIdentity(reviewQuestions, q.key)
     ? q.key
     : null;
+  const unresolvedNext = q?.unresolved ? refreshedUnresolved(q, reviewAll) : null;
+  const unresolvedSig = unresolvedNext && unresolvedNext !== q
+    ? (unresolvedNext.candidates ?? []).map((item) => item.key ?? item.id).join("|")
+    : "";
   useEffect(() => {
     if (!loadedKey) return;
     const real = questionByIdentity(reviewQuestions, loadedKey);
@@ -2022,6 +2043,13 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
     // The key appearing in the catalog is the change. The question object is read once then.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadedKey]);
+  useEffect(() => {
+    if (!unresolvedSig || !q?.unresolved) return;
+    const next = refreshedUnresolved(q, reviewAll);
+    if (next && next !== q) setQ(next);
+    // The candidate list is the change. The pool is read once then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unresolvedSig]);
 
   const remember = (item) => {
     const id = item ? answerIdentity(item) : null;

@@ -4,6 +4,7 @@
    and returns no row. That is the same screen a brand-new student sees. */
 const offline = { data: null, error: new Error("product screenshot offline fixture") };
 const emptyAccount = { data: null, error: null };
+const emptyPage = { data: [], error: null };
 
 function chain(result) {
   const api = new Proxy({}, {
@@ -31,6 +32,7 @@ export const supabase = {
   },
   from(table) {
     if (table === "progress") return chain(emptyAccount);
+    if (table === "questions" || table === "flashcards" || table === "case_studies") return chain(emptyPage);
     return chain(offline);
   },
 };

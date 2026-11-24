@@ -348,7 +348,7 @@ describe("a trial cannot be lost, duplicated, or over-paid", () => {
     const app = readFileSync("src/App.jsx", "utf8");
     const save = app.slice(app.indexOf("autosave on change"), app.indexOf("autosave on change") + 2200);
     expect(save.indexOf("releaseHeldGuest(window.sessionStorage)")).toBeGreaterThan(save.indexOf("guestClearOnSave(pendingAtStart)"));
-    expect(readFileSync("src/guest.jsx", "utf8")).toContain("holdGuestTrial(guest, window.sessionStorage)");
+    expect(readFileSync("src/guest.jsx", "utf8")).toContain("holdGuestTrial(guest, sessionBox())");
   });
 
   it("prefers the longer held copy over a short device copy and never adds both", () => {

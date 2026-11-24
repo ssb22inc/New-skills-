@@ -14,13 +14,17 @@ import { rewardBeat, motionAllowed, GUEST_PREFS } from "./effects.js";
 import { RewardsStyle, EcgBeat, Ripple, StreakGlyph, useAnnouncer, comboSpeech } from "./rewards-ui.jsx";
 import { freePassPlan } from "./free-pass.js";
 import {
-  GUEST_LIMIT, guestPool, emptyGuest, loadGuest, saveGuest, guestAnswer, guestRemaining, guestSummary, guestFresh, clearGuest, holdGuestTrial,
+  GUEST_LIMIT, guestPool, emptyGuest, loadGuest, saveGuest, guestAnswer, guestRemaining, guestSummary, guestFresh, clearGuest, holdGuestTrial, storageOrNull,
 } from "./guest.js";
 
+function localBox() { return storageOrNull(() => window.localStorage); }
+function sessionBox() { return storageOrNull(() => window.sessionStorage); }
+
 function initialGuest() {
-  const g = loadGuest(window.localStorage);
+  const storage = localBox();
+  const g = storage ? loadGuest(storage) : null;
   if (g && (guestFresh(g) || g.log.length === 0)) return g;
-  if (g) clearGuest(window.localStorage);
+  if (g && storage) clearGuest(storage);
   return emptyGuest(Date.now(), todayStr());
 }
 
@@ -36,7 +40,7 @@ export default function GuestTrial({ onSignUp, onSignIn }) {
   const motion = motionAllowed(GUEST_PREFS);
   const [liveRegion, announce] = useAnnouncer();
 
-  useEffect(() => { setDeviceSaved(saveGuest(window.localStorage, guest)); }, [guest]);
+  useEffect(() => { setDeviceSaved(saveGuest(localBox(), guest)); }, [guest]);
   useEffect(() => {
     const open = () => { setSection("labs"); setLabOpen(true); };
     window.addEventListener(OPEN_LABS_EVENT, open);
@@ -61,7 +65,7 @@ export default function GuestTrial({ onSignUp, onSignIn }) {
   };
 
   const leaveForAuth = (go) => {
-    holdGuestTrial(guest, window.sessionStorage);
+    holdGuestTrial(guest, sessionBox());
     go?.();
   };
   const answered = guest.log.length;
