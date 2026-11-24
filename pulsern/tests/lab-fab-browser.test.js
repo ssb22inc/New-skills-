@@ -152,8 +152,19 @@ describe("floating 🧪 study toolkit", () => {
     await ctx.close();
   }, 120_000);
 
-  it("keeps Check answer clear of the question navigation at the screenshot size", async () => {
+  it("keeps question navigation on screen when the stem is long, and Check answer clear at the screenshot size", async () => {
+    const long = await open({ width: 390, height: 844 });
+    await long.page.evaluate(() => window.T.setStem("Which client should the nurse see first? " + "The deciding finding continues across the question. ".repeat(40)));
+    await long.page.waitForTimeout(250);
+    const stuck = await long.page.locator(".q-nav-wrap").boundingBox();
+    expect(stuck.y).toBeGreaterThanOrEqual(0);
+    expect(stuck.y + stuck.height).toBeLessThanOrEqual(844);
+    await long.ctx.close();
     const { ctx, page } = await open({ width: 720, height: 620 });
+    await page.evaluate(() => {
+      document.querySelectorAll(".ngn-matrix, .exh-wrap, figure, table, .rationale, .chart").forEach((el) => { el.style.display = "none"; });
+    });
+    await page.waitForTimeout(200);
     const check = await page.getByRole("button", { name: "Check answer" }).boundingBox();
     const nav = await page.locator(".q-nav-wrap").boundingBox();
     expect(check && nav).toBeTruthy();

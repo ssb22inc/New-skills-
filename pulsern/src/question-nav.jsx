@@ -1,8 +1,10 @@
 /* Back, Next, and Skip. Large targets for a phone held in one hand.
    The count is the way back to anything skipped this sitting.
-   The lab reference is the draggable 🧪 study toolkit, which settles
-   clear of this row on its own (src/lab-fab.jsx). nextPrimary=false
+   The row sticks above the tab bar on a long item, and stays in flow
+   when sticking would cover Check answer. The lab reference is the
+   draggable 🧪 study toolkit (src/lab-fab.jsx). nextPrimary=false
    keeps Next secondary while "Check answer" is the one primary action. */
+import React, { useEffect, useRef } from "react";
 
 export const OPEN_LABS_EVENT = "pulsern:open-labs";
 export function openLabs() {
@@ -29,8 +31,39 @@ export function QuestionNav({
   nextPrimary = true,
 }) {
   const skippedLabel = skipped === 1 ? "1 skipped" : `${skipped} skipped`;
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || layout !== "sticky") return undefined;
+    let frame = 0;
+    const place = () => {
+      frame = 0;
+      el.classList.add("q-nav-flat");
+      const natural = el.getBoundingClientRect();
+      const stickTop = window.innerHeight - 62 - natural.height;
+      const checks = [...(el.parentElement?.querySelectorAll("button") ?? [])].filter((node) => !el.contains(node) && /check answer/i.test(node.textContent || ""));
+      const coversCheck = checks.some((node) => {
+        const box = node.getBoundingClientRect();
+        const onScreen = box.bottom > 0 && box.top < window.innerHeight;
+        return onScreen && box.top > stickTop - 1;
+      });
+      el.classList.toggle("q-nav-flat", coversCheck);
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(place); };
+    schedule();
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
+    ro?.observe(el.parentElement || document.body);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+      ro?.disconnect();
+    };
+  }, [layout]);
   return (
-    <div className={layout === "inline" ? "q-nav-wrap card-nav" : "q-nav-wrap"}>
+    <div ref={ref} className={(layout === "inline" ? "q-nav-wrap card-nav" : "q-nav-wrap") + " q-nav-flat"}>
       <div className="q-skipped">
         <p className="small mono q-skipped-count">{skippedLabel}</p>
         <button

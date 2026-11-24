@@ -77,6 +77,10 @@ export function findClearSpot(anchor, view, blocks, { size = FAB_SIZE, margin = 
   const start = anchor && typeof anchor.x === "number" ? anchor : anchorToPx(anchor, view, size, margin);
   const side = start.side ?? (start.x + size / 2 < view.vw / 2 ? "left" : "right");
   const b = band(view, size, margin);
+  /* A band shorter than the button has no full-size spot. Parking uses the
+     header and tab bar as blockers, so the button cannot sit on them. */
+  const room = Math.min(view.vh - margin, view.bottom ?? view.vh - margin) - size;
+  if (room < b.top) return parkTab(start.y, view, guardChrome(view, blocks), side);
   const ay = clamp(start.y, b.top, b.maxY);
   let best = null;
   for (const s of [side, side === "left" ? "right" : "left"]) {

@@ -109,6 +109,19 @@ describe("settling clear of every target", () => {
     expect(spot.parked).toBe(true);
     expect(hitsAny(rect, [wall])).toBe(false);
   });
+  it("parks instead of covering the tab bar when the usable band is shorter than the button", () => {
+    const view = { vw: 844, vh: 130, top: 70, bottom: 54 };
+    const spot = findClearSpot(DEFAULT_ANCHOR, view, []);
+    const rect = { x: spot.x, y: spot.y, w: spot.w, h: spot.h };
+    const tab = { x: 0, y: view.bottom, w: view.vw, h: view.vh - view.bottom };
+    const header = { x: 0, y: 0, w: view.vw, h: view.top };
+    expect(spot.parked).toBe(true);
+    expect(rectsOverlap(rect, tab)).toBe(false);
+    expect(rectsOverlap(rect, header)).toBe(false);
+    const tighter = findClearSpot(DEFAULT_ANCHOR, { vw: 390, vh: 80, top: 90, bottom: 40 }, []);
+    expect(tighter.parked).toBe(true);
+    expect(rectsOverlap({ x: tighter.x, y: tighter.y, w: tighter.w, h: tighter.h }, { x: 0, y: 40, w: 390, h: 40 })).toBe(false);
+  });
   it("on a desktop the default sits in the free right margin", () => {
     const column = { x: 80, y: 71, w: 1120, h: 650 };
     const spot = findClearSpot(DEFAULT_ANCHOR, desk, [column]);

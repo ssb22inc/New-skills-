@@ -2962,7 +2962,8 @@ export function Style() {
       .row{display:flex;gap:8px;flex-wrap:wrap}
       /* Back / Next / Skip. Sticky so a long stem on a phone does not
          bury the controls under the tab bar. 48px targets, three across. */
-      .q-nav-wrap{position:static;z-index:4;background:var(--card);padding:8px 0 2px;margin-top:12px;border-top:1px solid var(--line)}
+      .q-nav-wrap{position:sticky;bottom:calc(62px + env(safe-area-inset-bottom));z-index:4;background:var(--card);padding:8px 0 2px;margin-top:12px;border-top:1px solid var(--line)}
+      .q-nav-wrap.q-nav-flat{position:static}
       .q-skipped{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
       .q-skipped-count{margin:0}
       .q-skipped .btn{margin-top:0;min-height:48px;padding:10px 12px;font-size:14px}
