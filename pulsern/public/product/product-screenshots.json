@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-11-24T02:40:22.089Z",
-  "sourceCommitSha": "d3c65527197aa6681bf008fc29d9ce905afec3ff",
+  "capturedAt": "2026-11-24T07:51:24.375Z",
+  "sourceCommitSha": "dbbf4eb6843d0939351ec1438217118e4607f959",
   "renderer": "PulseRN App.jsx deterministic built-in-content harness",
   "browser": "151.0.7922.34",
   "containsLearnerData": false,
-  "sourceSetSha256": "c4c3f4e1614f85daef994910f9da467c2abe828bb4cab548c6fa2f9c1af9da88",
+  "sourceSetSha256": "6f1b3596f4c19ee8c93611a87bb6f7520c2b9ed2da6afc275bfd385f4894a41b",
   "sourceFiles": {
     "src/App.jsx": "471c9d948749274eb362ae5845e3f33d193c50d896fd8ce25c683134b24089df",
     "src/ability-engine.js": "a4a3c018359cf2128407cf31c3059f4bd2fcde84138aacb68c7614d963e3f462",
@@ -82,8 +82,8 @@
   "images": [
     {
       "file": "pulsern-adaptive-practice.png",
-      "sha256": "c913f5a74d341d0b9911ffda97ff26bbaa88c61d999f24610cfc8cc7c26a0c3e",
-      "bytes": 66568,
+      "sha256": "51092b2776e2945e99243089686b9745269a8b62cab0426d3abed733496f6739",
+      "bytes": 66788,
       "width": 720,
       "height": 620,
       "alt": "PulseRN adaptive NCLEX practice screen with one question, four answer choices, and the control to check the answer",
@@ -91,8 +91,8 @@
     },
     {
       "file": "pulsern-today-dashboard.png",
-      "sha256": "fbfe9e2f5e7564b7c3be90b6e74f38c60ee6810f24da73c90eff354f8511b4ce",
-      "bytes": 85493,
+      "sha256": "5c606724ec16587bcb8ba002cd9f327171bff46d45a9fb4038c06822a8f8edf5",
+      "bytes": 85465,
       "width": 720,
       "height": 1000,
       "alt": "PulseRN Today dashboard showing the daily round, candidate monitor, study goal, and progress cards",
@@ -100,8 +100,8 @@
     },
     {
       "file": "pulsern-lab-reference.png",
-      "sha256": "df1316f4ff33ab6ea01079fa156542536b3435ee39c5d88386ad1fc2067f4d7d",
-      "bytes": 73863,
+      "sha256": "2d709bcf432754267df77020ad4cc99caf419820a7f1513b8c5cf7d785823cac",
+      "bytes": 73861,
       "width": 430,
       "height": 932,
       "alt": "PulseRN mobile lab-reference drawer open over an adaptive practice question",

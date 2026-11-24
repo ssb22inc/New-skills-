@@ -142,7 +142,7 @@ describe("floating 🧪 study toolkit", () => {
 
   it("never covers a clinical diagram, image, or table", async () => {
     const { ctx, page } = await open({ width: 390, height: 844 });
-    for (const selector of [".exh-wrap", ".exh-svg", "figure", "img", "table"]) {
+    for (const selector of [".exh-wrap", ".exh-svg", ".ngn-matrix", ".mx-row", "figure", "img", "table"]) {
       const region = await page.locator(selector).first().boundingBox();
       expect(region, selector).toBeTruthy();
       await mouseDrag(page, { x: region.x + Math.min(region.width / 2, 40), y: region.y + region.height / 2 });

@@ -26,6 +26,9 @@ function Screen() {
         <FocusBar open={focusOpen} setOpen={setFocusOpen} groups={[{ label: "Category", options: [["pharm", "Pharmacology"]], selected: [], onToggle() {} }]} />
         <section className="card stack study-col">
           <p className="stem">{stemText}</p>
+          <div className="ngn-matrix" role="group" aria-label="Answer grid">
+            <div className="mx-row"><span className="small">Continuous bubbling in the water seal</span></div>
+          </div>
           <div className="exh-wrap">
             <svg className="exh-svg" viewBox="0 0 340 80" role="img" aria-label="ECG strip">
               <path d="M0,40 L80,40 L90,20 L100,60 L110,40 L340,40" fill="none" stroke="currentColor" strokeWidth="2" />
