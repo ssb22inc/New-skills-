@@ -425,14 +425,64 @@ function mergeRewards(base, server, local, replayed, localReplay, serverReplay, 
 /* A save that is no longer the newest snapshot must not become the
    baseline. The next save still has to see what the other device wrote. */
 /* Same rule as migration 022. A missing or unchanged revision is an
-   older client: keep the write and advance the counter. A client that
-   sends a revision must send a greater one. */
+   older client. Before any revision-aware save, the snapshot lands and
+   the counter moves to 1. After one, the stored revision stays put and
+   the snapshot is parked for the client merge. A client that sends a
+   revision must send a greater one. */
 export function progressRevisionOnUpdate(oldRevision, incoming) {
   const oldRev = Number(oldRevision) || 0;
-  if (incoming == null || Number(incoming) === oldRev) return { revision: oldRev + 1, legacy: true };
+  if (incoming == null || Number(incoming) === oldRev) {
+    if (oldRev > 0) return { revision: oldRev, legacy: true, pending: true };
+    return { revision: oldRev + 1, legacy: true, pending: false };
+  }
   const next = Number(incoming);
   if (!Number.isFinite(next) || next < oldRev) throw new Error("progress revision conflict");
-  return { revision: next, legacy: false };
+  return { revision: next, legacy: false, pending: false };
+}
+
+function pendingRowKey(row) {
+  if (!row) return "";
+  if (row.attempt != null && row.attempt !== "") return `a:${row.attempt}`;
+  return `l:${row.id}:${row.correct}:${row.day ?? ""}:${row.at ?? ""}:${row.ms ?? ""}`;
+}
+
+function pendingAddsWork(current, snapshot) {
+  const have = new Set((current?.log ?? []).map(pendingRowKey));
+  for (const row of snapshot?.log ?? []) if (!have.has(pendingRowKey(row))) return true;
+  const ops = new Set((current?.rewards?.cardOps ?? []).map((op) => op?.id).filter((id) => id != null));
+  for (const op of snapshot?.rewards?.cardOps ?? []) if (op?.id != null && !ops.has(op.id)) return true;
+  return false;
+}
+
+/* Parked snapshots from an older open app. Each one is the other
+   device's blob. The current row is both the server copy and the
+   baseline, which is how a conflict save already keeps answers, card
+   XP, and a spent shield. A snapshot whose answers are already in the
+   row does not get scored again. */
+export function foldPendingProgress(stored, snapshots) {
+  let current = stored && typeof stored === "object" && !Array.isArray(stored) ? stored : {};
+  for (const snapshot of snapshots ?? []) {
+    if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) continue;
+    if (!pendingAddsWork(current, snapshot)) {
+      const next = reconcileProgress(current, snapshot, current);
+      current = {
+        ...next,
+        log: current.log,
+        ability: current.ability,
+        xp: current.xp,
+        rewards: current.rewards,
+        streak: current.streak,
+        daily: current.daily,
+        bestRun: current.bestRun,
+        run: current.run,
+        missSchedule: current.missSchedule,
+        srsMap: current.srsMap,
+      };
+      continue;
+    }
+    current = reconcileProgress(current, snapshot, current);
+  }
+  return current;
 }
 
 export function bindCommittedProgress(state, commit) {

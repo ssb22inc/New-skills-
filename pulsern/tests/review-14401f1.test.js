@@ -430,8 +430,9 @@ describe("a revision conflict keeps both devices' answers", () => {
     const sql = fs.readFileSync(new URL("../supabase/migrations/022_progress_revision_guard.sql", import.meta.url), "utf8");
     expect(sql).toMatch(/before update on public\.progress/i);
     expect(sql).toMatch(/new\.revision < old\.revision/);
-    expect(progressRevisionOnUpdate(4, undefined)).toEqual({ revision: 5, legacy: true });
-    expect(progressRevisionOnUpdate(4, 5)).toEqual({ revision: 5, legacy: false });
+    expect(progressRevisionOnUpdate(4, undefined)).toEqual({ revision: 4, legacy: true, pending: true });
+    expect(progressRevisionOnUpdate(0, undefined)).toEqual({ revision: 1, legacy: true, pending: false });
+    expect(progressRevisionOnUpdate(4, 5)).toEqual({ revision: 5, legacy: false, pending: false });
     expect(() => progressRevisionOnUpdate(4, 3)).toThrow(/revision conflict/);
     const rollback = fs.readFileSync(new URL("../supabase/rollback/rollback_relabel_legacy_progress_20261124.sql", import.meta.url), "utf8");
     expect(rollback).toMatch(/revision = live\.revision \+ 1/);
@@ -447,12 +448,11 @@ describe("a revision conflict keeps both devices' answers", () => {
 
   it("keeps a save that does not send a revision and rejects one that sends an older revision", () => {
     const sql = fs.readFileSync(new URL("../supabase/migrations/022_progress_revision_guard.sql", import.meta.url), "utf8");
-    expect(sql).toMatch(/new\.revision := old\.revision \+ 1/);
-    expect(sql).toMatch(/jsonb_array_elements/);
-    expect(sql).toMatch(/old\.revision > 0/);
-    expect(sql).not.toMatch(/new\.revision is null or new\.revision <= old\.revision then/);
-    expect(progressRevisionOnUpdate(4, undefined)).toEqual({ revision: 5, legacy: true });
-    expect(progressRevisionOnUpdate(4, 4)).toEqual({ revision: 5, legacy: true });
+    expect(sql).toMatch(/progress_pending_merge/);
+    expect(sql).toMatch(/return old/i);
+    expect(sql).not.toMatch(/create or replace function public\.progress_merge_legacy_blob/);
+    expect(progressRevisionOnUpdate(4, undefined)).toEqual({ revision: 4, legacy: true, pending: true });
+    expect(progressRevisionOnUpdate(4, 4)).toEqual({ revision: 4, legacy: true, pending: true });
     expect(progressRevisionOnUpdate(4, 6).revision).toBe(6);
     expect(() => progressRevisionOnUpdate(4, 3)).toThrow(/revision conflict/);
   });

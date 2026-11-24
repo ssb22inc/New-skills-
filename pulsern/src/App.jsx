@@ -317,7 +317,7 @@ import {
   RewardsStyle, StreakGlyph, EcgBeat, ComboChip, MomentSheet, streakMoment, ShiftCard, CareerCard,
   BadgeGrid, RoundsCard, BestsCard, SessionRecap, EffectsCard, comboSpeech, useAnnouncer,
 } from "./rewards-ui.jsx";
-import { mergeGuestIntoBlob, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, readGuestForHandoff, releaseHeldGuest, waitForFlush, accountHasAnswers, reconcileProgress, blobForSave, createProgressEpoch, storageOrNull, noteAccountRead, bindCommittedProgress } from "./guest.js";
+import { mergeGuestIntoBlob, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, readGuestForHandoff, releaseHeldGuest, waitForFlush, accountHasAnswers, reconcileProgress, blobForSave, createProgressEpoch, storageOrNull, noteAccountRead, bindCommittedProgress, foldPendingProgress } from "./guest.js";
 import { applyAnswer, commitLiveAnswer, stampedQuestion, newAttemptId } from "./answer-apply.js";
 import { claimLegacyAt, claimLegacySchedule } from "./question-key.js";
 import { stampCatalogQuestion, stampLoadedCatalog } from "./question-identity.js";
@@ -466,6 +466,45 @@ const store = {
       progressGate.note(bound.revision, epoch);
     }
     return JSON.stringify(blob) === JSON.stringify(raw) ? undefined : { reconciled: true, blob };
+  },
+  /* An older open app parked a snapshot. Fold it with the same conflict
+     merge as two devices, save that result, then drop the parked rows.
+     A failed save leaves them in place so the next load can try again. */
+  async absorbPending(key) {
+    const seenEpoch = accountEpoch;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (seenEpoch !== accountEpoch || !session?.user?.id) return null;
+    if (!acceptedBlob || typeof acceptedBlob !== "object") return null;
+    const { data, error } = await supabase.from("progress_pending_merge")
+      .select("id, snapshot")
+      .eq("user_id", session.user.id)
+      .eq("key", key)
+      .order("received_at", { ascending: true })
+      .order("id", { ascending: true });
+    if (seenEpoch !== accountEpoch) return null;
+    if (error) throw new Error(error.message || "Could not read saved progress");
+    if (!data?.length) return null;
+    const merged = foldPendingProgress(acceptedBlob, data.map((row) => row.snapshot));
+    const ids = data.map((row) => row.id);
+    if (JSON.stringify(merged) !== JSON.stringify(acceptedBlob)) {
+      const expected = progressGate.revision();
+      const { data: written, error: writeError } = await supabase.from("progress").update({
+        blob: merged,
+        revision: expected + 1,
+        updated_at: new Date().toISOString(),
+      }).eq("user_id", session.user.id).eq("key", key).eq("revision", expected).select("revision");
+      if (seenEpoch !== accountEpoch) return null;
+      if (writeError) throw new Error(writeError.message || "Could not save progress");
+      const revision = Array.isArray(written) ? Number(written[0]?.revision) || null : null;
+      if (!revision) return null;
+      acceptedBlob = merged;
+      loadedBaseline = merged;
+      progressGate.note(revision, progressGate.epoch());
+    }
+    const { error: deleteError } = await supabase.from("progress_pending_merge").delete()
+      .in("id", ids).eq("user_id", session.user.id).eq("key", key);
+    if (deleteError) throw new Error(deleteError.message || "Could not read saved progress");
+    return merged;
   },
   releaseAccount() {
     accountEpoch += 1;
@@ -749,6 +788,18 @@ export default function App() {
     }
     setSaveBlocked(false);
     let s = parsed.blob;
+    if (s && read.status === "ok") {
+      try {
+        const absorbed = await store.absorbPending(STORE_KEY);
+        if (!stillCurrent()) return;
+        if (absorbed) s = absorbed;
+      } catch {
+        setLoaded(false);
+        setSaveBlocked(true);
+        setLoadState("error");
+        return;
+      }
+    }
     /* Try-before-sign-up handoff (src/progress-load.js guestHandoff). */
     let guest = null;
     guest = readGuestForHandoff(storageOrNull(() => window.localStorage), storageOrNull(() => window.sessionStorage));

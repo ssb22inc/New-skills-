@@ -1,6 +1,6 @@
-/* The revision guard runs in Postgres. A save that does not send a
-   revision is accepted. After a revision-aware write, that save is
-   merged into the stored row instead of replacing it. */
+/* A save that does not send a revision is accepted. After a newer
+   client has written the row, that save is kept beside it for the app
+   to merge. The stored progress row is not rewritten in SQL. */
 import { readFileSync } from "node:fs";
 import { describe, it, expect, beforeAll } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
@@ -15,6 +15,10 @@ function asObject(value) {
 
 async function load(db) {
   await db.exec(`
+    create schema if not exists auth;
+    create table if not exists auth.users (id uuid primary key);
+    create or replace function auth.uid() returns uuid language sql stable as $$ select null::uuid $$;
+    insert into auth.users (id) values ('${userId}') on conflict do nothing;
     create table public.progress (
       user_id uuid not null,
       key text not null,
@@ -32,7 +36,7 @@ async function row(db) {
   return { blob: asObject(result.rows[0].blob), revision: Number(result.rows[0].revision) };
 }
 
-describe("revision-less saves merge into a newer row", () => {
+describe("revision-less saves wait for the client merge", () => {
   let db;
 
   beforeAll(async () => {
@@ -40,30 +44,9 @@ describe("revision-less saves merge into a newer row", () => {
     await load(db);
   });
 
-  it("keeps an old tab's later card grade and scores its new answer", async () => {
-    const stored = {
-      log: [{ id: 1, cat: "Management of Care", diff: 1, correct: true, attempt: "new-client", day: "2026-11-24", source: "bank", rating: 1300 }],
-      ability: { "Management of Care": { theta: 1225.6, n: 1 }, Pharmacology: { theta: 1200, n: 0 } },
-      xp: 10,
-      bestRun: 1,
-      theme: "dim",
-      srsMap: { "card-old": { interval: 3, due: "2026-11-27", seen: "2026-11-24" } },
-      rewards: { covers: 1, coverWeeks: ["2026-11-23"], coverDays: [], days: {}, best: { streak: 1 } },
-      streak: { count: 1, lastDay: "2026-11-24", shield: true },
-    };
-    const incoming = {
-      log: [{ id: 9, cat: "Pharmacology", diff: 2, correct: true, day: "2026-11-25" }],
-      ability: { Pharmacology: { theta: 9999, n: 1 } },
-      xp: 40,
-      bestRun: 4,
-      theme: "light",
-      srsMap: {
-        "card-old": { interval: 1, due: "2026-11-21", seen: "2026-11-20" },
-        "card-new": { interval: 7, due: "2026-12-02", seen: "2026-11-25" },
-      },
-      rewards: { covers: 0, coverWeeks: ["2026-11-16"], days: { "2026-11-25": { q: 1, ok: 1, xp: 8, cards: 1, fixes: 0, ms: 9000 } }, best: { streak: 3 } },
-      streak: { count: 2, lastDay: "2026-11-25", shield: false },
-    };
+  it("leaves a newer row untouched and stores the old snapshot for the app", async () => {
+    const stored = { log: [{ id: 1, attempt: "new-client" }], xp: 50, theme: "dim" };
+    const incoming = { log: [{ id: 1, attempt: "new-client" }, { id: 2, attempt: "old-tab" }], xp: 70, theme: "light" };
     await db.query(
       `insert into public.progress (user_id, key, blob, revision) values ($1, 'pulsern-v1', $2::jsonb, 4)`,
       [userId, JSON.stringify(stored)],
@@ -73,103 +56,22 @@ describe("revision-less saves merge into a newer row", () => {
       [userId, JSON.stringify(incoming)],
     );
     const saved = await row(db);
-    expect(saved.revision).toBe(5);
-    expect(saved.blob.log.map((entry) => entry.id)).toEqual([1, 9]);
-    expect(saved.blob.srsMap["card-old"]).toMatchObject({ interval: 3, seen: "2026-11-24" });
-    expect(saved.blob.srsMap["card-new"]).toMatchObject({ interval: 7, seen: "2026-11-25" });
-    expect(saved.blob.ability.Pharmacology.n).toBe(1);
-    expect(saved.blob.ability.Pharmacology.theta).toBeGreaterThan(1200);
-    expect(saved.blob.ability["Management of Care"]).toMatchObject({ theta: 1225.6, n: 1 });
-    expect(saved.blob.ability.Pharmacology.theta).not.toBe(9999);
-    expect(saved.blob.xp).toBe(40);
-    expect(saved.blob.bestRun).toBe(4);
-    expect(saved.blob.rewards.covers).toBe(1);
-    expect(saved.blob.rewards.coverWeeks.sort()).toEqual(["2026-11-16", "2026-11-23"]);
-    expect(saved.blob.rewards.days["2026-11-25"].cards).toBe(1);
-    expect(saved.blob.rewards.best.streak).toBe(3);
-    expect(saved.blob.streak).toMatchObject({ count: 2, lastDay: "2026-11-25" });
-    expect(saved.blob.theme).toBe("light");
+    expect(saved.revision).toBe(4);
+    expect(saved.blob).toEqual(stored);
+    const pending = await db.query(
+      `select snapshot from public.progress_pending_merge where user_id = $1 and key = 'pulsern-v1' order by id`,
+      [userId],
+    );
+    expect(pending.rows).toHaveLength(1);
+    expect(asObject(pending.rows[0].snapshot)).toEqual(incoming);
+    const guarded = await db.query(`select proname from pg_proc where proname like 'progress_merge%' or proname like 'progress_ability%' or proname = 'progress_review_stamp' or proname = 'progress_apply_answer'`);
+    expect(guarded.rows).toEqual([]);
   });
 
-  it("keeps a repeated undated miss and does not rewrite calibrated ability", async () => {
-    const historical = { id: 4, cat: "Pharmacology", diff: 1, correct: false };
-    const stored = {
-      log: [historical, { id: 4, cat: "Pharmacology", diff: 1, correct: true, attempt: "fixed", day: "2026-11-24", source: "bank", rating: 2000 }],
-      ability: { Pharmacology: { theta: 1239.6, n: 8 } },
-      xp: 100,
-    };
-    const incoming = {
-      log: [historical, historical],
-      ability: { Pharmacology: { theta: 1100, n: 2 } },
-      xp: 120,
-    };
+  it("still stores a revision-less save when the row has never been revision-aware", async () => {
+    const first = { log: [{ id: 2, attempt: "old" }], xp: 3, theme: "dim" };
     await db.query(`delete from public.progress where user_id = $1`, [userId]);
-    await db.query(
-      `insert into public.progress (user_id, key, blob, revision) values ($1, 'pulsern-v1', $2::jsonb, 3)`,
-      [userId, JSON.stringify(stored)],
-    );
-    await db.query(
-      `update public.progress set blob = $2::jsonb where user_id = $1 and key = 'pulsern-v1'`,
-      [userId, JSON.stringify(incoming)],
-    );
-    const saved = await row(db);
-    expect(saved.blob.log.filter((entry) => entry.correct === false)).toHaveLength(2);
-    expect(saved.blob.log.some((entry) => entry.attempt === "fixed")).toBe(true);
-    expect(saved.blob.ability.Pharmacology.n).toBe(9);
-    expect(saved.blob.ability.Pharmacology.theta).not.toBe(1100);
-    expect(saved.blob.xp).toBe(120);
-  });
-
-  it("does not replay rating-less history over a calibrated ability", async () => {
-    const historical = { id: 4, cat: "Pharmacology", diff: 1, correct: true };
-    const stored = {
-      log: [historical],
-      ability: { Pharmacology: { theta: 1239.6, n: 8 } },
-      xp: 100,
-      theme: "dim",
-    };
-    await db.query(`delete from public.progress where user_id = $1`, [userId]);
-    await db.query(
-      `insert into public.progress (user_id, key, blob, revision) values ($1, 'pulsern-v1', $2::jsonb, 3)`,
-      [userId, JSON.stringify(stored)],
-    );
-    await db.query(
-      `update public.progress set blob = $2::jsonb where user_id = $1 and key = 'pulsern-v1'`,
-      [userId, JSON.stringify({ ...stored, ability: { Pharmacology: { theta: 1100, n: 1 } }, theme: "light" })],
-    );
-    const saved = await row(db);
-    expect(saved.blob.log).toHaveLength(1);
-    expect(saved.blob.ability.Pharmacology).toMatchObject({ theta: 1239.6, n: 8 });
-    expect(saved.blob.theme).toBe("light");
-  });
-
-  it("replaces a card when the old tab reviewed it later", async () => {
-    await db.query(`delete from public.progress where user_id = $1`, [userId]);
-    await db.query(
-      `insert into public.progress (user_id, key, blob, revision) values ($1, 'pulsern-v1', $2::jsonb, 2)`,
-      [userId, JSON.stringify({
-        log: [],
-        srsMap: { "card-a": { interval: 1, due: "2026-11-21", seen: "2026-11-20" } },
-        xp: 5,
-      })],
-    );
-    await db.query(
-      `update public.progress set blob = $2::jsonb where user_id = $1 and key = 'pulsern-v1'`,
-      [userId, JSON.stringify({
-        log: [],
-        srsMap: { "card-a": { interval: 7, due: "2026-12-02", seen: "2026-11-25" } },
-        xp: 8,
-      })],
-    );
-    const saved = await row(db);
-    expect(saved.blob.srsMap["card-a"]).toMatchObject({ interval: 7, seen: "2026-11-25" });
-    expect(saved.blob.xp).toBe(8);
-    expect(saved.revision).toBe(3);
-  });
-
-  it("still accepts a revision-less save when nothing newer has been stored", async () => {
-    const first = { log: [{ id: 2, cat: "Pharmacology", diff: 1, correct: false }], xp: 3, theme: "dim" };
-    await db.query(`delete from public.progress where user_id = $1`, [userId]);
+    await db.query(`delete from public.progress_pending_merge where user_id = $1`, [userId]);
     await db.query(
       `insert into public.progress (user_id, key, blob, revision) values ($1, 'pulsern-v1', '{"log":[]}'::jsonb, 0)`,
       [userId],
@@ -180,9 +82,9 @@ describe("revision-less saves merge into a newer row", () => {
     );
     const saved = await row(db);
     expect(saved.revision).toBe(1);
-    expect(saved.blob.xp).toBe(3);
-    expect(saved.blob.log).toHaveLength(1);
-    expect(saved.blob.theme).toBe("dim");
+    expect(saved.blob).toEqual(first);
+    const pending = await db.query(`select id from public.progress_pending_merge where user_id = $1`, [userId]);
+    expect(pending.rows).toEqual([]);
   });
 
   it("rejects a client that sends an older revision", async () => {
@@ -191,5 +93,19 @@ describe("revision-less saves merge into a newer row", () => {
       `update public.progress set blob = '{"log":[{"id":3}]}'::jsonb, revision = 4 where user_id = $1`,
       [userId],
     )).rejects.toThrow(/revision conflict/);
+  });
+
+  it("lets only the owning account read or delete a parked snapshot", async () => {
+    const policies = await db.query(`
+      select polname, polcmd from pg_policy
+      where polrelid = 'public.progress_pending_merge'::regclass
+      order by polname
+    `);
+    const locked = await db.query(`select relrowsecurity from pg_class where oid = 'public.progress_pending_merge'::regclass`);
+    expect(locked.rows[0].relrowsecurity).toBe(true);
+    const names = policies.rows.map((policy) => `${policy.polname}:${policy.polcmd}`).sort();
+    expect(names).toEqual(expect.arrayContaining(["pending_merge_select:r", "pending_merge_delete:d"]));
+    const defs = await db.query(`select pg_get_expr(polqual, polrelid) as expr from pg_policy where polrelid = 'public.progress_pending_merge'::regclass`);
+    expect(defs.rows.map((policy) => policy.expr).join("\n")).toMatch(/auth\.uid\(\)/);
   });
 });
