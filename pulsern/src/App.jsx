@@ -318,12 +318,12 @@ import {
   RewardsStyle, StreakGlyph, EcgBeat, ComboChip, MomentSheet, streakMoment, ShiftCard, CareerCard,
   BadgeGrid, RoundsCard, BestsCard, SessionRecap, EffectsCard, comboSpeech, useAnnouncer,
 } from "./rewards-ui.jsx";
-import { loadGuest, mergeGuestIntoBlob, clearGuest, guestSummary, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, readGuestForHandoff, releaseHeldGuest } from "./guest.js";
+import { loadGuest, mergeGuestIntoBlob, clearGuest, guestSummary, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, readGuestForHandoff, releaseHeldGuest, waitForFlush } from "./guest.js";
 import { applyAnswer, commitLiveAnswer, stampedQuestion } from "./answer-apply.js";
 import { classifyLog, rekeySchedule } from "./question-key.js";
 import { stampCatalogQuestion, stampLoadedCatalog } from "./question-identity.js";
 import { signOutAndForgetTrial as signOut } from "./sign-out.js";
-import { readProgress, parseProgress, clearLegacyProgressBackup, guestHandoff, sessionReadDecision } from "./progress-load.js";
+import { readProgress, parseProgress, clearLegacyProgressBackup, guestHandoff, sessionReadDecision, stashPendingProgress, readPendingProgress, clearPendingProgress } from "./progress-load.js";
 
 const STORE_KEY = "pulsern-v1";
 
@@ -524,7 +524,17 @@ export default function App() {
   if (!saveQueue.current) saveQueue.current = createSaveQueue();
   useEffect(() => () => { saveQueue.current?.invalidate(); }, []);
   const signOutAndForgetTrial = async () => {
-    const saved = await saveQueue.current.flush();
+    const saved = await waitForFlush(() => saveQueue.current.flush());
+    if (saved.timedOut) {
+      stashPendingProgress(window.localStorage, {
+        userId: accountId.current,
+        payload: JSON.stringify({ theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips, missSchedule, fcNew, rewards }),
+      });
+      saveQueue.current.invalidate();
+      accountId.current = null;
+      signOut({ auth: supabase.auth, storage: window.localStorage, holdStorage: window.sessionStorage });
+      return;
+    }
     if (!saved.ok || pendingHandoff.current) {
       const message = !saved.ok
         ? "The latest answers have not saved. Sign out anyway? They will be lost."
@@ -592,6 +602,11 @@ export default function App() {
     try { guest = readGuestForHandoff(window.localStorage, window.sessionStorage); } catch { /* storage blocked */ }
     let createdAt = null;
     try { const { data } = await supabase.auth.getSession(); createdAt = data?.session?.user?.created_at ?? null; accountId.current = data?.session?.user?.id ?? null; } catch { /* unknown = ask */ }
+    const pending = readPendingProgress(window.localStorage, accountId.current);
+    if (pending && parsed.status !== "corrupt") {
+      const restored = parseProgress(pending.payload, (b) => migrateBlob(b, CATS));
+      if (restored.status === "ok") s = restored.blob;
+    }
     const handoff = guestHandoff({ guest, accountCreatedAt: createdAt, hasSavedProgress: !!read.raw });
     if (handoff === "merge") {
       const merged = mergeGuestIntoBlob(s ?? migrateBlob({}, CATS), guest, { today: todayStr(), calibration });
@@ -650,6 +665,7 @@ export default function App() {
         return;
       }
       if (guestClearOnSave(pendingAtStart)) { pendingGuestClear.current = false; clearGuest(window.localStorage); releaseHeldGuest(window.sessionStorage); }
+      clearPendingProgress(window.localStorage);
       if (outcome === "saved" && note) {
         setGuestNote(note);
         setGuestSaveError(false);

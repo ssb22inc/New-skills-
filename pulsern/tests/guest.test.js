@@ -4,7 +4,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import {
-  GUEST_KEY, GUEST_LIMIT, GUEST_HOLD_KEY, guestPool, emptyGuest, guestAnswer, guestRemaining, mergeGuestIntoBlob, loadGuest, saveGuest, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, linkBuiltInGuest, holdGuestTrial, clearHeldMemory, peekHeldGuest, releaseHeldGuest, readGuestForHandoff, guestFresh, guestSummary, guestImportIdentity,
+  GUEST_KEY, GUEST_LIMIT, GUEST_HOLD_KEY, guestPool, emptyGuest, guestAnswer, guestRemaining, mergeGuestIntoBlob, loadGuest, saveGuest, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, linkBuiltInGuest, holdGuestTrial, clearHeldMemory, peekHeldGuest, releaseHeldGuest, readGuestForHandoff, guestFresh, guestSummary, guestImportIdentity, waitForFlush,
 } from "../src/guest.js";
 import { QUESTIONS } from "../src/App.jsx";
 import { migrateBlob } from "../src/state.js";
@@ -71,6 +71,27 @@ describe("guest XP uses the same rules as an account", () => {
     expect(again.res).toMatchObject({ xp: 0, reason: "repeat", run: 0 });
     expect(again.guest.bestRun).toBe(1);
     expect(again.guest.run).toBe(0);
+  });
+  it("a save that never finishes does not block sign-out, and the progress stays on the device", async () => {
+    const queue = createSaveQueue();
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    queue.enqueue(queue.next(), () => gate);
+    const result = await waitForFlush(() => queue.flush(), 30);
+    expect(result.timedOut).toBe(true);
+    const storage = memStore();
+    const session = memStore();
+    saveGuest(storage, guestAnswer(emptyGuest(NOW, TODAY), mk(1), true, { ms: 9000, today: TODAY }).guest);
+    holdGuestTrial(loadGuest(storage), session);
+    const { stashPendingProgress, readPendingProgress } = await import("../src/progress-load.js");
+    const { signOutAndForgetTrial } = await import("../src/sign-out.js");
+    expect(stashPendingProgress(storage, { userId: "u1", payload: JSON.stringify({ xp: 9 }) })).toBe(true);
+    await signOutAndForgetTrial({ auth: { signOut: async () => {} }, storage, holdStorage: session });
+    expect(loadGuest(storage)).toBeNull();
+    expect(peekHeldGuest(session)).toBeNull();
+    expect(readPendingProgress(storage, "u1").payload).toBe(JSON.stringify({ xp: 9 }));
+    expect(readPendingProgress(storage, "someone-else")).toBeNull();
+    release();
   });
   it("flush finishes the newest queued save before sign-out can drop it", async () => {
     const queue = createSaveQueue();
@@ -284,15 +305,11 @@ describe("a trial cannot be lost, duplicated, or over-paid", () => {
     second.missSchedule = { 1: { interval: 3, due: "2026-11-27" } };
     const once = mergeGuestIntoBlob(migrateBlob({}, CATS), first, { today: TODAY, now: NOW });
     const twice = mergeGuestIntoBlob(once.blob, second, { today: TODAY, now: NOW + 5000 });
-    expect(twice.summary.answers).toBe(1);
-    expect(twice.blob.log.map((l) => l.key)).toEqual(["builtin:1", "builtin:1"]);
-    expect(new Set(twice.blob.log.map((l) => l.attempt)).size).toBe(2);
-    expect(twice.blob.xp).toBe(REVIEW_FIX_BONUS);
-    expect(twice.blob.missSchedule["builtin:1"].interval).toBe(3);
-    const again = mergeGuestIntoBlob(twice.blob, second, { today: TODAY, now: NOW + 5000 });
-    expect(again.summary).toBeNull();
-    expect(again.blob.xp).toBe(twice.blob.xp);
-    expect(again.blob.log).toHaveLength(2);
+    expect(twice.summary).toBeNull();
+    expect(twice.blob.log.map((l) => l.key)).toEqual(["builtin:1"]);
+    expect(twice.blob.xp).toBe(once.blob.xp);
+    expect(twice.blob.ability).toEqual(once.blob.ability);
+    expect(twice.blob.missSchedule["builtin:1"].interval).toBe(1);
   });
 
   it("scores two attempts of one question inside a single trial only once", () => {
@@ -321,7 +338,8 @@ describe("a trial cannot be lost, duplicated, or over-paid", () => {
     const second = trial(NOW + 5000, true);
     const once = mergeGuestIntoBlob(migrateBlob({}, CATS), first, { today: TODAY, now: NOW });
     const twice = mergeGuestIntoBlob(once.blob, second, { today: TODAY, now: NOW + 5000 });
-    expect(twice.blob.log).toHaveLength(2);
+    expect(twice.summary).toBeNull();
+    expect(twice.blob.log).toHaveLength(1);
     expect(twice.blob.xp).toBe(once.blob.xp);
   });
 
@@ -341,11 +359,11 @@ describe("a trial cannot be lost, duplicated, or over-paid", () => {
     correct = guestAnswer(correct, mk(7), true, { ms: 9000, today: TODAY }).guest;
     const account = { ...migrateBlob({}, CATS), log: [{ id: 7, source: "builtin", key: "builtin:7", cat: "Pharmacology", diff: 2, correct: true, origin: "recorded" }], xp: 20, streak: { count: 4, lastDay: "2026-11-22", shield: true } };
     const paid = mergeGuestIntoBlob(account, correct, { today: TODAY, now: NOW });
-    expect(paid.summary.xp).toBe(0);
+    expect(paid.summary).toBeNull();
     expect(paid.blob.xp).toBe(20);
-    expect(paid.blob.ability.Pharmacology.n).toBe(1);
-    expect(paid.blob.rewards.days[TODAY]).toMatchObject({ q: 1, xp: 0 });
-    expect(paid.blob.log.map((row) => row.key)).toEqual(["builtin:7", "builtin:7"]);
+    expect(paid.blob.ability.Pharmacology.n).toBe(0);
+    expect(paid.blob.streak.count).toBe(4);
+    expect(paid.blob.log.map((row) => row.key)).toEqual(["builtin:7"]);
     const bankAccount = { ...account, log: [{ id: 7, source: "bank", key: "bank:7", cat: "Pharmacology", diff: 2, correct: true, origin: "recorded" }] };
     const unrelated = mergeGuestIntoBlob(bankAccount, correct, { today: TODAY, now: NOW });
     expect(unrelated.blob.xp).toBe(40);

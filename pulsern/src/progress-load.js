@@ -55,6 +55,30 @@ export function parseProgress(raw, migrate) {
    untouched and "Download a copy" uses the in-memory copy. Any old copy is
    removed on load and on sign-out. */
 export const LEGACY_PROGRESS_BACKUP_KEY = "pulsern-progress-backup-v1";
+/* Progress that could not be written before sign-out. The next sign-in
+   for the same account applies it and the autosave sends it up. */
+export const PENDING_PROGRESS_KEY = "pulsern-pending-progress-v1";
+
+export function stashPendingProgress(storage, { userId, payload }) {
+  try {
+    storage.setItem(PENDING_PROGRESS_KEY, JSON.stringify({ v: 1, userId: userId ?? null, payload }));
+    return true;
+  } catch { return false; }
+}
+
+export function readPendingProgress(storage, userId) {
+  try {
+    const parsed = JSON.parse(storage?.getItem(PENDING_PROGRESS_KEY) ?? "null");
+    if (!parsed || parsed.v !== 1 || typeof parsed.payload !== "string") return null;
+    if (parsed.userId && userId && parsed.userId !== userId) return null;
+    return parsed;
+  } catch { return null; }
+}
+
+export function clearPendingProgress(storage) {
+  try { storage?.removeItem(PENDING_PROGRESS_KEY); } catch { /* storage blocked */ }
+}
+
 export function clearLegacyProgressBackup(storage) {
   try { storage.removeItem(LEGACY_PROGRESS_BACKUP_KEY); } catch { /* storage blocked */ }
 }

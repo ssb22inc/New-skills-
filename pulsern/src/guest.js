@@ -12,9 +12,10 @@
    existing per-user progress blob (no new table, no migration). Each trial
    answer is stored as builtin:<id>. A shared-bank question with the same
    number is bank:<id> and is a different question. */
-import { answerXp, answerCountsForRun } from "./rewards.js";
+import { answerXp, answerCountsForRun, bumpDay } from "./rewards.js";
 import { applyAnswer, stampedQuestion } from "./answer-apply.js";
-import { canonicalKey } from "./question-key.js";
+import { canonicalKey, questionIdentity } from "./question-key.js";
+import { updateMissSchedule } from "./question-review.js";
 
 export const GUEST_KEY = "pulsern-guest-v1";
 export const GUEST_HOLD_KEY = "pulsern-guest-hold-v1";
@@ -126,6 +127,35 @@ export function persistDecision(session, expectedUserId) {
 /* One account, one write at a time, newest payload wins. A save that was
    scheduled earlier never runs once a later one exists, so it cannot land
    after the merged trial and erase those answers. */
+export const SIGN_OUT_FLUSH_MS = 3000;
+
+/* Sign-out waits for the newest save, but only briefly. A write that
+   never settles must not trap the student on a shared device. */
+export function waitForFlush(flush, ms = SIGN_OUT_FLUSH_MS) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      resolve({ ok: false, timedOut: true });
+    }, ms);
+    Promise.resolve()
+      .then(flush)
+      .then((result) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(result?.ok === false ? { ...result, timedOut: false } : { ok: true, ...(result ?? {}), timedOut: false });
+      })
+      .catch(() => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve({ ok: false, timedOut: false });
+      });
+  });
+}
+
 export function createSaveQueue() {
   let chain = Promise.resolve();
   let latest = 0;
@@ -233,30 +263,9 @@ export function guestImportIdentity(entry) {
   return stampedQuestion({ ...entry, id, source, key: entry?.key ?? canonicalKey(source, id) });
 }
 
-/* The attempt id is only for idempotency. The answer's own clock is
-   when it happened. A saved row from before that clock existed is
-   placed at the end of the local day it names, so it is not dated
-   back to the moment the trial was opened. */
-export function guestEventAt(entry, day) {
-  const row = entry && typeof entry === "object" ? entry : { attempt: entry, day };
-  if (Number.isFinite(row.at) && row.at > 1e11) return row.at;
-  const when = row.day ?? day;
-  if (typeof when === "string" && /^\d{4}-\d{2}-\d{2}$/.test(when)) {
-    const [y, m, d] = when.split("-").map(Number);
-    const index = Number(String(row.attempt ?? "").split(":")[1]);
-    return new Date(y, m - 1, d, 23, 59, 59, 0).getTime() + (Number.isFinite(index) ? index : 0);
-  }
-  return null;
-}
-
-export function mergeGuestIntoBlob(s, guest, { today, now = Date.now(), calibration = {} } = {}) {
-  if (!guestFresh(guest, now)) return { blob: s, summary: null };
-  /* Import identity is the attempt, never the question id. guest-1 from a
-     later trial is a new answer. The same attempt merged again is a no-op. */
+function trialEntries(s, guest, today) {
   const have = new Set((s.log ?? []).map((l) => l?.attempt).filter((id) => id != null).map(String));
-  /* localStorage is user-editable: never trust its totals. Keep at most
-     GUEST_LIMIT well-formed rows and recompute XP from them. */
-  const entries = guest.log
+  return guest.log
     .filter((l) => l && (typeof l.id === "number" || typeof l.id === "string") && typeof l.cat === "string" && typeof l.correct === "boolean")
     .slice(0, GUEST_LIMIT)
     .map((l, index) => ({
@@ -267,36 +276,95 @@ export function mergeGuestIntoBlob(s, guest, { today, now = Date.now(), calibrat
       ...(Number.isFinite(l.words) && l.words > 0 ? { words: l.words } : {}),
       ...(l.source ? { source: l.source } : {}),
       ...(l.key ? { key: l.key } : {}),
-      ...(Number.isFinite(l.at) ? { at: l.at } : {}),
       day: typeof l.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(l.day) ? l.day : (guest.day ?? today),
     }))
     .map((l) => ({ ...guestImportIdentity(l), ...l, key: guestImportIdentity(l).key, source: guestImportIdentity(l).source }))
-    .filter((l) => !have.has(String(l.attempt)))
-    .sort((a, b) => (guestEventAt(a) ?? 0) - (guestEventAt(b) ?? 0));
+    .filter((l) => !have.has(String(l.attempt)));
+}
+
+export function accountHasAnswers(log) {
+  return (log ?? []).some((row) => row && typeof row.correct === "boolean");
+}
+
+/* A brand-new account has nothing to merge with, so the trial is scored
+   by the live answer function, in the order it was taken. An account that
+   already has answers keeps its rows, ability, and streak. The trial can
+   only add a review for a miss the account has never seen, and XP for a
+   question it has never answered. */
+export function mergeGuestIntoBlob(s, guest, { today, now = Date.now(), calibration = {} } = {}) {
+  if (!guestFresh(guest, now)) return { blob: s, summary: null };
+  const entries = trialEntries(s, guest, today);
   if (!entries.length) return { blob: s, summary: null };
+  if (!accountHasAnswers(s.log)) return importTrialLive(s, entries, { today, calibration });
+  return importTrialOntoHistory(s, entries, today);
+}
+
+function importTrialLive(s, entries, { today, calibration }) {
   let state = {
     log: s.log ?? [], xp: s.xp ?? 0, ability: s.ability, streak: s.streak, rewards: s.rewards,
     daily: s.daily, missSchedule: s.missSchedule, run: s.run ?? 0, bestRun: s.bestRun ?? 0,
   };
   const beforeDay = s.streak?.lastDay ?? null;
   let xpGain = 0;
+  let accepted = 0;
+  let correct = 0;
   for (const e of entries) {
     const stem = e.words ? Array.from({ length: e.words }, () => "w").join(" ") : "";
     const applied = applyAnswer(state, {
       q: { id: e.id, key: e.key, source: e.source, cat: e.cat, diff: e.diff, stem, population: e.pop },
       correct: e.correct,
       ms: Number.isFinite(e.ms) ? e.ms : Infinity,
-      today: e.day,
+      today: e.day ?? today,
       attempt: e.attempt,
-      at: guestEventAt(e) ?? undefined,
       calibration,
     });
     if (applied.duplicate) continue;
     xpGain += applied.result?.xp ?? 0;
+    accepted += 1;
+    if (e.correct) correct += 1;
     state = applied.state;
   }
+  if (!accepted) return { blob: s, summary: null };
   return {
-    blob: { ...s, log: state.log, xp: state.xp, bestRun: state.bestRun, ability: state.ability, streak: state.streak, rewards: state.rewards, daily: state.daily, missSchedule: state.missSchedule },
-    summary: { answers: entries.length, correct: entries.filter((e) => e.correct).length, xp: xpGain, streak: state.streak?.count ?? 0, streakStarted: state.streak?.lastDay !== beforeDay },
+    blob: { ...s, log: state.log, xp: state.xp, bestRun: state.bestRun, ability: state.ability, streak: state.streak, rewards: state.rewards, daily: state.daily, missSchedule: state.missSchedule, run: state.run },
+    summary: { answers: accepted, correct, xp: xpGain, streak: state.streak?.count ?? 0, streakStarted: state.streak?.lastDay !== beforeDay },
+  };
+}
+
+function importTrialOntoHistory(s, entries, today) {
+  const known = new Set();
+  for (const row of s.log ?? []) {
+    const key = questionIdentity(row);
+    if (key) known.add(key);
+  }
+  const latest = new Map();
+  for (const e of entries) {
+    if (!e.key || known.has(e.key)) continue;
+    latest.set(e.key, e);
+  }
+  if (!latest.size) return { blob: s, summary: null };
+  let xp = s.xp ?? 0;
+  let rewards = s.rewards;
+  let schedule = s.missSchedule ?? {};
+  const log = [...(s.log ?? [])];
+  let xpGain = 0;
+  let correct = 0;
+  for (const e of latest.values()) {
+    const stem = e.words ? Array.from({ length: e.words }, () => "w").join(" ") : "";
+    const q = { id: e.id, key: e.key, source: e.source, cat: e.cat, diff: e.diff, stem, population: e.pop };
+    const res = answerXp({ q, correct: e.correct, ms: Number.isFinite(e.ms) ? e.ms : Infinity, log: s.log ?? [] });
+    xpGain += res.xp || 0;
+    xp += res.xp || 0;
+    if (res.xp) rewards = bumpDay(rewards, today, { xp: res.xp });
+    if (!e.correct) schedule = updateMissSchedule(schedule, e.key, false, today);
+    else correct += 1;
+    log.push({
+      id: e.id, key: e.key, source: e.source, cat: e.cat, diff: e.diff, correct: e.correct,
+      attempt: e.attempt, ...(e.day ? { day: e.day } : {}), origin: "recorded",
+    });
+  }
+  return {
+    blob: { ...s, log, xp, rewards, missSchedule: schedule },
+    summary: { answers: latest.size, correct, xp: xpGain, streak: s.streak?.count ?? 0, streakStarted: false },
   };
 }

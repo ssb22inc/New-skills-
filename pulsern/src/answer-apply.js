@@ -1,108 +1,10 @@
-/* One answer, whether it was just tapped or folded in from a trial.
-   Ability, the day's XP ledger, the streak, and the review date all
-   move here. Import does not keep a second copy of these rules. */
-import { answerXp, answerCountsForRun, bumpDay, advanceStreak, streakDayCounted, sameAnswer, shiftDay, STREAK_MILESTONES } from "./rewards.js";
-import { updateAbility, itemRating } from "./ability-engine.js";
+/* One live answer. A brand-new account imports a trial by calling this
+   once per answer, in order. An account that already has history does
+   not come through here for the trial: there is no replay. */
+import { answerXp, answerCountsForRun, bumpDay, advanceStreak, streakDayCounted, sameAnswer } from "./rewards.js";
+import { updateAbility } from "./ability-engine.js";
 import { updateMissSchedule } from "./question-review.js";
-import { canonicalKey, questionIdentity } from "./question-identity.js";
-
-function insertByTime(log, row) {
-  if (!Number.isFinite(row?.at)) return [...log, row];
-  const next = log.slice();
-  let i = next.length;
-  while (i > 0) {
-    const prev = next[i - 1];
-    if (Number.isFinite(prev?.at)) {
-      if (prev.at <= row.at) break;
-      i -= 1;
-      continue;
-    }
-    /* A saved row with a day but no clock sits at the end of that day.
-       A row with neither was already on the account and stays put. */
-    if (typeof prev?.day === "string" && typeof row.day === "string" && prev.day > row.day) {
-      i -= 1;
-      continue;
-    }
-    break;
-  }
-  next.splice(i, 0, row);
-  return next;
-}
-
-/* Replay one category from its stored ratings. A row without a rating,
-   or one that was left unclassified, contributed to the saved theta in
-   a way this replay cannot rebuild, so the caller keeps that theta. */
-function replayCategory(log, cat) {
-  const rows = [];
-  for (const row of log ?? []) {
-    if (!row || row.cat !== cat) continue;
-    if (row.unclassified || !questionIdentity(row) || !Number.isFinite(row.rating)) return null;
-    rows.push(row);
-  }
-  if (!rows.length) return null;
-  let ability = { [cat]: { theta: 1200, n: 0 } };
-  for (const row of rows) ability = updateAbility(ability, row, !!row.correct, {}).ability;
-  return ability[cat];
-}
-
-/* The streak is the run of studied days ending at lastDay. Importing
-   several earlier days extends that run across the whole set, including
-   a day that only becomes adjacent after a later import fills the gap.
-   Days already inside the streak, including a shielded gap, stay. */
-function reconcileStreak(streak, log) {
-  if (!streak?.lastDay || !(streak.count > 0)) return streak;
-  /* Count is studied days, not a calendar span. A shield bridges a gap
-     without adding that day, so walking lastDay-(count-1) would treat
-     the bridge as a study day and count the real one twice. Walk the
-     studied dates instead, and never shrink a streak the shield built. */
-  const studied = new Set([streak.lastDay]);
-  for (const row of log ?? []) {
-    if (typeof row?.day === "string" && row.day <= streak.lastDay) studied.add(row.day);
-  }
-  let count = 0;
-  let day = streak.lastDay;
-  while (studied.has(day)) {
-    count += 1;
-    day = shiftDay(day, -1);
-    if (count > 10000) break;
-  }
-  if (count <= streak.count) return streak;
-  let shield = streak.shield;
-  for (let n = streak.count + 1; n <= count; n += 1) if (n % 7 === 0) shield = true;
-  return { ...streak, count, shield };
-}
-
-/* XP for one question, in log order. Later answers are not visible to
-   earlier ones, so an import cannot treat a future miss as a prior miss. */
-function creditForQuestion(rows, q) {
-  let xp = 0;
-  const days = {};
-  const prefix = [];
-  for (const row of rows ?? []) {
-    if (row && questionIdentity(row) === q.key && !row.unclassified) {
-      const scored = answerXp({
-        q: { id: row.id, key: row.key, source: row.source, cat: row.cat, diff: row.diff ?? q.diff, stem: q.stem, population: row.pop },
-        correct: !!row.correct,
-        ms: Number.isFinite(row.ms) ? row.ms : Infinity,
-        log: prefix,
-      });
-      xp += scored.xp || 0;
-      if (typeof row.day === "string") {
-        const day = days[row.day] ?? { xp: 0, fixes: 0 };
-        day.xp += scored.xp || 0;
-        if (scored.fix) day.fixes += 1;
-        days[row.day] = day;
-      }
-    }
-    prefix.push(row);
-  }
-  return { xp, days };
-}
-
-function crossedMilestones(rewards, count) {
-  const had = new Set(rewards?.milestones ?? []);
-  return STREAK_MILESTONES.filter((m) => m <= count && !had.has(m));
-}
+import { canonicalKey } from "./question-identity.js";
 
 function adoptRawSchedule(schedule, q, log) {
   if (!q?.key) return schedule ?? {};
@@ -118,20 +20,6 @@ function adoptRawSchedule(schedule, q, log) {
   delete map[q.id];
   delete map[String(q.id)];
   return map;
-}
-
-/* One question's review date, in log order. Rows that are not this
-   question, including unkeyed and unclassified ones, are skipped.
-   They do not stop the keyed answers from being replayed. */
-function replayKeySchedule(log, key, schedule) {
-  let next = { ...(schedule ?? {}) };
-  delete next[key];
-  for (const row of log ?? []) {
-    if (questionIdentity(row) !== key || row.unclassified) continue;
-    if (typeof row.day !== "string") continue;
-    next = updateMissSchedule(next, key, !!row.correct, row.day);
-  }
-  return next;
 }
 
 /* An older day never replaces a newer day's counter. The same day
@@ -164,14 +52,12 @@ export function applyAnswer(state, input) {
   const today = input.today;
   const ms = input.ms ?? Infinity;
   const correct = !!input.correct;
-  const historical = Number.isFinite(input.at);
-  const at = historical ? input.at : Date.now();
   const calibration = input.calibration ?? {};
-  const rating = q.unclassified ? null : itemRating(q, calibration);
-  let res = q.unclassified
+  const res = q.unclassified
     ? { xp: 0, reason: "unclassified", base: 0, bonus: 0, fix: false }
     : answerXp({ q, correct, ms, log });
   const counts = !q.unclassified && answerCountsForRun({ correct, q, ms });
+  const run = counts ? (state.run ?? 0) + 1 : 0;
   const row = {
     id: q.id,
     key: q.key,
@@ -183,65 +69,39 @@ export function applyAnswer(state, input) {
     ...(input.attempt != null ? { attempt: String(input.attempt) } : {}),
     ...(today ? { day: today } : {}),
     ...(q.population ? { pop: q.population } : {}),
-    ...(Number.isFinite(rating) ? { rating } : {}),
     ...(Number.isFinite(ms) ? { ms } : {}),
-    at,
     origin: "recorded",
   };
-  const placed = historical ? insertByTime(log, row) : [...log, row];
-  const insertedBehind = placed[placed.length - 1] !== row;
-  const run = insertedBehind ? (state.run ?? 0) : (counts ? (state.run ?? 0) + 1 : 0);
   if (q.unclassified) {
     return {
-      state: { ...state, log: placed },
+      state: { ...state, log: [...log, row] },
       result: { ...res, run: state.run ?? 0 },
       duplicate: false,
       streakNote: null,
     };
   }
-  const prior = [...(insertedBehind ? placed.slice(0, placed.indexOf(row)) : log)].reverse().find((r) => sameAnswer(q, r));
-  const replayed = insertedBehind ? replayCategory(placed, q.cat) : null;
-  const ability = replayed
-    ? { ...(state.ability ?? {}), [q.cat]: replayed }
-    : updateAbility(state.ability, { ...q, rating }, correct, calibration).ability;
-  let rewards;
-  if (insertedBehind && q.key) {
-    const before = creditForQuestion(log, q);
-    const after = creditForQuestion(placed, q);
-    res = { xp: after.xp - before.xp, reason: "reconcile", base: after.xp - before.xp, bonus: 0, fix: false };
-    rewards = bumpDay(state.rewards, today, { q: 1, ok: correct ? 1 : 0, xp: 0, fixes: 0 });
-    const days = new Set([...Object.keys(before.days), ...Object.keys(after.days)]);
-    for (const day of days) {
-      const was = before.days[day] ?? { xp: 0, fixes: 0 };
-      const now = after.days[day] ?? { xp: 0, fixes: 0 };
-      if (now.xp !== was.xp || now.fixes !== was.fixes) rewards = bumpDay(rewards, day, { xp: now.xp - was.xp, fixes: now.fixes - was.fixes });
-    }
-  } else {
-    rewards = bumpDay(state.rewards, today, { q: 1, ok: correct ? 1 : 0, xp: res.xp, fixes: correct && prior && prior.correct === false ? 1 : 0 });
-  }
+  const prior = [...log].reverse().find((r) => sameAnswer(q, r));
+  const ability = updateAbility(state.ability, q, correct, calibration).ability;
+  let rewards = bumpDay(state.rewards, today, { q: 1, ok: correct ? 1 : 0, xp: res.xp, fixes: correct && prior && prior.correct === false ? 1 : 0 });
   let streak = state.streak;
   let streakNote = null;
   if (!streakDayCounted(streak, null, today)) {
     const adv = advanceStreak(streak, rewards, today);
-    streak = historical ? reconcileStreak(adv.streak, placed) : adv.streak;
+    streak = adv.streak;
     rewards = { ...adv.rewards, best: { ...adv.rewards.best, streak: Math.max(adv.rewards.best?.streak ?? 0, streak.count), run: Math.max(adv.rewards.best?.run ?? 0, run) } };
-    const crossed = crossedMilestones(rewards, streak.count);
-    if (crossed.length) rewards = { ...rewards, milestones: [...(rewards.milestones ?? []), ...crossed] };
     streakNote = adv;
   } else if (run > (rewards.best?.run ?? 0)) {
     rewards = { ...rewards, best: { ...rewards.best, run } };
   }
   const daily = dailyAfter(state.daily, today);
-  const baseSchedule = adoptRawSchedule(state.missSchedule, q, state.log);
+  const baseSchedule = adoptRawSchedule(state.missSchedule, q, log);
   const missSchedule = input.schedule === false
     ? state.missSchedule
-    : (insertedBehind
-      ? replayKeySchedule(placed, q.key, baseSchedule)
-      : updateMissSchedule(baseSchedule, q.key, correct, today));
+    : updateMissSchedule(baseSchedule, q.key, correct, today);
   return {
     state: {
       ...state,
-      log: placed,
+      log: [...log, row],
       xp: (state.xp ?? 0) + (res.xp || 0),
       ability,
       rewards,
