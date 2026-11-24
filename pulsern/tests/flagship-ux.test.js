@@ -54,6 +54,31 @@ describe("study shortcuts", () => {
     expect(studyKeyAction({ key: "1", target: { tagName: "DIV", closest: () => ({}) } })).toBe(null);
     expect(studyKeyAction(ev("ArrowRight", { metaKey: true }))).toBe(null);
   });
+  it("leaves arrow, Enter, and Space keys to radios, checks, and fields", () => {
+    const control = (tag, role, inside) => ({
+      tagName: tag,
+      isContentEditable: tag === "EDITABLE",
+      getAttribute: (name) => (name === "role" ? role : null),
+      closest: (sel) => (inside && sel.includes(inside) ? {} : null),
+    });
+    const keys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Enter", " "];
+    const targets = [
+      control("BUTTON", "radio"),
+      control("BUTTON", "checkbox"),
+      control("INPUT", null),
+      control("TEXTAREA", null),
+      control("SELECT", null),
+      control("EDITABLE", null),
+      control("DIV", null, "radiogroup"),
+      control("DIV", null, "listbox"),
+    ];
+    for (const target of targets) for (const key of keys) expect(studyKeyAction({ key, target })).toBe(null);
+  });
+  it("still moves back and next when focus is not in a form control", () => {
+    expect(studyKeyAction(ev("ArrowLeft"))).toEqual({ type: "back" });
+    expect(studyKeyAction(ev("ArrowRight"))).toEqual({ type: "next" });
+    expect(studyKeyAction(ev("Enter"))).toEqual({ type: "primary" });
+  });
   it("publishes short hints", () => {
     expect(SHORTCUT_HINT).toMatch(/Enter/);
     expect(CARD_SHORTCUT_HINT).toMatch(/1–4/);

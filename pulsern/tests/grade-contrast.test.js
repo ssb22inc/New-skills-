@@ -42,4 +42,10 @@ describe("grade button contrast", () => {
     ];
     for (const [fg, bg] of pairs) expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5);
   });
+
+  it("gives the lab search a focus ring of at least 3:1 against the card", () => {
+    expect(src).toMatch(/\.lp-search:focus-within\{[^}]*box-shadow:0 0 0 3px var\(--accent-ink\)/);
+    expect(contrast(pick(light, "--accent-ink"), pick(light, "--card"))).toBeGreaterThanOrEqual(3);
+    expect(contrast(pick(dim, "--accent-ink"), pick(dim, "--card"))).toBeGreaterThanOrEqual(3);
+  });
 });

@@ -4,19 +4,30 @@ import { useEffect, useRef } from "react";
      1–9      pick an option (Cards: 1–4 grade Again / Hard / Good / Easy)
      Enter    check the answer, then go to the next item (Cards: flip)
      ← / →    back / next
-   Nothing fires while typing, inside a dialog, the lab drawer, or a menu.
+   Nothing fires while typing, on a radio or checkbox, inside a radiogroup
+   or listbox, inside a dialog, the lab drawer, or a menu. Arrow keys there
+   belong to the control.
    Deterministic plain code. */
 
 const FIELD = /^(INPUT|TEXTAREA|SELECT)$/;
+
+function formControl(target) {
+  if (!target || typeof target !== "object") return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName?.toUpperCase?.() ?? "";
+  if (FIELD.test(tag)) return true;
+  const role = typeof target.getAttribute === "function" ? target.getAttribute("role") : target.role;
+  if (role === "radio" || role === "checkbox") return true;
+  return typeof target.closest === "function" && !!target.closest("[role='radiogroup'], [role='listbox']");
+}
 
 export function studyKeyAction(event) {
   if (!event) return null;
   const key = typeof event === "string" ? event : event.key;
   const target = typeof event === "string" ? null : event.target;
   if (typeof event === "object" && (event.altKey || event.ctrlKey || event.metaKey)) return null;
-  if (target?.isContentEditable) return null;
+  if (formControl(target)) return null;
   const tag = target?.tagName?.toUpperCase?.() ?? "";
-  if (FIELD.test(tag)) return null;
   if (typeof target?.closest === "function" && target.closest("[role='dialog'], .lab-drawer, .lab-fab, .fab-menu, .menu-panel, .sheet")) return null;
   if (key === "ArrowLeft") return { type: "back" };
   if (key === "ArrowRight") return { type: "next" };

@@ -3232,6 +3232,7 @@ export function Style() {
       .tk-reset{min-height:44px;padding:0 14px;border:none;background:transparent;color:var(--accent-ink);font:inherit;font-size:13px;font-weight:700;cursor:pointer;border-radius:10px}
       .tk-reset:hover{background:var(--surface)}
       .lp-search{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:8px;background:var(--card);border:2px solid var(--teal);border-radius:14px;padding:0 4px 0 12px;margin-bottom:10px;box-shadow:0 4px 12px rgba(8,20,16,.06)}
+      .lp-search:focus-within{border-color:var(--accent-ink);box-shadow:0 0 0 3px var(--accent-ink)}
       .lp-search-icon{font-size:20px;color:var(--accent-ink);font-weight:700}
       .lp-input{flex:1;min-width:0;min-height:50px;border:none;background:transparent;color:var(--ink);font:inherit;font-size:16px;outline:none}
       .lp-input::placeholder{color:var(--muted);opacity:1}
