@@ -307,7 +307,7 @@ import { useSessionReport } from "./session-report.js";
 import { tourMark, tourStepAt, tourStepsFor } from "./tour.js";
 import { LeaveDialog, Tour, useTourDismissScroll, useTourPlacement } from "./tour.jsx";
 import {
-  emptyRewards, answerXp, answerCountsForRun, xpNote, comboFor, cardXp, questionsOn, caseStepIds, bumpDay, reverseCardDay, advanceStreak, streakDayCounted, shiftStatus, weekRounds, maybeGrantCover,
+  emptyRewards, answerXp, answerCountsForRun, sameAnswer, xpNote, comboFor, cardXp, questionsOn, caseStepIds, bumpDay, reverseCardDay, advanceStreak, streakDayCounted, shiftStatus, weekRounds, maybeGrantCover,
   careerStatus, badgeBoard, detectMoments, markMomentsSeen, sessionRecap, MAX_COVERS,
 } from "./rewards.js";
 import { motionAllowed, rewardBeat } from "./effects.js";
@@ -315,7 +315,7 @@ import {
   RewardsStyle, StreakGlyph, EcgBeat, ComboChip, MomentSheet, streakMoment, ShiftCard, CareerCard,
   BadgeGrid, RoundsCard, BestsCard, SessionRecap, EffectsCard, comboSpeech, useAnnouncer,
 } from "./rewards-ui.jsx";
-import { loadGuest, mergeGuestIntoBlob, clearGuest, guestSummary, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, linkBuiltInGuest } from "./guest.js";
+import { loadGuest, mergeGuestIntoBlob, clearGuest, guestSummary, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, linkBuiltInGuest, readGuestForHandoff, releaseHeldGuest } from "./guest.js";
 import { signOutAndForgetTrial as signOut } from "./sign-out.js";
 import { readProgress, parseProgress, clearLegacyProgressBackup, guestHandoff } from "./progress-load.js";
 
@@ -576,7 +576,7 @@ export default function App() {
     let s = parsed.blob;
     /* Try-before-sign-up handoff (src/progress-load.js guestHandoff). */
     let guest = null;
-    try { guest = loadGuest(window.localStorage); } catch { /* storage blocked */ }
+    try { guest = readGuestForHandoff(window.localStorage, window.sessionStorage); } catch { /* storage blocked */ }
     let createdAt = null;
     try { const { data } = await supabase.auth.getSession(); createdAt = data?.session?.user?.created_at ?? null; accountId.current = data?.session?.user?.id ?? null; } catch { /* unknown = ask */ }
     const handoff = guestHandoff({ guest, accountCreatedAt: createdAt, hasSavedProgress: !!read.raw });
@@ -587,7 +587,7 @@ export default function App() {
     } else if (handoff === "ask") {
       setGuestOffer({ guest, summary: guestSummary(guest) });
     } else if (handoff === "expired") {
-      try { clearGuest(window.localStorage); } catch { /* storage blocked */ }
+      try { clearGuest(window.localStorage); releaseHeldGuest(window.sessionStorage); } catch { /* storage blocked */ }
     }
     if (s) applyBlob(s);
     setLoadState("ok");
@@ -613,7 +613,7 @@ export default function App() {
         return;
       }
     }
-    try { clearGuest(window.localStorage); } catch { /* storage blocked */ }
+    try { clearGuest(window.localStorage); releaseHeldGuest(window.sessionStorage); } catch { /* storage blocked */ }
   };
 
   /* ---- autosave on change ---- */
@@ -636,7 +636,7 @@ export default function App() {
         if (outcome === "error") setGuestSaveError(true);
         return;
       }
-      if (guestClearOnSave(pendingAtStart)) { pendingGuestClear.current = false; clearGuest(window.localStorage); }
+      if (guestClearOnSave(pendingAtStart)) { pendingGuestClear.current = false; clearGuest(window.localStorage); releaseHeldGuest(window.sessionStorage); }
       if (outcome === "saved" && note) {
         setGuestNote(note);
         setGuestSaveError(false);
@@ -927,7 +927,7 @@ export default function App() {
     const item = linkBuiltInGuest(q, QUESTIONS);
     const res = answerXp({ q: item, correct, ms: opts.ms ?? Infinity, log });
     // population is additive on the log entry — old entries simply lack it
-    setLog((l) => [...l, { id: q.id, cat: q.cat, diff: q.diff, correct, ...(q.population ? { pop: q.population } : {}) }]);
+    setLog((l) => [...l, { id: q.id, cat: q.cat, diff: q.diff, correct, ...(q.population ? { pop: q.population } : {}), ...(q.source ? { source: q.source } : {}) }]);
     if (opts.schedule !== false) setMissSchedule((m) => updateMissSchedule(m, q.id, correct));
     touchDay();
     const { ability: nextAbility, itemDelta } = updateAbility(ability, q, correct, calibration);
@@ -949,7 +949,7 @@ export default function App() {
     const newBest = nextRun >= 3 && nextRun > bestRun;
     setRun(nextRun);
     if (counts) setBestRun((b) => Math.max(b, nextRun));
-    const prior = [...log].reverse().find((row) => String(row.id) === String(item.id) || (item.aliases ?? []).map(String).includes(String(row.id)) && row.cat === item.cat);
+    const prior = [...log].reverse().find((row) => sameAnswer(item, row));
     setRewards((r) => bumpDay(r, todayStr(), { q: 1, ok: correct ? 1 : 0, xp: res.xp, fixes: correct && prior && prior.correct === false ? 1 : 0 }));
     const combo = counts ? comboFor(nextRun) : null;
     announce(comboSpeech(combo, newBest));
@@ -2448,7 +2448,7 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
     setCredit(c);
     if (marked.recorded) {
       setStepScores((m) => ({ ...m, [step]: c }));
-      const scored = record({ id: stepId, aliases: stepIds.aliases, cat: cs.cat, diff: 3, stem: s?.stem }, correct, { schedule: false, ms: Date.now() - stepShownAt.current }) ?? null;
+      const scored = record({ id: stepId, aliases: stepIds.aliases, legacyAliases: stepIds.legacyAliases, source: "case", cat: cs.cat, diff: 3, stem: s?.stem }, correct, { schedule: false, ms: Date.now() - stepShownAt.current }) ?? null;
       stepXp.current[stepId] = scored;
       setStepRes(scored);
     }

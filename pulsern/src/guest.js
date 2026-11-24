@@ -15,6 +15,7 @@
 import { answerXp, answerCountsForRun, advanceStreak, bumpDay, daysBetween } from "./rewards.js";
 
 export const GUEST_KEY = "pulsern-guest-v1";
+export const GUEST_HOLD_KEY = "pulsern-guest-hold-v1";
 export const GUEST_LIMIT = 5;
 export const GUEST_TTL_DAYS = 7;
 export const GUEST_TYPES = ["mc", "sata"];
@@ -45,6 +46,56 @@ export function saveGuest(storage, guest) {
 
 export function clearGuest(storage) {
   try { storage?.removeItem(GUEST_KEY); } catch { /* private mode */ }
+}
+
+/* The sign-up screen unmounts the trial. If the device copy could not be
+   written, this hold is the copy that still exists: in memory for this tab,
+   and in the passed store (sessionStorage) when that write works. It is
+   released only after the account write is confirmed, or when the student
+   discards the trial. */
+let heldTrial = null;
+
+export function holdGuestTrial(guest, storage) {
+  heldTrial = guest && Array.isArray(guest.log) ? guest : null;
+  if (!heldTrial) return false;
+  try { storage?.setItem(GUEST_HOLD_KEY, JSON.stringify(heldTrial)); return true; }
+  catch { return false; }
+}
+
+export function clearHeldMemory() {
+  heldTrial = null;
+}
+
+export function peekHeldGuest(storage) {
+  if (heldTrial && Array.isArray(heldTrial.log) && heldTrial.log.length) return heldTrial;
+  try {
+    const raw = storage?.getItem(GUEST_HOLD_KEY);
+    if (!raw) return null;
+    const g = JSON.parse(raw);
+    if (!g || g.v !== 1 || !Array.isArray(g.log)) return null;
+    heldTrial = g;
+    return g;
+  } catch { return null; }
+}
+
+export function releaseHeldGuest(storage) {
+  heldTrial = null;
+  const drop = (s) => { try { s?.removeItem(GUEST_HOLD_KEY); } catch { /* blocked */ } };
+  drop(storage);
+}
+
+/* One copy. A longer or later hold wins over a short device copy, so the
+   answers that could not be stored are not thrown away. The two copies are
+   never concatenated. */
+export function readGuestForHandoff(storage, holdStorage) {
+  const saved = loadGuest(storage);
+  const held = peekHeldGuest(holdStorage);
+  const stamp = (g) => Number(g?.lastAt ?? g?.startedAt ?? 0);
+  const n = (g) => g?.log?.length ?? 0;
+  if (!n(saved)) return n(held) ? held : null;
+  if (!n(held)) return saved;
+  if (stamp(held) !== stamp(saved)) return stamp(held) > stamp(saved) ? held : saved;
+  return n(held) > n(saved) ? held : saved;
 }
 
 /* The device copy is removed only by the save that was already carrying
@@ -137,8 +188,12 @@ export function guestAnswer(guest, q, correct, { ms = Infinity, today } = {}) {
   const run = answerCountsForRun({ correct, q, ms }) ? guest.run + 1 : 0;
   const words = String(q?.stem ?? "").trim().split(/\s+/).filter(Boolean).length;
   const studyDay = today ?? guest.day;
+  /* Stable for this trial, unique per answer. A later trial has a new
+     startedAt, so the same question is a new attempt. A retried merge of
+     this trial repeats these ids and adds nothing. */
+  const attempt = `${guest.startedAt}:${guest.log.length}`;
   const entry = {
-    id: q.id, cat: q.cat, diff: q.diff, correct,
+    id: q.id, cat: q.cat, diff: q.diff, correct, attempt,
     ...(studyDay ? { day: studyDay } : {}),
     ...(Number.isFinite(ms) ? { ms } : {}),
     ...(words ? { words } : {}),
@@ -166,14 +221,17 @@ export function guestSummary(guest) {
    merged). Idempotent: a merged entry is never added twice. */
 export function mergeGuestIntoBlob(s, guest, { today, now = Date.now(), updateAbility = null, calibration = {} } = {}) {
   if (!guestFresh(guest, now)) return { blob: s, summary: null };
-  const have = new Set((s.log ?? []).map((l) => String(l.id)));
+  /* Import identity is the attempt, never the question id. guest-1 from a
+     later trial is a new answer. The same attempt merged again is a no-op. */
+  const have = new Set((s.log ?? []).map((l) => l?.attempt).filter((id) => id != null).map(String));
   /* localStorage is user-editable: never trust its totals. Keep at most
      GUEST_LIMIT well-formed rows and recompute XP from them. */
   const valid = guest.log
     .filter((l) => l && (typeof l.id === "number" || typeof l.id === "string") && typeof l.cat === "string" && typeof l.correct === "boolean")
     .slice(0, GUEST_LIMIT)
-    .map((l) => ({
+    .map((l, index) => ({
       id: l.id, cat: l.cat, diff: Math.max(1, Math.min(3, Number(l.diff) || 1)), correct: l.correct,
+      attempt: l.attempt != null ? String(l.attempt) : `${guest.startedAt}:${index}`,
       ...(l.pop ? { pop: l.pop } : {}),
       ...(Number.isFinite(l.ms) ? { ms: l.ms } : {}),
       ...(Number.isFinite(l.words) && l.words > 0 ? { words: l.words } : {}),
@@ -181,12 +239,14 @@ export function mergeGuestIntoBlob(s, guest, { today, now = Date.now(), updateAb
     }));
   const entries = valid
     .map((l) => ({ ...l, id: `guest-${l.id}` }))
-    .filter((l) => !have.has(String(l.id)));
+    .filter((l) => !have.has(String(l.attempt)));
   if (!entries.length) return { blob: s, summary: null };
   const scored = [];
   let gxp = 0;
   {
-    const seen = [];
+    /* Score against answers already in the account, so a second attempt of
+       guest-1 is a fix or a repeat, never another full payout. */
+    const seen = [...(s.log ?? [])];
     for (const e of entries) {
       const stem = e.words ? Array.from({ length: e.words }, () => "w").join(" ") : "";
       const earned = answerXp({ q: { id: e.id, diff: e.diff, stem }, correct: e.correct, ms: Number.isFinite(e.ms) ? e.ms : Infinity, log: seen }).xp;
@@ -224,11 +284,13 @@ export function mergeGuestIntoBlob(s, guest, { today, now = Date.now(), updateAb
     ? (s.daily?.day === today ? { ...s.daily, answered: s.daily.answered + todayRows.length } : { day: today, answered: todayRows.length })
     : s.daily;
   const missSchedule = { ...(s.missSchedule ?? {}) };
-  for (const e of scored) {
-    if (e.correct) continue;
-    const src = String(e.id).replace(/^guest-/, "");
+  const lastAttempt = new Map();
+  for (const e of scored) lastAttempt.set(String(e.id), e);
+  for (const [id, e] of lastAttempt) {
+    if (e.correct) { delete missSchedule[id]; continue; }
+    const src = id.replace(/^guest-/, "");
     const prev = guest.missSchedule?.[src] ?? guest.missSchedule?.[Number(src)];
-    missSchedule[e.id] = prev && typeof prev.due === "string" ? prev : { interval: 1, due: e.day ?? today };
+    missSchedule[id] = prev && typeof prev.due === "string" ? prev : { interval: 1, due: e.day ?? today };
   }
   return {
     blob: { ...s, log: [...s.log, ...logged], xp: s.xp + (guest.xp ?? 0), bestRun: Math.max(s.bestRun ?? 0, guest.bestRun ?? 0), ability, streak, rewards, daily, missSchedule },

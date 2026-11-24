@@ -122,23 +122,24 @@ describe("N2: sign-out forgets the trial", () => {
 
 describe("N7: case steps already answered stay answered", () => {
   it("bank cases use the db id and alias the old 50000 + id*10 + step number", () => {
-    expect(caseStepIds({ dbId: 7, step: 2 })).toEqual({ id: "case-db7-2", aliases: [50072] });
+    expect(caseStepIds({ dbId: 7, step: 2 })).toEqual({ id: "case-db7-2", aliases: ["case:db7:2"], legacyAliases: [50072] });
   });
   it("bundled cases use a fixed key, not the editable title, and alias 100 + index*10 + step", () => {
     expect(CASE_STUDIES.map((c) => c.key)).toEqual(["sepsis", "dka", "preeclampsia-magnesium"]);
-    expect(caseStepIds({ key: "dka", title: "Hyperglycemic Crisis · DKA", index: 1, step: 3 })).toEqual({ id: "case-dka-3", aliases: [113] });
+    expect(caseStepIds({ key: "dka", title: "Hyperglycemic Crisis · DKA", index: 1, step: 3 })).toEqual({ id: "case-dka-3", aliases: ["case:dka:3"], legacyAliases: [113] });
   });
   it("a step answered under the old id pays no first-try XP again", () => {
-    const { id, aliases } = caseStepIds({ key: "sepsis", index: 0, step: 1 });
-    const log = [{ id: 101, cat: "Physiological Adaptation", diff: 3, correct: true }];
-    expect(answerXp({ q: { id, aliases, cat: "Physiological Adaptation", diff: 3 }, correct: true, log }).reason).toBe("repeat");
+    const step = caseStepIds({ key: "sepsis", index: 0, step: 1 });
+    const log = [{ id: 101, cat: "Physiological Adaptation", diff: 3, correct: true, source: "case" }];
+    expect(answerXp({ q: { ...step, cat: "Physiological Adaptation", diff: 3 }, correct: true, log }).reason).toBe("repeat");
     const db = caseStepIds({ dbId: 12, step: 0 });
-    expect(answerXp({ q: { ...db, cat: "Pharmacology", diff: 3 }, correct: true, log: [{ id: 50120, cat: "Pharmacology", diff: 3, correct: true }] }).xp).toBe(0);
+    expect(answerXp({ q: { ...db, cat: "Pharmacology", diff: 3 }, correct: true, log: [{ id: 50120, cat: "Pharmacology", diff: 3, correct: true, source: "case" }] }).xp).toBe(0);
   });
-  it("an unrelated bank question with the same number but another category does not block the step", () => {
-    const { id, aliases } = caseStepIds({ key: "sepsis", index: 0, step: 1 });
-    const log = [{ id: 101, cat: "Pharmacology", diff: 2, correct: true }];
-    expect(answerXp({ q: { id, aliases, cat: "Physiological Adaptation", diff: 3 }, correct: true, log }).xp).toBe(30);
+  it("a bank question with the same number and category does not spend the case step", () => {
+    const step = caseStepIds({ key: "sepsis", index: 0, step: 1 });
+    const log = [{ id: 101, cat: "Physiological Adaptation", diff: 1, correct: true }];
+    expect(answerXp({ q: { ...step, cat: "Physiological Adaptation", diff: 3, stem: "Which findings require immediate follow-up? Select all that apply." }, correct: true, ms: 9000, log }).reason).toBe("correct");
+    expect(answerXp({ q: { ...step, cat: "Physiological Adaptation", diff: 3 }, correct: true, log }).xp).toBe(30);
   });
 });
 

@@ -137,18 +137,24 @@ export function answerCountsForRun({ correct, q, ms = Infinity }) {
      bank case:    50000 + dbId * 10 + step
      bundled case: 100 + index * 10 + step (bundled cases come first) */
 export function caseStepIds({ dbId = null, key = null, title = "", index = 0, step = 0 }) {
-  if (dbId != null) return { id: `case-db${dbId}-${step}`, aliases: [50000 + Number(dbId) * 10 + step] };
-  return { id: `case-${key ?? title}-${step}`, aliases: [100 + index * 10 + step] };
+  if (dbId != null) return { id: `case-db${dbId}-${step}`, aliases: [`case:db${dbId}:${step}`], legacyAliases: [50000 + Number(dbId) * 10 + step] };
+  const name = key ?? title;
+  return { id: `case-${name}-${step}`, aliases: [`case:${name}:${step}`], legacyAliases: [100 + index * 10 + step] };
+}
+
+/* A log row is this question. Namespaced case aliases never match a bank
+   id. A bare legacy case number matches only a row recorded as a case. */
+export function sameAnswer(q, row) {
+  if (!q || !row) return false;
+  if (String(row.id) === String(q.id)) return true;
+  const id = String(row.id);
+  if ((q.aliases ?? []).map(String).includes(id)) return true;
+  return (q.legacyAliases ?? []).map(String).includes(id) && row.source === "case" && row.cat === q.cat;
 }
 
 export function answerXp({ q, correct, ms = Infinity, log = [], skipped = false }) {
   if (skipped) return { xp: 0, reason: "skip", base: 0, bonus: 0 };
-  const key = String(q.id);
-  /* Legacy aliases count only for rows of the same category: the old
-     bundled-case ids share the 100-125 range with bank questions, and when
-     in doubt this errs toward paying less, never more. */
-  const aliases = new Set((q.aliases ?? []).map(String));
-  const same = (row) => String(row.id) === key || (aliases.has(String(row.id)) && row.cat === q.cat);
+  const same = (row) => sameAnswer(q, row);
   let last = null, everCorrect = false;
   for (let i = log.length - 1; i >= 0; i--) {
     if (!same(log[i])) continue;

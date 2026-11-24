@@ -14,7 +14,7 @@ import { rewardBeat, motionAllowed, GUEST_PREFS } from "./effects.js";
 import { RewardsStyle, EcgBeat, Ripple, StreakGlyph, useAnnouncer, comboSpeech } from "./rewards-ui.jsx";
 import { freePassPlan } from "./free-pass.js";
 import {
-  GUEST_LIMIT, guestPool, emptyGuest, loadGuest, saveGuest, guestAnswer, guestRemaining, guestSummary, guestFresh, clearGuest,
+  GUEST_LIMIT, guestPool, emptyGuest, loadGuest, saveGuest, guestAnswer, guestRemaining, guestSummary, guestFresh, clearGuest, holdGuestTrial,
 } from "./guest.js";
 
 function initialGuest() {
@@ -92,7 +92,7 @@ export default function GuestTrial({ onSignUp, onSignIn }) {
               auto autoLimit={limit} onDone={() => setStage("save")} guest onGuestSignIn={onSignUp} />
           </div>
         ) : (
-          <SaveProgress guest={guest} onSignUp={onSignUp} onSignIn={onSignIn} motion={motion} deviceSaved={deviceSaved} />
+          <SaveProgress guest={guest} onSignUp={() => { holdGuestTrial(guest, window.sessionStorage); onSignUp(); }} onSignIn={() => { holdGuestTrial(guest, window.sessionStorage); onSignIn(); }} motion={motion} deviceSaved={deviceSaved} />
         )}
       </main>
       <footer className="guest-legal">
