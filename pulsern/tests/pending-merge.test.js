@@ -105,6 +105,25 @@ describe("a parked snapshot uses the device conflict merge", () => {
     expect(folded.srsMap.c2).toMatchObject({ interval: 7, due: "2026-12-01" });
   });
 
+  it("does not treat a different category with the same number as the stored answer", () => {
+    const stored = {
+      log: [{ id: 7, key: "builtin:7", source: "builtin", cat: "Management of Care", diff: 1, correct: false }],
+      xp: 0,
+      ability: updateAbility(emptyAbility(ABILITY_CATS), { id: 7, key: "builtin:7", source: "builtin", cat: "Management of Care", diff: 1 }, false).ability,
+      rewards: emptyRewards(),
+      streak: { count: 1, lastDay: "2026-11-24", shield: true },
+    };
+    const pending = {
+      log: [{ id: 7, cat: "Pharmacology", diff: 1, correct: false }],
+      xp: 0,
+      ability: updateAbility(emptyAbility(ABILITY_CATS), { id: 7, cat: "Pharmacology", diff: 1 }, false).ability,
+    };
+    const folded = foldPendingProgress(stored, [pending]);
+    expect(folded.log.map((row) => row.cat)).toEqual(["Management of Care", "Pharmacology"]);
+    expect(folded.ability.Pharmacology.n).toBe(1);
+    expect(folded.ability["Management of Care"].n).toBe(1);
+  });
+
   it("keeps a second identical undated miss in a parked snapshot", () => {
     const miss = { id: 9, cat: "Pharmacology", diff: 1, correct: false };
     const ability = updateAbility(emptyAbility(ABILITY_CATS), { id: 9, cat: "Pharmacology", diff: 1 }, false).ability;

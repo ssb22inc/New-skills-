@@ -627,6 +627,40 @@ describe("a revision conflict keeps both devices' answers", () => {
     expect(merged.streak).toMatchObject({ count: 3, lastDay: "2026-11-25" });
   });
 
+  it("does not bring back answers from before a reset", () => {
+    const reset = { log: [], xp: 0, rewards: emptyRewards(), resetGeneration: 1, streak: { count: 0, lastDay: null, shield: true } };
+    const older = { log: [answer("old", 1)], xp: 40, rewards: emptyRewards(), streak: { count: 4, lastDay: "2026-11-24", shield: false } };
+    expect(reconcileProgress(reset, older, older).log).toEqual([]);
+    expect(reconcileProgress(older, reset, older).resetGeneration).toBe(1);
+    expect(reconcileProgress(older, reset, older).log).toEqual([]);
+  });
+
+  it("keeps a cover that was earned and spent before the save was acknowledged", () => {
+    const baseline = { log: [], xp: 0, ability: emptyAbility(ABILITY_CATS), rewards: { ...emptyRewards(), covers: 0 }, streak: { count: 0, lastDay: null, shield: false } };
+    const local = {
+      ...baseline,
+      log: [{ id: 1, key: "bank:1", source: "bank", cat: "Pharmacology", diff: 1, correct: true, attempt: "sun", at: 3, day: "2026-11-29", ms: 9000, words: 8, rating: 1300 }],
+      xp: 80,
+      rewards: { ...emptyRewards(), covers: 0, coverWeeks: ["2026-11-23"], coverDays: ["2026-11-28"] },
+      streak: { count: 6, lastDay: "2026-11-29", shield: false },
+    };
+    const merged = blobForSave(baseline, local, baseline);
+    expect(merged.streak).toMatchObject({ count: 6, lastDay: "2026-11-29", shield: false });
+    expect(merged.rewards.covers).toBe(0);
+    expect(merged.rewards.coverWeeks).toEqual(["2026-11-23"]);
+  });
+
+  it("does not charge a new card again after the other device undoes it", () => {
+    const today = "2026-11-24";
+    const ids = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "A"];
+    const baseline = { log: [], xp: 0, rewards: emptyRewards(), fcNew: { day: today, count: 10, ids } };
+    const server = { ...baseline, fcNew: { day: today, count: 11, ids: [...ids, "K"] } };
+    const local = { ...baseline, fcNew: { day: today, count: 9, ids: ids.filter((id) => id !== "A") } };
+    const merged = blobForSave(server, local, baseline);
+    expect(merged.fcNew.ids).toEqual([...ids.filter((id) => id !== "A"), "K"]);
+    expect(merged.fcNew.count).toBe(10);
+  });
+
   it("does not carry yesterday's new-card count into today", () => {
     const baseline = { log: [], xp: 0, rewards: emptyRewards(), fcNew: { day: "2026-11-23", count: 20 } };
     const server = { ...baseline, fcNew: { day: "2026-11-24", count: 1, ids: ["cA"] } };

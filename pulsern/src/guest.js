@@ -143,6 +143,7 @@ function sameLegacyOccurrence(serverRow, localRow) {
   if (!serverRow || !localRow || serverRow.attempt || localRow.attempt) return false;
   return serverRow.id === localRow.id
     && serverRow.correct === localRow.correct
+    && (serverRow.cat ?? "") === (localRow.cat ?? "")
     && (serverRow.day ?? "") === (localRow.day ?? "")
     && (serverRow.at ?? "") === (localRow.at ?? "")
     && (serverRow.ms ?? "") === (localRow.ms ?? "");
@@ -311,7 +312,7 @@ function mergeFcNew(base, server, local) {
   if (serverIds) for (const id of baseIds) if (!serverIds.includes(id)) removed.add(id);
   if (localIds) for (const id of baseIds) if (!localIds.includes(id)) removed.add(id);
   const ids = [...baseIds.filter((id) => !removed.has(id)), ...added];
-  const count = Math.max(anonymous + ids.length, Number(s.count) || 0, Number(l.count) || 0);
+  const count = anonymous + ids.length;
   return { day: s.day ?? null, count, ...(ids.length ? { ids } : {}) };
 }
 
@@ -443,7 +444,7 @@ export function progressRevisionOnUpdate(oldRevision, incoming) {
 function pendingRowKey(row) {
   if (!row) return "";
   if (row.attempt != null && row.attempt !== "") return `a:${row.attempt}`;
-  return `l:${row.id}:${row.correct}:${row.day ?? ""}:${row.at ?? ""}:${row.ms ?? ""}`;
+  return `l:${row.id}:${row.correct}:${row.cat ?? ""}:${row.day ?? ""}:${row.at ?? ""}:${row.ms ?? ""}`;
 }
 
 /* Identical undated rows are separate sittings. A stored copy consumes
@@ -900,6 +901,13 @@ export function reconcileProgress(serverBlob, localBlob, baselineBlob = null) {
   /* A missing baseline is an empty account, not "the server is the baseline".
      Otherwise a late empty save treats the other device's answer as already
      scored and writes its XP back to zero. */
+  const generation = (blob) => {
+    const n = Number(blob?.resetGeneration);
+    return Number.isInteger(n) && n > 0 ? n : 0;
+  };
+  const serverGen = generation(server);
+  const localGen = generation(local);
+  if (serverGen !== localGen) return serverGen > localGen ? server : local;
   const hasBaseline = baselineBlob == null || (typeof baselineBlob === "object" && !Array.isArray(baselineBlob));
   const base = baselineBlob != null && typeof baselineBlob === "object" && !Array.isArray(baselineBlob) ? baselineBlob : {};
   const log = mergeLogs(server.log, local.log, hasBaseline ? (base.log ?? []) : null);
@@ -973,6 +981,10 @@ export function reconcileProgress(serverBlob, localBlob, baselineBlob = null) {
         coverDays: played.rewards?.coverDays ?? merged.rewards.coverDays,
       };
     }
+  }
+  if (sameJson(server, base)) {
+    if (local.streak) merged.streak = local.streak;
+    if (local.rewards) merged.rewards = local.rewards;
   }
   if (merged.rewards && (Number(merged.streak?.count) || 0) > (Number(merged.rewards.best?.streak) || 0)) {
     merged.rewards = { ...merged.rewards, best: { ...merged.rewards.best, streak: merged.streak.count } };

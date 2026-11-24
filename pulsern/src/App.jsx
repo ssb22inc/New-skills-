@@ -679,6 +679,7 @@ export default function App() {
   const [saveStall, setSaveStall] = useState(false);
   const [saveAttempt, setSaveAttempt] = useState(0);
   const pendingGuestClear = useRef(false);
+  const resetGeneration = useRef(0);
   const pendingHandoff = useRef(null);
   const saveQueue = useRef(null);
   const accountId = useRef(null);
@@ -770,6 +771,7 @@ export default function App() {
     setMissSchedule(s.missSchedule);
     setFcNew(s.fcNew);
     setRewards(s.rewards);
+    resetGeneration.current = Number(s.resetGeneration) || 0;
   };
   const loadProgress = useCallback(async () => {
     const generation = ++loadGeneration.current;
@@ -841,7 +843,7 @@ export default function App() {
   useEffect(() => {
     if (!loaded || saveBlocked) return;
     const seq = saveQueue.current.next();
-    const payload = JSON.stringify({ theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips, missSchedule, fcNew, rewards });
+    const payload = JSON.stringify({ theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips, missSchedule, fcNew, rewards, ...(resetGeneration.current > 0 ? { resetGeneration: resetGeneration.current } : {}) });
     const pendingAtStart = pendingGuestClear.current === true;
     const note = pendingHandoff.current;
     const userId = accountId.current;
@@ -1326,6 +1328,7 @@ export default function App() {
     if (saveBlocked) return;
     saveQueue.current?.invalidate();
     try { await store.delete(STORE_KEY); } catch (e) { setSaveFailed(true); return; }
+    resetGeneration.current += 1;
     setXp(0); setRun(0); setBestRun(0); setLog([]); setFlagged([]); setCustomQs([]);
     touchedDay.current = null;
     setStreak({ count: 0, lastDay: null, shield: true }); setDaily({ day: todayStr(), answered: 0 });
