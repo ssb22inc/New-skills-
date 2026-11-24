@@ -1,0 +1,42 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "b7349d9b90de5d67f751981cc07136f5323f9182",
+    "head": "856ed9eab28096b5880a1a008397361cf96bb7c1",
+    "pr": "186"
+  },
+  "reviewedAt": "2026-11-24T10:59:30.894Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-astra-review.yml",
+    "pulsern/ops/astra-review.mjs",
+    "pulsern/ops/llm.mjs"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/ops/astra-review.mjs",
+      "line": 635,
+      "title": "Add regression coverage for parseable but truncated reviews",
+      "problem": "This branch adds critical fail-closed behavior without a corresponding test. The important input is valid review JSON with no findings accompanied by finishReason: \"length\": JSON parsing alone accepts it, and the previous implementation would report PASS. No test was added to distinguish this unfinished review from a completed one.",
+      "failure_scenario": "If llmCall stops forwarding finish_reason, or this check is removed, a token-limited response containing valid JSON can again certify an unfinished review. The change supplies no regression test that would catch either failure.",
+      "fix": "Test runReview with identical valid empty-findings JSON under finishReason \"length\" and \"stop\": require code 2, a persisted FAIL report, and preserved raw output for \"length\", versus PASS for \"stop\". Also test that llmCall forwards finish_reason from a nonempty mocked HTTP response so the safety check is exercised across the adapter boundary.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 23085,
+    "completionTokens": 1574,
+    "reasoningTokens": 1278,
+    "costUsd": 0.073451
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "The token-cap validation and truncation handling appear correct, but the new review-gate safety behavior lacks regression coverage.",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0
+  }
+}
