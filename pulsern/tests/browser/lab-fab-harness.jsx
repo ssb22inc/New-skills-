@@ -1,7 +1,7 @@
 /* A practice question with the shipped floating 🧪 button and study
    toolkit on top, so drag, settle, open, and the AI lookup can be checked
    in a real browser at phone and desktop sizes. */
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Style, Toolkit } from "../../src/App.jsx";
 import { LabFab } from "../../src/lab-fab.jsx";
@@ -15,6 +15,9 @@ function Screen() {
   const [open, setOpen] = useState(false);
   const [section, setSection] = useState("labs");
   const [focusOpen, setFocusOpen] = useState(false);
+  const [stemText, setStemText] = useState("Which client should the nurse see first? STEM-ONE The finding that decides priority is written out to the end of this line.");
+  const [crowded, setCrowded] = useState(true);
+  useEffect(() => { window.T.setStem = setStemText; window.T.setCrowded = setCrowded; }, []);
   return (
     <div className="app tab-qbank in-session" data-theme={window.__theme || "light"}>
       <Style />
@@ -22,14 +25,14 @@ function Screen() {
       <main className="body">
         <FocusBar open={focusOpen} setOpen={setFocusOpen} groups={[{ label: "Category", options: [["pharm", "Pharmacology"]], selected: [], onToggle() {} }]} />
         <section className="card stack study-col">
-          <p className="stem">Which client should the nurse see first? STEM-ONE The finding that decides priority is written out to the end of this line.</p>
-          {OPTIONS.map((o, i) => (
+          <p className="stem">{stemText}</p>
+          {crowded && OPTIONS.map((o, i) => (
             <button key={o} type="button" role="radio" aria-checked={pick === i} className={pick === i ? "opt picked" : "opt"} onClick={() => setPick(i)}>{o}</button>
           ))}
-          <button type="button" className="btn" disabled={pick == null}>Check answer</button>
-          <p className="rationale"><strong>Rationale.</strong> Beta choice treats the immediate risk and is the priority.</p>
-          <div className="chart mono"><span className="chip">HR 88/min</span><span className="chip lab">K 4.0 mEq/L</span></div>
-          <QuestionNav canBack={false} skipped={0} onBack={() => {}} onSkip={() => {}} onNext={() => {}} onReview={() => {}} nextPrimary={false} />
+          {crowded && <button type="button" className="btn" disabled={pick == null}>Check answer</button>}
+          {crowded && <p className="rationale"><strong>Rationale.</strong> Beta choice treats the immediate risk and is the priority.</p>}
+          {crowded && <div className="chart mono"><span className="chip">HR 88/min</span><span className="chip lab">K 4.0 mEq/L</span></div>}
+          {crowded && <QuestionNav canBack={false} skipped={0} onBack={() => {}} onSkip={() => {}} onNext={() => {}} onReview={() => {}} nextPrimary={false} />}
         </section>
       </main>
       <nav className="tabs" aria-label="Sections">
@@ -41,5 +44,5 @@ function Screen() {
   );
 }
 
+window.T = { ready: true, setStem() {} };
 createRoot(document.getElementById("host")).render(<Screen />);
-window.T = { ready: true };

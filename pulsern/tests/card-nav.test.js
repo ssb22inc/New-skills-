@@ -271,6 +271,8 @@ describe("keyboard", () => {
     expect(cardNavAction({ key: "ArrowRight", target: { tagName: "SELECT", closest: () => null } })).toBeNull();
     expect(cardNavAction({ key: "ArrowLeft", target: { tagName: "DIV", isContentEditable: true, closest: () => null } })).toBeNull();
     expect(cardNavAction({ key: "ArrowLeft", target: dialogBtn })).toBeNull();
+    expect(cardNavAction({ key: "ArrowRight", target: { tagName: "BUTTON", getAttribute: () => "radio", closest: () => null } })).toBeNull();
+    expect(cardNavAction({ key: "ArrowLeft", target: { tagName: "BUTTON", getAttribute: () => "tab", closest: () => null } })).toBeNull();
     expect(cardNavAction({ key: "ArrowRight", ctrlKey: true, target: div })).toBeNull();
     expect(cardNavAction({ key: "ArrowLeft", metaKey: true, target: div })).toBeNull();
     expect(cardNavAction({ key: "ArrowRight", altKey: true, target: div })).toBeNull();

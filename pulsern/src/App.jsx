@@ -274,7 +274,8 @@ import {
   heldIds, checkpointAfter,
 } from "./question-nav.js";
 import { QuestionNav, OPEN_LABS_EVENT } from "./question-nav.jsx";
-import { LabFab, resetLabFab } from "./lab-fab.jsx";
+import { LabFab, resetLabFab, useLabSettleKey } from "./lab-fab.jsx";
+import { onRadioKeyDown, radioTabIndex } from "./radio-group.js";
 import { cycleTab, tabbables } from "./focus-trap.js";
 import { LabPanel } from "./lab-panel.jsx";
 import { FocusBar } from "./focus-sheet.jsx";
@@ -1242,9 +1243,21 @@ export function Toolkit({ open, section = "labs", onSection, onClose, provider, 
           </div>
           <button type="button" className="tk-close" onClick={onClose} aria-label="Close study toolkit">✕</button>
         </div>
-        <div className="tk-tabs" role="tablist" aria-label="Toolkit sections">
+        <div className="tk-tabs" role="tablist" aria-label="Toolkit sections" onKeyDown={(e) => {
+          const tabs = [...e.currentTarget.querySelectorAll("[role='tab']")];
+          const i = tabs.indexOf(e.target);
+          if (i < 0) return;
+          const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : null;
+          const next = step == null ? (e.key === "Home" ? 0 : e.key === "End" ? tabs.length - 1 : null) : (i + step + tabs.length) % tabs.length;
+          if (next == null) return;
+          e.preventDefault();
+          e.stopPropagation();
+          tabs[next].focus();
+          tabs[next].click();
+        }}>
           {[["labs", "🧪 Labs & lookup", "Normal lab and vital-sign reference ranges"], ["help", "💬 Help & contact", "Help and contact"]].map(([k, label, aria]) => (
             <button key={k} type="button" role="tab" id={tabIds[k]} aria-selected={section === k} aria-controls={`tk-panel-${k}`}
+              tabIndex={section === k ? 0 : -1}
               className={section === k ? "tk-tab on" : "tk-tab"} onClick={() => onSection(k)} title={aria}>{label}</button>
           ))}
         </div>
@@ -1659,6 +1672,7 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
   useEffect(() => {
     if (phase === "answering" && q) window.scrollTo(0, 0);
   }, [q?.id, phase]);
+  useLabSettleKey(q ? `${q.id}:${phase}` : phase);
 
   const TYPE_CHIPS =[["mc", "Multiple choice"], ["sata", "Select all"], ["order", "Ordering"], ["matrix", "Matrix"], ["bowtie", "Bow-tie"], ["cloze", "Cloze"], ["calc", "Dosage calc"], ["highlight", "Highlight"]];
 
@@ -1836,7 +1850,7 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
               {ext.columns.map((c, ci) => <span key={ci} className="small mono mx-colhead">{c}</span>)}
             </div>
             {ext.rows.map((r, ri) => (
-              <div key={ri} className={ra(qReader, `row${ri}`, "mx-row")} style={{ gridTemplateColumns: `2fr repeat(${ext.columns.length}, 1fr)` }}>
+              <div key={ri} role="radiogroup" aria-label={r} className={ra(qReader, `row${ri}`, "mx-row")} style={{ gridTemplateColumns: `2fr repeat(${ext.columns.length}, 1fr)` }}>
                 <span className="small">
                   {phase === "feedback" && <strong>{sel[ri] === q.answer[ri] ? "✓ " : "✗ "}</strong>}{r}
                 </span>
@@ -1849,7 +1863,8 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
                   }
                   return (
                     <button key={ci} type="button" className={cls} disabled={locked} onClick={() => setMatrixRow(ri, ci)} aria-label={`${r}: ${c}`}
-                      role="radio" aria-checked={sel[ri] === ci}>
+                      role="radio" aria-checked={sel[ri] === ci} onKeyDown={onRadioKeyDown}
+                      tabIndex={radioTabIndex(sel[ri] === ci, ci, Number.isInteger(sel[ri]))}>
                       <span className="ck radio mx-ck" aria-hidden="true" />
                     </button>
                   );
@@ -1904,7 +1919,7 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
         )}
 
         {["mc", "sata", "order"].includes(q.type) && (
-        <div className="opts">
+        <div className="opts" role={q.type === "mc" ? "radiogroup" : q.type === "sata" ? "group" : undefined} aria-label={q.type === "order" ? undefined : "Answer choices"}>
           {q.options.map((opt, i) => {
             let cls = ra(qReader, `opt${i}`, "opt");
             if (q.type !== "order") {
@@ -1913,7 +1928,9 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
               const multi = q.type === "sata";
               return (
                 <button key={i} type="button" className={cls} disabled={locked} onClick={() => toggleSel(i)}
-                  role={multi ? "checkbox" : "radio"} aria-checked={sel.includes(i)}>
+                  role={multi ? "checkbox" : "radio"} aria-checked={sel.includes(i)}
+                  onKeyDown={multi ? undefined : onRadioKeyDown}
+                  tabIndex={multi ? undefined : radioTabIndex(sel.includes(i), i, sel.length > 0)}>
                   <span className={multi ? "ck" : "ck radio"} aria-hidden="true">{st === "wrong" ? "✗" : multi && sel.includes(i) ? "✓" : ""}</span>
                   <span className="opt-text">{opt}{CHOICE_BADGE[st] && <span className="st-badge">{CHOICE_BADGE[st]}</span>}</span>
                 </button>
@@ -2106,6 +2123,7 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
     inSession: caseIdx != null,
     hasDraft: phase === "answering" && Array.isArray(sel) && sel.length > 0,
   });
+  useLabSettleKey(cs ? `${caseKey}:${step}:${phase}` : "cases");
 
   if (caseIdx == null) {
     // sub-category accordion: cases stay tucked away until a group is opened
@@ -2227,7 +2245,9 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
               const multi = s.type === "sata";
               return (
                 <button key={i} type="button" className={cls} disabled={phase !== "answering"} onClick={() => pickCase(i)}
-                  role={multi ? "checkbox" : "radio"} aria-checked={sel.includes(i)}>
+                  role={multi ? "checkbox" : "radio"} aria-checked={sel.includes(i)}
+                  onKeyDown={multi ? undefined : onRadioKeyDown}
+                  tabIndex={multi ? undefined : radioTabIndex(sel.includes(i), i, sel.length > 0)}>
                   <span className={multi ? "ck" : "ck radio"} aria-hidden="true">{st === "wrong" ? "✗" : multi && sel.includes(i) ? "✓" : ""}</span>
                   <span className="opt-text">{opt}{CHOICE_BADGE[st] && <span className="st-badge">{CHOICE_BADGE[st]}</span>}</span>
                 </button>
@@ -2378,6 +2398,7 @@ export function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+  useLabSettleKey(curId != null ? `${curId}:${show ? "back" : "front"}` : "cards");
 
   const onBack = () => setSession((s) => goBackCard(s));
   const onSkip = () => setSession((s) => skipCard(s).nav);

@@ -73,6 +73,9 @@ describe("study shortcuts", () => {
       control("DIV", null, "listbox"),
     ];
     for (const target of targets) for (const key of keys) expect(studyKeyAction({ key, target })).toBe(null);
+    expect(studyKeyAction({ key: "2", target: control("BUTTON", "radio") })).toEqual({ type: "pick", index: 1 });
+    expect(studyKeyAction({ key: "3", target: control("BUTTON", "checkbox") })).toEqual({ type: "pick", index: 2 });
+    expect(studyKeyAction({ key: "1", target: control("DIV", null, "radiogroup") })).toEqual({ type: "pick", index: 0 });
   });
   it("still moves back and next when focus is not in a form control", () => {
     expect(studyKeyAction(ev("ArrowLeft"))).toEqual({ type: "back" });

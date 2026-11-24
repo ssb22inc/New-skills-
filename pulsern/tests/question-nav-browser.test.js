@@ -54,6 +54,37 @@ const back = () => page.getByRole("button", { name: "Back to the previous questi
 const choice = (name) => page.getByRole("radio", { name }).or(page.getByRole("checkbox", { name }));
 const visible = async (locator) => { await locator.waitFor({ state: "visible" }); };
 
+describe("answer radio keys", () => {
+  it("moves focus and selection with the arrow keys, and 1–9 still pick", async () => {
+    await page.evaluate(() => window.T.mountPractice(false));
+    await page.getByRole("button", { name: "New questions" }).click();
+    await visible(page.locator(".stem"));
+    const stemBefore = await stem();
+    const focusIndex = () => page.evaluate(() => [...document.querySelectorAll("[role=radio]")].indexOf(document.activeElement));
+    const checked = (i) => page.getByRole("radio").nth(i).getAttribute("aria-checked");
+    await page.getByRole("radio").nth(0).focus();
+    await page.keyboard.press("ArrowDown");
+    expect(await focusIndex()).toBe(1);
+    expect(await checked(1)).toBe("true");
+    await page.keyboard.press("ArrowUp");
+    expect(await focusIndex()).toBe(0);
+    expect(await checked(0)).toBe("true");
+    await page.keyboard.press("End");
+    expect(await focusIndex()).toBe(3);
+    expect(await checked(3)).toBe("true");
+    await page.keyboard.press("Home");
+    expect(await focusIndex()).toBe(0);
+    await page.keyboard.press("ArrowLeft");
+    expect(await focusIndex()).toBe(3);
+    expect(await checked(3)).toBe("true");
+    await page.keyboard.press("2");
+    expect(await checked(1)).toBe("true");
+    expect(await focusIndex()).toBe(3);
+    await page.keyboard.press(" ");
+    expect(await stem()).toBe(stemBefore);
+  }, 60_000);
+});
+
 describe("practice questions", () => {
   it("moves back and forward, and a skip does not count as wrong", async () => {
     await page.evaluate(() => window.T.mountPractice(false));

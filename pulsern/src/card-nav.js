@@ -211,7 +211,9 @@ export function cardNavAction(event) {
   if (target?.isContentEditable) return null;
   const tag = target?.tagName?.toUpperCase?.() ?? "";
   if (FIELD.test(tag)) return null;
-  if (typeof target?.closest === "function" && target.closest("[role='dialog'], .lab-drawer, .fab-menu")) return null;
+  if (typeof target?.closest === "function" && target.closest("[role='dialog'], [role='radiogroup'], .lab-drawer, .fab-menu")) return null;
+  const role = typeof target?.getAttribute === "function" ? target.getAttribute("role") : target?.role;
+  if (role === "radio" || role === "checkbox" || role === "tab") return null;
   if (key === "ArrowLeft") return "back";
   if (key === "ArrowRight") return "next";
   return null;

@@ -123,6 +123,23 @@ describe("floating 🧪 study toolkit", () => {
     await ctx.close();
   }, 120_000);
 
+  it("moves clear when a short stem grows into a long one", async () => {
+    const { ctx, page } = await open({ width: 390, height: 844 });
+    await page.evaluate(() => { window.T.setCrowded(false); window.T.setStem("Short stem."); });
+    await page.waitForTimeout(200);
+    const stem = await page.locator(".stem").boundingBox();
+    await mouseDrag(page, { x: stem.x + stem.width - 20, y: stem.y + stem.height + 48 });
+    const parked = await fab(page).boundingBox();
+    expect(overlaps(parked, stem)).toBe(false);
+    await page.evaluate(() => window.T.setStem("Which client should the nurse see first? " + "The deciding finding continues across the full width of the question. ".repeat(12)));
+    await page.waitForTimeout(250);
+    const button = await fab(page).boundingBox();
+    const grown = await page.locator(".stem").boundingBox();
+    expect(overlaps(parked, grown), JSON.stringify({ parked, grown })).toBe(true);
+    expect(overlaps(button, grown)).toBe(false);
+    await ctx.close();
+  }, 120_000);
+
   it("never covers the stem, rationale, or chart after a drag or a snap", async () => {
     const { ctx, page } = await open({ width: 390, height: 844 });
     const reading = async () => {

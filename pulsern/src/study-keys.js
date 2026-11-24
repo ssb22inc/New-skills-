@@ -4,21 +4,32 @@ import { useEffect, useRef } from "react";
      1–9      pick an option (Cards: 1–4 grade Again / Hard / Good / Easy)
      Enter    check the answer, then go to the next item (Cards: flip)
      ← / →    back / next
-   Nothing fires while typing, on a radio or checkbox, inside a radiogroup
-   or listbox, inside a dialog, the lab drawer, or a menu. Arrow keys there
-   belong to the control.
+   Nothing fires while typing, inside a listbox, inside a dialog, the lab
+   drawer, or a menu. On a radio or checkbox, 1–9 still pick a choice;
+   arrows, Space, and Enter stay with that control.
    Deterministic plain code. */
 
 const FIELD = /^(INPUT|TEXTAREA|SELECT)$/;
 
-function formControl(target) {
+function roleOf(target) {
+  if (typeof target.getAttribute === "function") return target.getAttribute("role") || "";
+  return target.role || "";
+}
+
+function inChoice(target) {
+  const role = roleOf(target);
+  if (role === "radio" || role === "checkbox") return true;
+  return typeof target.closest === "function" && !!target.closest("[role='radiogroup']");
+}
+
+function blocksShortcuts(target) {
   if (!target || typeof target !== "object") return false;
   if (target.isContentEditable) return true;
   const tag = target.tagName?.toUpperCase?.() ?? "";
   if (FIELD.test(tag)) return true;
-  const role = typeof target.getAttribute === "function" ? target.getAttribute("role") : target.role;
-  if (role === "radio" || role === "checkbox") return true;
-  return typeof target.closest === "function" && !!target.closest("[role='radiogroup'], [role='listbox']");
+  const role = roleOf(target);
+  if (role === "listbox" || role === "option") return true;
+  return typeof target.closest === "function" && !!target.closest("[role='listbox']");
 }
 
 export function studyKeyAction(event) {
@@ -26,7 +37,11 @@ export function studyKeyAction(event) {
   const key = typeof event === "string" ? event : event.key;
   const target = typeof event === "string" ? null : event.target;
   if (typeof event === "object" && (event.altKey || event.ctrlKey || event.metaKey)) return null;
-  if (formControl(target)) return null;
+  if (blocksShortcuts(target)) return null;
+  if (target && inChoice(target)) {
+    if (/^[1-9]$/.test(key)) return { type: "pick", index: Number(key) - 1 };
+    return null;
+  }
   const tag = target?.tagName?.toUpperCase?.() ?? "";
   if (typeof target?.closest === "function" && target.closest("[role='dialog'], .lab-drawer, .lab-fab, .fab-menu, .menu-panel, .sheet")) return null;
   if (key === "ArrowLeft") return { type: "back" };

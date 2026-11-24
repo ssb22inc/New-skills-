@@ -13,6 +13,15 @@ import {
    never the only way. */
 
 export const LABFAB_RESET_EVENT = "pulsern:labfab-reset";
+const SETTLE_KEY_EVENT = "pulsern:lab-settle-key";
+
+/* Screens call this with the question, case step, or card on screen so a
+   new item re-checks the button even when the text nodes are reused. */
+export function useLabSettleKey(key) {
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(SETTLE_KEY_EVENT, { detail: key ?? "" }));
+  }, [key]);
+}
 export function resetLabFab() {
   try { clearAnchor(window.localStorage); } catch { /* private mode */ }
   if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(LABFAB_RESET_EVENT));
@@ -69,6 +78,13 @@ export function LabFab({ onOpen, hidden = false, open = false, settleKey = "", b
   const [pos, setPos] = useState(null);
   const [dragging, setDragging] = useState(false);
   const [moved, setMoved] = useState(false);
+  const [contentKey, setContentKey] = useState("");
+
+  useEffect(() => {
+    const onKey = (e) => setContentKey(String(e.detail ?? ""));
+    window.addEventListener(SETTLE_KEY_EVENT, onKey);
+    return () => window.removeEventListener(SETTLE_KEY_EVENT, onKey);
+  }, []);
 
   const settle = useCallback(() => {
     if (drag.current?.active || typeof window === "undefined") return;
@@ -104,27 +120,38 @@ export function LabFab({ onOpen, hidden = false, open = false, settleKey = "", b
     settle();
   }, [hidden, settle]);
 
-  /* Re-settle whenever the screen under it changes: resize, scroll end,
-     new question, opened sheet, a different tab. */
+  /* Re-settle when the screen under the button changes. One check per
+     frame: a new question, a rationale, a chart, or text that grows. */
   useEffect(() => {
     if (hidden) return undefined;
-    let raf = 0; let t = 0;
-    const soon = (delay = 120) => { clearTimeout(t); t = setTimeout(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(settle); }, delay); };
-    soon(0);
-    const onScroll = () => soon(180);
-    const onResize = () => soon(60);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onResize);
+    let raf = 0;
     const root = document.querySelector("main.body") || document.body;
-    const mo = typeof MutationObserver === "function" ? new MutationObserver(() => soon(140)) : null;
-    mo?.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style", "hidden"] });
-    return () => {
-      clearTimeout(t); cancelAnimationFrame(raf);
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onResize);
-      mo?.disconnect();
+    let ro = null;
+    const watch = () => {
+      ro?.observe(root);
+      root.querySelectorAll(".stem, .rationale, .chart, .opts, .case-chart, .case-chart-bar, .case-chart-body, .flashcard, .card, .grades").forEach((el) => ro?.observe(el));
     };
-  }, [hidden, settle, settleKey]);
+    const soon = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => { raf = 0; watch(); settle(); });
+    };
+    ro = typeof ResizeObserver === "function" ? new ResizeObserver(soon) : null;
+    soon();
+    window.addEventListener("scroll", soon, { passive: true });
+    window.addEventListener("resize", soon);
+    const mo = typeof MutationObserver === "function" ? new MutationObserver(soon) : null;
+    mo?.observe(root, {
+      childList: true, subtree: true, characterData: true,
+      attributes: true, attributeFilter: ["class", "style", "hidden", "aria-expanded"],
+    });
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", soon);
+      window.removeEventListener("resize", soon);
+      mo?.disconnect();
+      ro?.disconnect();
+    };
+  }, [hidden, settle, settleKey, contentKey]);
 
   const onPointerDown = (e) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
