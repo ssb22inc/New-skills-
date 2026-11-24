@@ -32,7 +32,7 @@ const supabaseStub = {
 
 let server, browser, page, base;
 beforeAll(async () => {
-  server = await createServer({ configFile: false, root: process.cwd(), plugins: [supabaseStub, react()], logLevel: "silent", server: { port: 0, host: "127.0.0.1" }, optimizeDeps: { include: ["react", "react-dom", "react-dom/client", "react/jsx-dev-runtime"] } });
+  server = await createServer({ configFile: false, cacheDir: "node_modules/.vite-read-aloud-hook", root: process.cwd(), plugins: [supabaseStub, react()], logLevel: "silent", server: { port: 0, host: "127.0.0.1" }, optimizeDeps: { include: ["react", "react-dom", "react-dom/client", "react/jsx-dev-runtime"] } });
   await server.listen();
   base = server.resolvedUrls.local[0];
   browser = await launchBrowser({ proxy: undefined });

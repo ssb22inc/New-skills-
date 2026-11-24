@@ -3,6 +3,9 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import GuestTrial from "../../src/guest.jsx";
+import { QUESTIONS } from "../../src/App.jsx";
+
+window.QUESTIONS = QUESTIONS; // lets a test pick the right answer
 
 window.T = { signUps: 0, signIns: 0 };
 createRoot(document.getElementById("host")).render(

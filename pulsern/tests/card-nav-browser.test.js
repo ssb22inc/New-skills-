@@ -25,7 +25,7 @@ function overlaps(a, b) {
 let server, browser, page;
 beforeAll(async () => {
   server = await createServer({
-    configFile: false,
+    configFile: false, cacheDir: "node_modules/.vite-card-nav-browser",
     root: process.cwd(),
     plugins: [supabaseStub, react()],
     logLevel: "silent",

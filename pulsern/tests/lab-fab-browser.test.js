@@ -25,7 +25,7 @@ const overlaps = (a, b) => a.x < b.x + b.width - 0.5 && a.x + a.width > b.x + 0.
 let server, browser, base;
 beforeAll(async () => {
   server = await createServer({
-    configFile: false, root: process.cwd(), plugins: [supabaseStub, react()], logLevel: "silent",
+    configFile: false, cacheDir: "node_modules/.vite-lab-fab-browser", root: process.cwd(), plugins: [supabaseStub, react()], logLevel: "silent",
     server: { port: 0, host: "127.0.0.1" },
     optimizeDeps: { include: ["react", "react-dom", "react-dom/client", "react/jsx-dev-runtime"] },
   });

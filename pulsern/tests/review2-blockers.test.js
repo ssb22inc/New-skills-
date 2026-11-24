@@ -164,7 +164,7 @@ describe("minors with logic", () => {
 describe("m3: case-study steps", () => {
   it("log string ids outside the numeric bank id space and pass answer time", () => {
     const app = fs.readFileSync("src/App.jsx", "utf8");
-    expect(app).toContain("const stepId = cs ? `case-");
+    expect(app).toContain("caseStepIds({ dbId: cs.dbId ?? null, key: cs.key ?? null");
     expect(app).toMatch(/record\(\{ id: stepId[^\n]*ms: Date\.now\(\) - stepShownAt\.current/);
     expect(answerXp({ q: { id: "case-Sepsis-0", diff: 3, stem: "Which findings require immediate follow-up? Select all that apply." }, correct: true, ms: 400, log: [] }).reason).toBe("too-fast");
   });

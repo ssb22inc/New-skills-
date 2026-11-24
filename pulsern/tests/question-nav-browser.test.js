@@ -22,7 +22,7 @@ const supabaseStub = {
 let server, browser, base;
 beforeAll(async () => {
   server = await createServer({
-    configFile: false,
+    configFile: false, cacheDir: "node_modules/.vite-question-nav-browser",
     root: process.cwd(),
     plugins: [supabaseStub, react()],
     logLevel: "silent",
