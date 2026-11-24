@@ -1,7 +1,8 @@
 /* A practice question with the shipped floating 🧪 button and study
    toolkit on top, so drag, settle, open, and the AI lookup can be checked
    in a real browser at phone and desktop sizes. */
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { useStudyKeys } from "../../src/study-keys.js";
 import { createRoot } from "react-dom/client";
 import { Style, Toolkit } from "../../src/App.jsx";
 import { LabFab } from "../../src/lab-fab.jsx";
@@ -16,6 +17,9 @@ function Screen() {
   const [section, setSection] = useState("labs");
   const [focusOpen, setFocusOpen] = useState(false);
   const [stemText, setStemText] = useState("Which client should the nurse see first? STEM-ONE The finding that decides priority is written out to the end of this line.");
+  const keys = useRef({});
+  useStudyKeys(keys);
+  keys.current = { pick: (i) => { if (!open && i < OPTIONS.length) setPick(i); } };
   const [crowded, setCrowded] = useState(true);
   useEffect(() => { window.T.setStem = setStemText; window.T.setCrowded = setCrowded; }, []);
   return (

@@ -57,7 +57,7 @@ export function LabPanel({ ask, searchRef, groups: allGroups = LAB_GROUPS }) {
           placeholder="Search a lab value or ask any NCLEX question…" value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !groups.length && !aiHit) askAi(); }} />
-        {q && <button type="button" className="lp-clear" onClick={() => setQ("")} aria-label="Clear search">✕</button>}
+        {q && <button type="button" className="lp-clear" onClick={(e) => { setQ(""); const input = e.currentTarget.parentElement?.querySelector("input"); requestAnimationFrame(() => input?.focus()); }} aria-label="Clear search">✕</button>}
       </div>
 
       <div className="lp-meta">

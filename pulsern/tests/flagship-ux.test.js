@@ -3,6 +3,7 @@
    a first question that comes before any tour. Deterministic plain code. */
 import { describe, it, expect } from "vitest";
 import { choiceState, choiceClasses, CHOICE_BADGE } from "../src/choice-state.js";
+import fs from "node:fs";
 import { studyKeyAction, SHORTCUT_HINT, MOVE_HINT, shortcutHint, digitPickEnabled, CARD_SHORTCUT_HINT } from "../src/study-keys.js";
 import { startSession, gradeCurrent, goBack, currentCard, sessionProgress, canUndoGrade, undoGrade } from "../src/card-nav.js";
 import { QUICK_TOUR_STEPS, TOUR_STEPS, tourStepsFor, tourStepAt, isLastTourStep } from "../src/tour.js";
@@ -95,6 +96,12 @@ describe("study shortcuts", () => {
       expect(shortcutHint(type)).toBe(MOVE_HINT);
       expect(shortcutHint(type)).not.toMatch(/1–9/);
     }
+    const keys = fs.readFileSync("src/study-keys.js", "utf8");
+    expect(keys).toContain(".toolkit.open");
+    expect(keys.indexOf("studySurfaceBlocked()")).toBeLessThan(keys.indexOf("studyKeyAction(e)"));
+    const app = fs.readFileSync("src/App.jsx", "utf8");
+    expect(app).toContain("if (studySurfaceBlocked()) return;");
+    expect(fs.readFileSync("src/lab-panel.jsx", "utf8")).toContain("input?.focus()");
   });
 });
 

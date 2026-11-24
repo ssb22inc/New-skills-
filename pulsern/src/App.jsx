@@ -280,7 +280,7 @@ import { cycleTab, tabbables } from "./focus-trap.js";
 import { LabPanel } from "./lab-panel.jsx";
 import { FocusBar } from "./focus-sheet.jsx";
 import { TabIcon } from "./tab-icons.jsx";
-import { useStudyKeys, shortcutHint, digitPickEnabled, CARD_SHORTCUT_HINT } from "./study-keys.js";
+import { useStudyKeys, shortcutHint, digitPickEnabled, studySurfaceBlocked, CARD_SHORTCUT_HINT } from "./study-keys.js";
 import { choiceState, choiceClasses, CHOICE_BADGE } from "./choice-state.js";
 import Calculator from "./calculator.jsx";
 import ExamCenter from "./exam.jsx";
@@ -2390,6 +2390,7 @@ export function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = 
 
   useEffect(() => {
     const onKey = (e) => {
+      if (studySurfaceBlocked()) return;
       const action = cardNavAction(e);
       if (!action) return;
       e.preventDefault();

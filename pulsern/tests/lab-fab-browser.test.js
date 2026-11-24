@@ -213,6 +213,18 @@ describe("floating 🧪 study toolkit", () => {
     await ctx.close();
   }, 120_000);
 
+  it("does not answer the question underneath an open toolkit", async () => {
+    const { ctx, page } = await open({ width: 390, height: 844 });
+    await page.locator(".lab-fab").click();
+    await page.waitForSelector(".toolkit.open");
+    await page.getByLabel("Search a lab value or ask any NCLEX question").fill("potassium");
+    await page.getByRole("button", { name: "Clear search" }).click();
+    await page.keyboard.press("1");
+    await page.keyboard.press("Enter");
+    expect(await page.locator("[aria-checked='true']").count()).toBe(0);
+    await ctx.close();
+  }, 120_000);
+
   it("opens by tap or keyboard over the question without losing it; Escape closes and focus returns", async () => {
     const { ctx, page } = await open({ width: 390, height: 844 });
     await page.getByRole("radio", { name: "Beta choice" }).click();

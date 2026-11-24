@@ -58,13 +58,19 @@ export function studyKeyAction(event) {
 /* handlers: { back, next, primary, pick(index) } — any may be missing.
    A ref ({ current: handlers }) is accepted too, so a screen can register
    the hook before its early returns and fill the handlers in later. */
+/* The toolkit is a modal. After its Clear button removes itself, Chromium
+   leaves focus on the document, so a target check is not enough. */
+export function studySurfaceBlocked() {
+  return !!document.querySelector(".tour-overlay, .sheet-overlay, .menu-panel, .toolkit.open");
+}
+
 export function useStudyKeys(handlers, active = true) {
   const ref = useRef(handlers);
   ref.current = handlers;
   useEffect(() => {
     if (!active) return undefined;
     const onKey = (e) => {
-      if (document.querySelector(".tour-overlay, .sheet-overlay, .menu-panel")) return;
+      if (studySurfaceBlocked()) return;
       const a = studyKeyAction(e);
       if (!a) return;
       const raw = ref.current ?? {};
