@@ -32,7 +32,9 @@ export function collectSources(roots, read) {
       if (!spec?.startsWith(".")) continue;
       const base = normalize(join(dir, spec)).replace(/\\/g, "/");
       if (!base.startsWith("pulsern/")) continue;
-      const candidates = /\.[a-z0-9]+$/i.test(base) ? [base] : [`${base}.mjs`, `${base}.js`, `${base}.jsx`, `${base}.json`];
+      const candidates = /\.[a-z0-9]+$/i.test(base)
+        ? [base]
+        : [`${base}.mjs`, `${base}.js`, `${base}.jsx`, `${base}.json`, `${base}/index.mjs`, `${base}/index.js`, `${base}/index.jsx`];
       for (const candidate of candidates) {
         if (seen.has(candidate)) continue;
         let body;

@@ -491,86 +491,22 @@ FORMS YOU WILL SEE
    What the answer means
    --------------------------------------------------------------------------- */
 
-/* DeepSeek often wraps the verdict in a fence, or writes a thought before
-   the object. The object is the review. Anything that is not that object
-   is a failure, not a pass. */
+/* The answer is one JSON object, or that object inside one fence, with an
+   optional thinking block before it. Anything else is not a finished review. */
 function looksLikeReview(obj) {
   return !!obj && typeof obj === "object" && !Array.isArray(obj) && ("assessment" in obj || "findings" in obj);
 }
 
-const reviewish = (span) => /"assessment"\s*:|"findings"\s*:/.test(span);
-
-function unclosedReview(s) {
-  let depth = 0, start = -1, inString = false, escape = false;
-  for (let i = 0; i < s.length; i++) {
-    const c = s[i];
-    if (inString) {
-      if (escape) escape = false;
-      else if (c === "\\") escape = true;
-      else if (c === "\"") inString = false;
-      continue;
-    }
-    if (c === "\"") { inString = true; continue; }
-    if (c === "{") {
-      if (depth === 0) start = i;
-      depth++;
-    } else if (c === "}" && depth > 0) {
-      depth--;
-      if (depth === 0) start = -1;
-    }
-  }
-  return depth > 0 && start >= 0 && reviewish(s.slice(start));
-}
-
 export function parseReviewText(text) {
   if (typeof text !== "string" || !text.trim()) throw new Error("review result is empty");
-  const stripped = text.replace(/^\uFEFF/, "").trim();
-  if (unclosedReview(stripped)) throw new Error("review result contains an incomplete verdict");
-  const spans = jsonObjectSpans(stripped);
-  if (!spans.length) {
-    let obj;
-    try { obj = JSON.parse(stripped.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim()); }
-    catch { throw new Error("review result is not JSON"); }
-    if (!looksLikeReview(obj)) throw new Error("review result is not a verdict");
-    return validateResult(obj);
-  }
-  const reviews = [];
-  let invalid = null;
-  for (const span of spans) {
-    let obj;
-    try { obj = JSON.parse(span); }
-    catch { throw new Error("review result contains a malformed verdict"); }
-    if (!looksLikeReview(obj)) { invalid = new Error("review result is not a verdict"); continue; }
-    try { reviews.push(validateResult(obj)); }
-    catch (e) { invalid = e; }
-  }
-  if (invalid) throw invalid;
-  if (reviews.length !== 1) throw new Error("review result contains more than one verdict");
-  return reviews[0];
-}
-
-/* Top-level {...} spans, ignoring braces that sit inside strings. */
-function jsonObjectSpans(s) {
-  const spans = [];
-  let depth = 0, start = -1, inString = false, escape = false;
-  for (let i = 0; i < s.length; i++) {
-    const c = s[i];
-    if (inString) {
-      if (escape) escape = false;
-      else if (c === "\\") escape = true;
-      else if (c === "\"") inString = false;
-      continue;
-    }
-    if (c === "\"") { inString = true; continue; }
-    if (c === "{") {
-      if (depth === 0) start = i;
-      depth++;
-    } else if (c === "}" && depth > 0) {
-      depth--;
-      if (depth === 0 && start >= 0) spans.push(s.slice(start, i + 1));
-    }
-  }
-  return spans;
+  let stripped = text.replace(/^\uFEFF/, "").trim().replace(/^<think>[\s\S]*?<\/think>\s*/i, "");
+  const fenced = stripped.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  const payload = (fenced ? fenced[1] : stripped).trim();
+  let obj;
+  try { obj = JSON.parse(payload); }
+  catch { throw new Error("review result is not JSON"); }
+  if (!looksLikeReview(obj)) throw new Error("review result is not a verdict");
+  return validateResult(obj);
 }
 
 export function validateResult(obj) {

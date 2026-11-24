@@ -817,8 +817,9 @@ describe("running a review end to end (Astra finding #5)", () => {
     expect(parseReviewText(raw).assessment).toBe("clean");
     expect(parseReviewText("```json\n" + raw + "\n```").findings).toHaveLength(1);
     expect(parseReviewText("<think>not the verdict</think>\n" + raw).findings[0].problem).toBe("says }");
-    expect(() => parseReviewText(raw + "\n{'assessment':'Blocked','findings':[]}")).toThrow(/malformed verdict/);
-    expect(parseReviewText("Review follows.\n```json\n" + raw + "\n```\nDone.")).toBeTruthy();
+    expect(() => parseReviewText(raw + "\n{'assessment':'Blocked','findings':[]}")).toThrow(/not JSON/);
+    expect(() => parseReviewText(raw + "\n{\"assessment\"")).toThrow(/not JSON/);
+    expect(() => parseReviewText("Review follows.\n```json\n" + raw + "\n```\nDone.")).toThrow(/not JSON/);
     expect(() => parseReviewText("not json")).toThrow();
     expect(() => parseReviewText("")).toThrow(/empty/);
     expect(reviewMaxTokens()).toBe(64000);
@@ -828,7 +829,7 @@ describe("running a review end to end (Astra finding #5)", () => {
     const example = JSON.stringify({ assessment: "Example only", findings: [] });
     const broken = '{"assessment":"blocked","findings":[{"severity":"blocker","file":"pulsern/src/a.js","line":null,"title":"t","problem":"p","failure_scenario":"f","fix":"y","confidence":"high",}],}';
     const text = "```json\n" + example + "\n```\n" + broken;
-    expect(() => parseReviewText(text)).toThrow(/malformed verdict/);
+    expect(() => parseReviewText(text)).toThrow(/not JSON/);
     const dir = out();
     const { code, report } = await runReview(opts(dir), { callModel: async () => ({ text, finishReason: "stop", usage: {}, model: "deepseek/deepseek-v4-pro-0813" }) });
     expect(code).toBe(2);
@@ -838,25 +839,26 @@ describe("running a review end to end (Astra finding #5)", () => {
   it("rejects an example when the final review is missing a field", async () => {
     const example = JSON.stringify({ assessment: "Example", findings: [] });
     const broken = JSON.stringify({ assessment: "blocked", findings: [{ severity: "major", file: "pulsern/src/a.js", line: null, title: "t", problem: "p", failure_scenario: "f", confidence: "high" }] });
+    expect(() => parseReviewText(broken)).toThrow(/missing fix/);
     const text = example + "\n" + broken;
-    expect(() => parseReviewText(text)).toThrow(/missing fix/);
+    expect(() => parseReviewText(text)).toThrow(/not JSON/);
     const dir = out();
     const { code, report } = await runReview(opts(dir), { callModel: async () => ({ text, finishReason: "stop", usage: {}, model: "deepseek/deepseek-v4-pro-0813" }) });
     expect(code).toBe(2);
     expect(report.verdict).toBe("FAIL");
-    expect(report.error).toMatch(/missing fix/);
+    expect(report.error).toMatch(/not JSON/);
   });
 
   it("rejects two verdicts instead of keeping the one with no findings", async () => {
     const example = JSON.stringify({ assessment: "Example", findings: [] });
     const real = JSON.stringify({ assessment: "blocked", findings: [finding("blocker")] });
     const text = "```json\n" + example + "\n```\n" + real;
-    expect(() => parseReviewText(text)).toThrow(/more than one verdict/);
+    expect(() => parseReviewText(text)).toThrow(/not JSON/);
     const dir = out();
     const { code, report } = await runReview(opts(dir), { callModel: async () => ({ text, finishReason: "stop", usage: {}, model: "deepseek/deepseek-v4-pro-0813" }) });
     expect(code).toBe(2);
     expect(report.verdict).toBe("FAIL");
-    expect(report.error).toMatch(/more than one verdict/);
+    expect(report.error).toMatch(/not JSON/);
   });
 
   it("passes a fenced DeepSeek verdict and fails the same text when the cap cut it off", async () => {

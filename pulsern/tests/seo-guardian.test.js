@@ -873,6 +873,12 @@ describe("SEO guardian", () => {
       throw new Error("missing");
     });
     expect(sources.has("pulsern/src/landing.css")).toBe(true);
+    const indexed = collectSources(["pulsern/src/landing.jsx"], (file) => {
+      if (file === "pulsern/src/landing.jsx") return 'import Banner from "./marketing-banner";\n';
+      if (file === "pulsern/src/marketing-banner/index.jsx") return "export default function Banner(){return null}\n";
+      throw new Error("missing");
+    });
+    expect(indexed.has("pulsern/src/marketing-banner/index.jsx")).toBe(true);
     expect(sources.has("pulsern/src/grading-note.js")).toBe(true);
     expect(parseReview(JSON.stringify(skippedReview())).verdict).toBe("PASS");
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-page-names-"));
