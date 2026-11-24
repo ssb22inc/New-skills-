@@ -280,7 +280,7 @@ import { cycleTab, tabbables } from "./focus-trap.js";
 import { LabPanel } from "./lab-panel.jsx";
 import { FocusBar } from "./focus-sheet.jsx";
 import { TabIcon } from "./tab-icons.jsx";
-import { useStudyKeys, SHORTCUT_HINT, CARD_SHORTCUT_HINT } from "./study-keys.js";
+import { useStudyKeys, shortcutHint, digitPickEnabled, CARD_SHORTCUT_HINT } from "./study-keys.js";
 import { choiceState, choiceClasses, CHOICE_BADGE } from "./choice-state.js";
 import Calculator from "./calculator.jsx";
 import ExamCenter from "./exam.jsx";
@@ -1792,7 +1792,7 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
     back: onBack,
     next: onMove,
     primary: () => { if (phase === "answering") { if (canSubmit) submit(); } else onMove(); },
-    pick: (i) => { if (phase === "answering" && ["mc", "sata", "highlight"].includes(q.type) && (q.type === "highlight" ? i < ext.tokens.length : i < q.options.length)) toggleSel(i); },
+    pick: (i) => { if (phase === "answering" && digitPickEnabled(q.type) && (q.type === "highlight" ? i < ext.tokens.length : i < q.options.length)) toggleSel(i); },
   };
 
   return (
@@ -1956,7 +1956,7 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
             <button className="btn" disabled={!canSubmit} onClick={submit}>Check answer</button>
           </div>
         )}
-        {phase === "answering" && <p className="small tip kbd-hint">{SHORTCUT_HINT}</p>}
+        {phase === "answering" && <p className="small tip kbd-hint">{shortcutHint(q.type)}</p>}
 
         {phase === "feedback" && (
           <div className={wasCorrect ? "feedback ok" : "feedback no"}>
@@ -2164,7 +2164,7 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
   }
 
   const pickCase = (i) => {
-    if (phase !== "answering" || !s || i >= s.options.length) return;
+    if (phase !== "answering" || !s || !digitPickEnabled(s.type) || i >= (s.options?.length ?? 0)) return;
     if (s.type === "mc") setSel([i]);
     else setSel((x) => x.includes(i) ? x.filter((y) => y !== i) : [...x, i]);
   };
@@ -2261,7 +2261,7 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
             <p className="small tip">Skipped. It stays out of your score until you answer it.</p>
           )}
           {phase === "answering" && <button className="btn" disabled={!sel.length} onClick={submit}>Check answer</button>}
-          {phase === "answering" && <p className="small tip kbd-hint">{SHORTCUT_HINT}</p>}
+          {phase === "answering" && <p className="small tip kbd-hint">{shortcutHint(s.type)}</p>}
           {phase === "feedback" && (
             <div className={ok ? "feedback ok" : "feedback no"}>
               <p className={ra(caseFbReader, "verdict", "fb-head mono")}>

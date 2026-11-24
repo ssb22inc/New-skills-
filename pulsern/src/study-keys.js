@@ -80,4 +80,15 @@ export function useStudyKeys(handlers, active = true) {
 }
 
 export const SHORTCUT_HINT = "Keys: 1–9 pick · Enter check / next · ← → move";
+export const MOVE_HINT = "Keys: Enter check / next · ← → move";
 export const CARD_SHORTCUT_HINT = "Keys: Enter flip · 1–4 grade · ← → move";
+
+/* Digits pick a choice only for multiple choice, select-all, and highlight.
+   Ordering, matrix, bow-tie, cloze, and dosage items do not use them. */
+const DIGIT_PICK = new Set(["mc", "sata", "highlight"]);
+export function digitPickEnabled(type) {
+  return DIGIT_PICK.has(type);
+}
+export function shortcutHint(type) {
+  return digitPickEnabled(type) ? SHORTCUT_HINT : MOVE_HINT;
+}

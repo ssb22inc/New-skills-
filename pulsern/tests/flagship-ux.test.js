@@ -3,7 +3,7 @@
    a first question that comes before any tour. Deterministic plain code. */
 import { describe, it, expect } from "vitest";
 import { choiceState, choiceClasses, CHOICE_BADGE } from "../src/choice-state.js";
-import { studyKeyAction, SHORTCUT_HINT, CARD_SHORTCUT_HINT } from "../src/study-keys.js";
+import { studyKeyAction, SHORTCUT_HINT, MOVE_HINT, shortcutHint, digitPickEnabled, CARD_SHORTCUT_HINT } from "../src/study-keys.js";
 import { startSession, gradeCurrent, goBack, currentCard, sessionProgress, canUndoGrade, undoGrade } from "../src/card-nav.js";
 import { QUICK_TOUR_STEPS, TOUR_STEPS, tourStepsFor, tourStepAt, isLastTourStep } from "../src/tour.js";
 import { shouldAutoOpenTour } from "../src/first-answer.js";
@@ -85,6 +85,16 @@ describe("study shortcuts", () => {
   it("publishes short hints", () => {
     expect(SHORTCUT_HINT).toMatch(/Enter/);
     expect(CARD_SHORTCUT_HINT).toMatch(/1–4/);
+    for (const type of ["mc", "sata", "highlight"]) {
+      expect(digitPickEnabled(type)).toBe(true);
+      expect(shortcutHint(type)).toBe(SHORTCUT_HINT);
+      expect(shortcutHint(type)).toMatch(/1–9 pick/);
+    }
+    for (const type of ["order", "matrix", "bowtie", "cloze", "calc"]) {
+      expect(digitPickEnabled(type)).toBe(false);
+      expect(shortcutHint(type)).toBe(MOVE_HINT);
+      expect(shortcutHint(type)).not.toMatch(/1–9/);
+    }
   });
 });
 
