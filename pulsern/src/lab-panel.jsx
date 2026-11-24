@@ -17,7 +17,7 @@ function Mark({ text, needle }) {
   return <>{text.slice(0, i)}<mark>{text.slice(i, i + needle.length)}</mark>{text.slice(i + needle.length)}</>;
 }
 
-export function LabPanel({ ask, searchRef, groups: allGroups = LAB_GROUPS }) {
+export function LabPanel({ ask, searchRef, groups: allGroups = LAB_GROUPS, guest = false, onGuestSignIn }) {
   const [q, setQ] = useState("");
   const [aiAnswers, setAiAnswers] = useState({}); // {query: text} — session cache
   const [aiBusy, setAiBusy] = useState(false);
@@ -56,7 +56,7 @@ export function LabPanel({ ask, searchRef, groups: allGroups = LAB_GROUPS }) {
           aria-label="Search a lab value or ask any NCLEX question"
           placeholder="Search a lab value or ask any NCLEX question…" value={q}
           onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && !groups.length && !aiHit) askAi(); }} />
+          onKeyDown={(e) => { if (e.key === "Enter" && !groups.length && !aiHit && !guest) askAi(); }} />
         {q && <button type="button" className="lp-clear" onClick={(e) => { setQ(""); const input = e.currentTarget.parentElement?.querySelector("input"); requestAnimationFrame(() => input?.focus()); }} aria-label="Clear search">✕</button>}
       </div>
 
@@ -100,7 +100,14 @@ export function LabPanel({ ask, searchRef, groups: allGroups = LAB_GROUPS }) {
         })}
       </div>
 
-      {searching && !groups.length && !aiHit && (
+      {searching && !groups.length && guest && (
+        <div className="lp-ask lp-ask-guest">
+          <p className="lp-ask-title">“{q.trim()}” isn't in the built-in ranges</p>
+          <p className="lp-ask-body">The AI lookup explains anything that isn't a built-in range. It is part of your free account.</p>
+          {onGuestSignIn && <button type="button" className="btn lp-ask-btn" onClick={onGuestSignIn}>Sign up free to ask</button>}
+        </div>
+      )}
+      {searching && !groups.length && !aiHit && !guest && (
         <div className="lp-ask">
           <p className="lp-ask-title">“{q.trim()}” isn't in the built-in ranges</p>
           <p className="lp-ask-body">Ask the AI: lab values come back as ranges, and study questions get a short explanation.</p>

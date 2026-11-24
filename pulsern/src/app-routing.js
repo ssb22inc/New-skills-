@@ -4,6 +4,7 @@ export const APP_ROOT = "/app/";
 export const APP_SIGN_IN = "/app/sign-in";
 export const APP_SIGN_UP = "/app/sign-up";
 export const APP_RESET = "/app/reset";
+export const APP_TRY = "/app/try";
 export const APP_SESSION_MIGRATION_KEY = "pulsern.app-path-session.v1";
 
 export function cohortFromUrl(href = typeof window !== "undefined" ? window.location.href : "") {
@@ -23,6 +24,7 @@ export function authModeFromUrl(href = window.location.href) {
   const url = new URL(href);
   if (url.pathname === APP_SIGN_UP || url.searchParams.get("start") === "1") return "signup";
   if (url.pathname === APP_RESET) return "reset";
+  if (url.pathname === APP_TRY) return "try";
   return "signin";
 }
 

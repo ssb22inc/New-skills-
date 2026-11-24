@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 
 /* The eight client-needs categories of the official NCSBN NCLEX-RN test
    plan ("Pharmacology" = Pharmacological & Parenteral Therapies). */
-const CATS = [
+export const CATS = [
   "Management of Care",
   "Safety & Infection Control",
   "Health Promotion & Maintenance",
@@ -15,7 +15,7 @@ const CATS = [
   "Physiological Adaptation",
 ];
 
-const QUESTIONS = [
+export const QUESTIONS = [
   {
     id: 1, cat: "Pharmacology", diff: 1, type: "mc",
     stem: "The nurse is preparing to administer digoxin to an adult client with heart failure. Which assessment is the priority before giving the dose?",
@@ -306,6 +306,16 @@ import { hasDraftAnswer, planLeaveRequest } from "./home-nav.js";
 import { useSessionReport } from "./session-report.js";
 import { tourMark, tourStepAt, tourStepsFor } from "./tour.js";
 import { LeaveDialog, Tour, useTourDismissScroll, useTourPlacement } from "./tour.jsx";
+import {
+  emptyRewards, answerXp, xpNote, comboFor, bumpDay, advanceStreak, shiftStatus, weekRounds, maybeGrantCover,
+  careerStatus, badgeBoard, detectMoments, markMomentsSeen, sessionRecap, MAX_COVERS,
+} from "./rewards.js";
+import { motionAllowed, rewardBeat } from "./effects.js";
+import {
+  RewardsStyle, StreakGlyph, EcgBeat, ComboChip, MomentSheet, streakMoment, ShiftCard, CareerCard,
+  BadgeGrid, RoundsCard, BestsCard, SessionRecap,
+} from "./rewards-ui.jsx";
+import { loadGuest, guestFresh, mergeGuestIntoBlob, clearGuest } from "./guest.js";
 
 const STORE_KEY = "pulsern-v1";
 
@@ -471,14 +481,31 @@ export default function App() {
   const [scrolling, setScrolling] = useState(false); // floating UI hides while scrolling
   const [isOwner, setIsOwner] = useState(false);    // reviewers-table member = owner tools
   const [shield, setShield] = useState(false);      // blur content when app loses focus
+  const [rewards, setRewards] = useState(emptyRewards); // blob (additive): reward history + effect prefs
+  const rewardsRef = useRef(rewards);
+  rewardsRef.current = rewards;
+  const [moments, setMoments] = useState([]);       // celebrations waiting for a natural break
+  const [guestNote, setGuestNote] = useState(null); // what a guest trial carried into this account
+  const pendingGuestClear = useRef(false);
 
   /* ---- load saved progress once ---- */
   useEffect(() => {
     (async () => {
       try {
         const raw = await store.get(STORE_KEY);
-        if (raw) {
-          const s = migrateBlob(JSON.parse(raw), CATS); // legacy saves get defaults (§4)
+        let s = raw ? migrateBlob(JSON.parse(raw), CATS) : null; // legacy saves get defaults (§4)
+        /* Try-before-sign-up handoff: answers a guest gave on this device
+           fold into this account once (src/guest.js). */
+        let guest = null;
+        try { guest = loadGuest(window.localStorage); } catch { /* storage blocked */ }
+        if (guest) {
+          const merged = guestFresh(guest)
+            ? mergeGuestIntoBlob(s ?? migrateBlob({}, CATS), guest, { today: todayStr(), updateAbility })
+            : { blob: s, summary: null };
+          if (merged.summary) { s = merged.blob; setGuestNote(merged.summary); }
+          pendingGuestClear.current = true;
+        }
+        if (s) {
           setTheme(s.theme);
           setXp(s.xp);
           setBestRun(s.bestRun);
@@ -503,6 +530,7 @@ export default function App() {
           setFcFlips(s.fcFlips);
           setMissSchedule(s.missSchedule);
           setFcNew(s.fcNew);
+          setRewards(s.rewards);
         }
       } catch (e) {
         /* first visit — nothing saved yet */
@@ -516,12 +544,14 @@ export default function App() {
     if (!loaded) return;
     (async () => {
       try {
-        await store.set(STORE_KEY, JSON.stringify({ theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips, missSchedule, fcNew }));
+        await store.set(STORE_KEY, JSON.stringify({ theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips, missSchedule, fcNew, rewards }));
+        /* The guest copy is removed only after the account copy is saved. */
+        if (pendingGuestClear.current) { pendingGuestClear.current = false; clearGuest(window.localStorage); }
       } catch (e) {
         console.error("Save failed", e);
       }
     })();
-  }, [loaded, theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips, missSchedule, fcNew]);
+  }, [loaded, theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips, missSchedule, fcNew, rewards]);
 
   /* One screen, and only once study is actually reachable. Waiting for
      entitlement is what keeps the tour off the expired paywall. */
@@ -764,29 +794,34 @@ export default function App() {
     : readiness.pct >= 55 ? "Borderline (estimate): keep drilling weak areas"
     : "Below the passing standard (estimate): focus your review";
 
+  /* Streak: the existing {count, lastDay, shield} rule, plus banked shift
+     covers and once-only milestone moments (src/rewards.js advanceStreak). */
+  const touchedDay = useRef(null);
   const touchDay = () => {
     setDaily((d) => d.day === todayStr() ? { ...d, answered: d.answered + 1 } : { day: todayStr(), answered: 1 });
-    setStreak((s) => {
-
-      if (s.lastDay === todayStr()) return s;
-      if (s.lastDay === yesterdayStr()) {
-        const n = s.count + 1;
-        return { count: n, lastDay: todayStr(), shield: s.shield || n % 7 === 0 };
-      }
-      if (s.lastDay === twoDaysAgoStr() && s.shield) {
-        // missed exactly one day — the shield absorbs it
-        return { count: s.count + 1, lastDay: todayStr(), shield: false };
-      }
-      return { count: 1, lastDay: todayStr(), shield: s.shield ?? true };
-    });
+    const today = todayStr();
+    if (streak.lastDay === today || touchedDay.current === today) return;
+    touchedDay.current = today;
+    const adv = advanceStreak(streak, rewardsRef.current, today);
+    setStreak(adv.streak);
+    setRewards((r) => ({
+      ...r, covers: adv.rewards.covers, coverDays: adv.rewards.coverDays, milestones: adv.rewards.milestones,
+      best: { ...r.best, streak: Math.max(r.best.streak, adv.streak.count) },
+    }));
+    if (adv.milestone) setMoments((m) => [...m, streakMoment(adv.milestone)]);
+    if (adv.event === "cover") setMoments((m) => [...m, { kind: "cover", title: "Your streak is protected", line: `A shift cover covered the day you missed. Day ${adv.streak.count} today.`, next: `${adv.rewards.covers} cover${adv.rewards.covers === 1 ? "" : "s"} left` }]);
   };
 
   /* `correct` is the FULL-CREDIT outcome (every NCSBN partial-credit point
      earned). The ability engine, readiness, XP and the review schedule all
      receive this same binary outcome, so Elo calibration is unchanged by
      partial-credit scoring. Case-study steps pass { schedule: false }: their
-     pseudo-ids are not QBank questions and cannot be re-served. */
+     pseudo-ids are not QBank questions and cannot be re-served.
+     XP follows src/rewards.js answerXp: considered, correct, first-time
+     retrievals earn it; repeats, skips, and too-fast taps earn none.
+     Returns the XP result so the feedback line shows exactly what was earned. */
   const record = (q, correct, opts = {}) => {
+    const res = answerXp({ q, correct, ms: opts.ms ?? Infinity, log });
     // population is additive on the log entry — old entries simply lack it
     setLog((l) => [...l, { id: q.id, cat: q.cat, diff: q.diff, correct, ...(q.population ? { pop: q.population } : {}) }]);
     if (opts.schedule !== false) setMissSchedule((m) => updateMissSchedule(m, q.id, correct));
@@ -802,11 +837,21 @@ export default function App() {
         body: JSON.stringify({ itemId: q.id, correct, itemDelta }),
       }).catch(() => {});
     }
-    if (correct) {
-      setXp((x) => x + 10 * q.diff);
-      setRun((r) => { const n = r + 1; setBestRun((b) => Math.max(b, n)); return n; });
-    } else setRun(0);
+    if (res.xp) setXp((x) => x + res.xp);
+    /* A too-fast tap never builds a run, even when it happens to be right. */
+    const counts = correct && res.reason !== "too-fast";
+    const nextRun = counts ? run + 1 : 0;
+    const newBest = nextRun >= 3 && nextRun > bestRun;
+    setRun(nextRun);
+    if (counts) setBestRun((b) => Math.max(b, nextRun));
+    setRewards((r) => bumpDay(r, todayStr(), { q: 1, ok: correct ? 1 : 0, xp: res.xp, fixes: res.fix ? 1 : 0 }));
+    const combo = counts ? comboFor(nextRun) : null;
+    if (res.xp > 0) rewardBeat(combo || newBest ? "combo" : "correct", rewardsRef.current.prefs);
+    return { ...res, run: nextRun, combo, newBest };
   };
+  const noteCard = () => setRewards((r) => bumpDay(r, todayStr(), { cards: 1 }));
+  const setPref = (k, v) => setRewards((r) => ({ ...r, prefs: { ...r.prefs, [k]: v } }));
+  const motion = motionAllowed(rewards.prefs);
 
   const catStats = CATS.map((c) => {
     const rows = log.filter((l) => l.cat === c);
@@ -839,11 +884,71 @@ export default function App() {
   );
   const addQuestions = (qs) => setCustomQs((c) => [...c, ...qs]);
 
+  /* ---- rewards: all derived from the log + reward history ---- */
+  const today = todayStr();
+  const board = useMemo(() => badgeBoard(log, CATS, rewards.badgesSeen), [log, rewards.badgesSeen]);
+  const career = useMemo(() => careerStatus({ xp, log, cats: CATS, rankHigh: rewards.rankHigh }), [xp, log, rewards.rankHigh]);
+  const missesOpen = useMemo(() => reviewPools(allQuestions, log, missSchedule, today).review.length, [allQuestions, log, missSchedule, today]);
+  const shift = shiftStatus({ day: rewards.days[today], answeredToday: daily.day === today ? daily.answered : 0, dueCount, missesOpen });
+  const week = weekRounds(rewards, today);
+  const nextDue = useMemo(() => {
+    let m = null;
+    for (const v of Object.values(srsMap)) if (v?.due && v.due > today && (!m || v.due < m)) m = v.due;
+    return m;
+  }, [srsMap, today]);
+
+  /* Promotions and new badge levels are celebrated once. Whatever is
+     already true when the app loads (an existing student's first visit
+     after this update, or a guest handoff) is marked seen silently. */
+  const momentsPrimed = useRef(false);
+  useEffect(() => {
+    if (!loaded) return;
+    const after = { career: careerStatus({ xp, log, cats: CATS, rankHigh: null }), board: badgeBoard(log, CATS, {}) };
+    const found = detectMoments({ before: after, after, rewards: rewardsRef.current });
+    if (found.length) {
+      setRewards((r) => markMomentsSeen(r, found));
+      if (momentsPrimed.current) setMoments((m) => [...m, ...found]);
+    }
+    momentsPrimed.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, log.length, xp]);
+  /* Five shifts in a week bank one shift cover (max MAX_COVERS). */
+  useEffect(() => {
+    if (!loaded) return;
+    const g = maybeGrantCover(rewardsRef.current, today);
+    if (g.rewards === rewardsRef.current) return;
+    setRewards(g.rewards);
+    if (g.granted) setMoments((m) => [...m, { kind: "cover", title: "Shift cover earned", line: "Five shifts this week. A cover protects your streak on a day you can't study, like a clinical day.", next: `${g.rewards.covers} of ${MAX_COVERS} banked` }]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, rewards.days, today]);
+
+  /* ---- session recap: snapshot at the start, summary at the end ---- */
+  const sessionStart = useRef(null);
+  const beginSession = () => {
+    sessionStart.current = { logLen: log.length, xp, at: Date.now(), bestRun, cards: rewards.days[today]?.cards ?? 0 };
+  };
+  const makeRecap = () => {
+    if (!sessionStart.current) beginSession();
+    const start = sessionStart.current ?? { logLen: log.length, xp, at: Date.now(), bestRun, cards: 0 };
+    return sessionRecap({ start, log, xp, rewards, cardsToday: rewards.days[today]?.cards ?? 0, dueCount, nextDue, bestRun });
+  };
+  const commitRecap = (recap) => {
+    if (!recap) return;
+    setRewards((r) => ({ ...r, best: { ...r.best, run: Math.max(r.best.run, recap.nextBest.run), sessionAcc: Math.max(r.best.sessionAcc, recap.nextBest.sessionAcc), sessionN: recap.nextBest.sessionAcc > r.best.sessionAcc ? recap.nextBest.sessionN : r.best.sessionN } }));
+    rewardBeat("recap", rewardsRef.current.prefs);
+  };
+  const recapProps = { makeRecap, commitRecap, shift, today, motion };
+  const momentKey = moments[0] ? `${moments[0].kind}:${moments[0].title}` : null;
+  useEffect(() => {
+    if (momentKey && !sessionLive) rewardBeat("milestone", rewardsRef.current.prefs);
+  }, [momentKey, sessionLive]);
+
   const resetAll = async () => {
     try { await store.delete(STORE_KEY); } catch (e) { /* nothing saved */ }
     setXp(0); setRun(0); setBestRun(0); setLog([]); setFlagged([]); setCustomQs([]);
     setStreak({ count: 0, lastDay: null, shield: true }); setDaily({ day: todayStr(), answered: 0 });
     setSrs(freshCards()); setSrsMap({}); setFcNew({ day: null, count: 0 }); setMissSchedule({}); setExamResults({}); setAbility(emptyAbility(CATS)); setPlan(null); setExamDate(null); setTab("today");
+    setRewards((r) => ({ ...emptyRewards(), rankHigh: 0, prefs: r.prefs })); setMoments([]);
   };
 
   /* ---- weekly planner (§5.7): one LLM call per ISO week, cached in the blob ---- */
@@ -965,8 +1070,9 @@ export default function App() {
   };
 
   return (
-    <div className={"app" + (shield ? " shield" : "") + (isOwner ? " owner" : "") + (scrolling ? " scrolling" : "") + (sessionLive ? " in-session" : "") + " tab-" + tab} data-theme={theme}>
+    <div className={"app" + (shield ? " shield" : "") + (isOwner ? " owner" : "") + (scrolling ? " scrolling" : "") + (sessionLive ? " in-session" : "") + (motion ? "" : " fx-reduced") + " tab-" + tab} data-theme={theme}>
       <Style />
+      <RewardsStyle />
       <header className={"top" + (menuOpen ? " menu-open" : "")}>
         {/* Exam lockdown: while a readiness exam runs, all navigation and
             references disappear — only the exam (and its calculator) exists,
@@ -984,7 +1090,7 @@ export default function App() {
             <span className="exam-lock-chip" title="References stay closed until you submit or end the exam">🔒 EXAM</span>
           ) : (
             <span key={xpPulse} className={"stat-chip" + (xpPulse ? " pulse" : "")} role="img" aria-label={`${streak.count} day streak, ${xp} XP`}>
-              <span aria-hidden="true">🔥 {streak.count}</span><span className="stat-sep" aria-hidden="true" /><span aria-hidden="true">◆ {xp} XP</span>
+              <span aria-hidden="true"><StreakGlyph />{streak.count}</span><span className="stat-sep" aria-hidden="true" /><span aria-hidden="true">◆ {xp} XP</span>
             </span>
           )}
           {(examLock || locked) && (
@@ -1010,6 +1116,15 @@ export default function App() {
                 <button type="button" className="menu-item" onClick={() => setTheme(theme === "light" ? "dim" : "light")}
                   title="Light mode reads best for long study sessions; night mode cuts glare for late review">
                   {theme === "light" ? "🌙 Night mode" : "☀ Light mode"}
+                </button>
+                <button type="button" className="menu-item menu-switch" role="switch" aria-checked={!!rewards.prefs.sound} onClick={() => setPref("sound", !rewards.prefs.sound)}>
+                  <span>♪ Sound effects</span><span className="menu-state mono">{rewards.prefs.sound ? "On" : "Off"}</span>
+                </button>
+                <button type="button" className="menu-item menu-switch" role="switch" aria-checked={!!rewards.prefs.haptics} onClick={() => setPref("haptics", !rewards.prefs.haptics)}>
+                  <span>≋ Haptics</span><span className="menu-state mono">{rewards.prefs.haptics ? "On" : "Off"}</span>
+                </button>
+                <button type="button" className="menu-item menu-switch" role="switch" aria-checked={!!rewards.prefs.reduceFx} onClick={() => setPref("reduceFx", !rewards.prefs.reduceFx)}>
+                  <span>◐ Reduce effects</span><span className="menu-state mono">{rewards.prefs.reduceFx ? "On" : "Off"}</span>
                 </button>
                 <button type="button" className="menu-item" onClick={() => { window.location.assign("/about/"); }}>🩺 Meet the RN behind PulseRN</button>
                 <button type="button" className="menu-item" onClick={openTour}>🎓 Tour</button>
@@ -1045,6 +1160,14 @@ export default function App() {
             <InstallCard />
           </section>
         )}
+        {guestNote && !locked && (
+          <section className="card rw-saved" role="status">
+            <p className="eyebrow">Progress saved</p>
+            <h2 className="h2">Your trial answers are in your account</h2>
+            <p className="small">{guestNote.answers} answer{guestNote.answers === 1 ? "" : "s"}, {guestNote.correct} correct, +{guestNote.xp} XP{guestNote.streakStarted ? `, and day ${guestNote.streak} of your streak` : ""}. They count toward your stats, badges, and readiness estimate.</p>
+            <button type="button" className="btn ghost" onClick={() => setGuestNote(null)}>Got it</button>
+          </section>
+        )}
         {locked && !confirming && <Paywall ent={ent} onRefresh={refreshEnt} />}
         {!locked && !isOwner && ent?.status === "trial" && tab !== "plans" && (
           <section className="card trial-banner">
@@ -1060,13 +1183,15 @@ export default function App() {
             fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)}
             cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} addXp={(n) => setXp((x) => x + n)}
             needsFirstAnswer={activating} quizKick={quizKick} appliedQuizKick={appliedQuizKick} accessPending={accessPending}
-            homeEpoch={homeEpoch} tourHold={tourStep != null} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} onSession={onSession} />}
-          {tab === "qbank" && <QBank key={sectionEpoch} record={record} log={log} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} missSchedule={missSchedule} isOwner={isOwner} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
+            homeEpoch={homeEpoch} tourHold={tourStep != null} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} onSession={onSession}
+            rewards={rewards} shift={shift} career={career} beginSession={beginSession} recapProps={recapProps} onGrade={noteCard} />}
+          {tab === "qbank" && <QBank key={sectionEpoch} record={record} log={log} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} missSchedule={missSchedule} isOwner={isOwner} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus}
+            onBegin={beginSession} renderBreak={({ onMore, onEnd }) => <RecapPanel {...recapProps} doneLabel="End session" onDone={onEnd} onMore={onMore} moreLabel="One more block →" />} />}
           {tab === "case" && <CaseStudy key={sectionEpoch} record={record} provider={provider} cases={allCases} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
-          {tab === "cards" && <Flashcards key={sectionEpoch} addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)} newAllowance={newAllowance} onNewCard={onNewCard} onRefundNewCard={onRefundNewCard} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
+          {tab === "cards" && <Flashcards key={sectionEpoch} onGrade={noteCard} addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)} newAllowance={newAllowance} onNewCard={onNewCard} onRefundNewCard={onRefundNewCard} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
           {tab === "exams" && <ExamCenter record={record} examResults={examResults} setExamResults={setExamResults} cats={CATS} ent={ent} isOwner={isOwner} onRunning={setExamLock} onAttempt={(f) => setEnt((e) => (e ? { ...e, examsLeft: Math.max(0, e.examsLeft - 1), attempted: [...e.attempted, f] } : e))} onUpgrade={() => goSection("plans")} onSession={onSession} bindExit={examLeave.bindExit} onScored={examLeave.onScored} onLeaveSubmit={examLeave.onLeaveSubmit} />}
           {tab === "plans" && <Paywall ent={ent} onRefresh={refreshEnt} trialBanner={ent?.status === "trial"} />}
-          {tab === "stats" && <Stats xp={xp} streak={streak} bestRun={bestRun} readiness={readiness} readyLabel={readyLabel} log={log} catStats={catStats} popStats={popStats} acc={acc} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => goSection("plans")} profile={profile} setProfile={setProfile} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
+          {tab === "stats" && <Stats rewards={rewards} career={career} board={board} week={week} xp={xp} streak={streak} bestRun={bestRun} readiness={readiness} readyLabel={readyLabel} log={log} catStats={catStats} popStats={popStats} acc={acc} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => goSection("plans")} profile={profile} setProfile={setProfile} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
           {tourStep != null && <div className="tour-scroll-room" aria-hidden="true" />}
         </>}
       </main>
@@ -1091,6 +1216,9 @@ export default function App() {
       <Toolkit open={!examLock && (labOpen || helpOpen)} section={helpOpen ? "help" : "labs"}
         onSection={(k) => { setLabOpen(k === "labs"); setHelpOpen(k === "help"); }}
         onClose={() => { setLabOpen(false); setHelpOpen(false); }} provider={provider} />
+      {moments.length > 0 && !sessionLive && tourStep == null && !leaveGuard && !examLock && !locked && (
+        <MomentSheet key={moments.length + ":" + moments[0].kind + ":" + (moments[0].title ?? "")} moment={moments[0]} motion={motion} onClose={() => setMoments((m) => m.slice(1))} />
+      )}
       {tourStep != null && !locked && (
         <Tour
           step={tourStep}
@@ -1134,7 +1262,7 @@ Profile & texts: Stats has a Profile card where students add their name and mobi
 Plans: every new account gets a free 7-day pass with full study access (no exams). Access passes are one-time payments that do not auto-renew: 30-day $99 (1 self-assessment), 60-day $159 (2), 90-day $219 (3), 180-day $319 (4), 360-day $379 (5), 730-day $439 (6). Add-ons, also one-time: 7-day renewal pass $45 (content only, never charged automatically) or an extra self-assessment $45. Refunds: if paid access has not been used, a full refund can be requested within 7 days of purchase; after 7 days, or once paid access has been used, payments are non-refundable, except where the law requires otherwise (see the Terms). Partner discount codes can be entered on the Plans page. All content is the property of the app's owner and may not be used outside PulseRN. Under any answered question: an AI tutor button and a ⚠ button for reporting a problem with the question.
 Rules: help with app navigation and NCLEX study strategy; you may explain nursing concepts in an educational exam-prep register but NEVER give real-world medical or dosing advice. For account, billing, data-deletion, or anything you can't resolve, direct the user to email sheldon@pulsern.app or call 786-408-4357. Keep answers under 120 words, warm and plain. Plain text only — no markdown, no asterisks, no headers.`;
 
-function HelpPanel({ provider, inputRef }) {
+function HelpPanel({ provider, inputRef, guest = false, onGuestSignIn }) {
   const [msgs, setMsgs] = useState([]); // {role: "you"|"ai", text}
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1162,6 +1290,18 @@ function HelpPanel({ provider, inputRef }) {
     if (!answered) setMsgs((m) => [...m, { role: "ai", text: "I couldn't reach the helper service just now. Try sending that again in a few seconds. For anything urgent, email sheldon@pulsern.app or call 786-408-4357." }]);
     setBusy(false);
   };
+
+  if (guest) return (
+    <div className="hp">
+      <div className="help-contact">
+        <p className="small"><strong>Reach a human:</strong> <a href="mailto:sheldon@pulsern.app">sheldon@pulsern.app</a> · <a href="tel:+17864084357">786-408-4357</a></p>
+      </div>
+      <div className="guest-ai">
+        <p className="small"><strong>The study helper chat is part of your free account.</strong> It answers questions about the app and NCLEX concepts.</p>
+        {onGuestSignIn && <button type="button" className="btn ghost" onClick={onGuestSignIn}>Create a free account</button>}
+      </div>
+    </div>
+  );
 
   return (
     <div className="hp">
@@ -1193,7 +1333,7 @@ function HelpPanel({ provider, inputRef }) {
    A bottom sheet on phones, a side panel on wider screens. Escape or ✕
    closes and hands focus back to whatever opened it. */
 
-export function Toolkit({ open, section = "labs", onSection, onClose, provider, ask = askModel }) {
+export function Toolkit({ open, section = "labs", onSection, onClose, provider, ask = askModel, guest = false, onGuestSignIn }) {
   const asideRef = useRef(null);
   const titleRef = useRef(null);
   const returnTo = useRef(null);
@@ -1263,10 +1403,10 @@ export function Toolkit({ open, section = "labs", onSection, onClose, provider, 
         </div>
         <div className="tk-body">
           <div id="tk-panel-labs" role="tabpanel" aria-labelledby={tabIds.labs} hidden={section !== "labs"} aria-label="Normal lab and vital-sign reference ranges">
-            <LabPanel ask={ask} />
+            <LabPanel ask={ask} guest={guest} onGuestSignIn={onGuestSignIn} />
           </div>
           <div id="tk-panel-help" role="tabpanel" aria-labelledby={tabIds.help} hidden={section !== "help"} className="tk-help">
-            <HelpPanel provider={provider} />
+            <HelpPanel provider={provider} guest={guest} onGuestSignIn={onGuestSignIn} />
           </div>
         </div>
         <div className="tk-foot">
@@ -1340,7 +1480,7 @@ function Today(props) {
   if (stage === "cards") return (
     <div className="stack">
       <p className="eyebrow stage-label">TODAY'S ROUND · STEP 1 OF 2 · CARDS</p>
-      <Flashcards addXp={props.addXp} cards={props.cards} srsMap={props.srsMap} setSrsMap={props.setSrsMap} touchDay={props.touchDay} ready={props.ready} fcFlips={props.fcFlips} onFlip={props.onFlip} newAllowance={props.newAllowance} onNewCard={props.onNewCard} onRefundNewCard={props.onRefundNewCard} embedded onDone={() => setStage("quiz")} onSession={props.onSession} />
+      <Flashcards addXp={props.addXp} onGrade={props.onGrade} cards={props.cards} srsMap={props.srsMap} setSrsMap={props.setSrsMap} touchDay={props.touchDay} ready={props.ready} fcFlips={props.fcFlips} onFlip={props.onFlip} newAllowance={props.newAllowance} onNewCard={props.onNewCard} onRefundNewCard={props.onRefundNewCard} embedded onDone={() => setStage("quiz")} onSession={props.onSession} />
     </div>
   );
 
@@ -1353,12 +1493,16 @@ function Today(props) {
 
   if (stage === "done") return (
     <div className="stack">
-      <section className="card">
-        <p className="eyebrow">Round complete</p>
-        <h2 className="h2">That's the whole job for today 🎉</h2>
-        <p className="small">Day {streak.count} locked in. The science says stop here: spacing does its work between sessions, not during them. Tomorrow, tap the same button.</p>
-        <button className="btn ghost" onClick={() => setStage("home")}>Back to Today</button>
-      </section>
+      {props.recapProps ? (
+        <RecapPanel {...props.recapProps} doneLabel="Back to Today" onDone={() => setStage("home")} />
+      ) : (
+        <section className="card">
+          <p className="eyebrow">Round complete</p>
+          <h2 className="h2">That's the whole job for today</h2>
+          <button className="btn ghost" onClick={() => setStage("home")}>Back to Today</button>
+        </section>
+      )}
+      <Why label="why stop here">Day {streak.count} locked in. The science says stop here: spacing does its work between sessions, not during them. Tomorrow, tap the same button.</Why>
       {props.showProfile && (
         <ProfileCard profile={null} setProfile={props.setProfile} prompt onDismiss={props.dismissProfileCard} />
       )}
@@ -1370,7 +1514,7 @@ function Today(props) {
       <section className={"card center" + tourMark(props.tourFocus, "today-round")} data-tour="today-round">
         <p className="eyebrow">One tap. The app picks what you study.</p>
 
-        <button className="bigbtn" onClick={() => setStage(dueCount ? "cards" : "quiz")}>▶ Start today's round</button>
+        <button className="bigbtn" onClick={() => { props.beginSession?.(); setStage(dueCount ? "cards" : "quiz"); }}>▶ Start today's round</button>
         <p className="small">{dueCount ? `${dueCount} flashcard${dueCount === 1 ? "" : "s"} due` : "No cards due"} + 8 smart questions · about 10 minutes</p>
       </section>
       {props.showProfile && (
@@ -1396,9 +1540,28 @@ function Today(props) {
   );
 }
 
+/* The recap is frozen when it opens, then its personal bests are saved once. */
+function RecapPanel({ makeRecap, commitRecap, ...rest }) {
+  const [recap] = useState(() => makeRecap());
+  useEffect(() => { commitRecap(recap); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!recap) return null;
+  return <SessionRecap recap={recap} {...rest} />;
+}
+
+/* Guests get the full rationale; the AI tutor needs an account (/api/ai
+   requires a signed-in user), so it shows a gentle invitation instead. */
+function GuestAiNote({ onSignIn }) {
+  return (
+    <div className="guest-ai">
+      <p className="small"><strong>Want this explained another way?</strong> The AI tutor is part of your free account.</p>
+      {onSignIn && <button type="button" className="btn ghost" onClick={onSignIn}>Create a free account to ask</button>}
+    </div>
+  );
+}
+
 /* ================= MONITOR (dashboard) ================= */
 
-function Monitor({ xp, streak, bestRun, log, readiness, readyLabel, catStats, daily, dueCount, go, tourFocus }) {
+function Monitor({ xp, streak, bestRun, log, readiness, readyLabel, catStats, daily, dueCount, go, tourFocus, rewards, shift, career }) {
   const lvl = levelFor(xp);
   const weakest = catStats.filter((c) => c.pct != null).sort((a, b) => a.pct - b.pct)[0];
   const goalPct = Math.min(100, Math.round((daily.answered / DAILY_GOAL) * 100));
@@ -1432,28 +1595,33 @@ function Monitor({ xp, streak, bestRun, log, readiness, readyLabel, catStats, da
         <p className="monitor-note mono">{readyLabel.toUpperCase()}</p>
       </section>
 
-      <section className="card">
-        <p className="eyebrow">Today's goal · little and often</p>
-        <h2 className="h2">{daily.answered >= DAILY_GOAL ? "Goal met: spacing secured" : `${daily.answered} / ${DAILY_GOAL} questions today`}</h2>
-        <div className="bar"><div className="bar-fill" style={{ width: `${goalPct}%` }} /></div>
-        <Why>{daily.answered >= DAILY_GOAL
-          ? "One block a day beats a weekend marathon. Clear your flashcard queue, then rest. The forgetting curve is doing the work now."
-          : "Distributed practice: a short block today is worth more than a long one someday. Your streak counts days, not hours."}</Why>
-        {dueCount > 0 && <p className="small tip"><strong>{dueCount} flashcard{dueCount === 1 ? "" : "s"} due today.</strong> Spaced reviews only count if they happen on schedule.</p>}
-        <p className="small tip">{streak.shield ? "🛡 Streak shield ready: one missed day won't break your streak." : "🛡 Shield used. A 7-day run restores it."}</p>
-      </section>
+      {shift && rewards ? (
+        <ShiftCard shift={shift} streak={streak} rewards={rewards}>
+          <Why>{shift.complete
+            ? "One block a day beats a weekend marathon. Your reviews are done and your misses are corrected, so rest now: the forgetting curve is doing the work."
+            : "Each task is a learning behavior: questions are retrieval practice, due cards are spacing, and fixing a miss is error correction. A streak counts days, not hours. A shield covers one missed day and refills every 7 days; a shift cover, earned by 5 shifts in a week, covers another."}</Why>
+        </ShiftCard>
+      ) : (
+        <section className="card">
+          <p className="eyebrow">Today's goal · little and often</p>
+          <h2 className="h2">{daily.answered >= DAILY_GOAL ? "Goal met: spacing secured" : `${daily.answered} / ${DAILY_GOAL} questions today`}</h2>
+          <div className="bar"><div className="bar-fill" style={{ width: `${goalPct}%` }} /></div>
+          <p className="small tip">{streak.shield ? "Streak shield ready: one missed day won't break your streak." : "Shield used. A 7-day run restores it."}</p>
+        </section>
+      )}
 
-      <section className="card">
-        <p className="eyebrow">Rank</p>
-        <h2 className="h2">{lvl.name}</h2>
-        {lvl.next && (
-          <>
-            <div className="bar"><div className="bar-fill" style={{ width: `${Math.min(100, (xp / lvl.next[0]) * 100)}%` }} /></div>
-
-            <p className="small">{lvl.next[0] - xp} XP to {lvl.next[1]} · best answer run {bestRun}</p>
-          </>
-        )}
-      </section>
+      {career ? <CareerCard career={career} /> : (
+        <section className="card">
+          <p className="eyebrow">Rank</p>
+          <h2 className="h2">{lvl.name}</h2>
+          {lvl.next && (
+            <>
+              <div className="bar"><div className="bar-fill" style={{ width: `${Math.min(100, (xp / lvl.next[0]) * 100)}%` }} /></div>
+              <p className="small">{lvl.next[0] - xp} XP to {lvl.next[1]} · best answer run {bestRun}</p>
+            </>
+          )}
+        </section>
+      )}
 
       <section className="card">
         <p className="eyebrow">Today's plan</p>
@@ -1487,7 +1655,7 @@ function blankAnswer(q) {
   return { sel: [], order: [] };
 }
 
-export function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, onDone, questions = QUESTIONS, provider = "claude", addQuestions, ability = {}, calibration = {}, missSchedule = {}, isOwner = false, onSession, tourFocus = null }) {
+export function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, onDone, questions = QUESTIONS, provider = "claude", addQuestions, ability = {}, calibration = {}, missSchedule = {}, isOwner = false, onSession, tourFocus = null, guest = false, onGuestSignIn, onBegin, renderBreak }) {
   const [diffTarget, setDiffTarget] = useState(1);
   const [calcOpen, setCalcOpen] = useState(false); // on-screen calculator
   const [q, setQ] = useState(null);
@@ -1500,6 +1668,9 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
   const [credit, setCredit] = useState({ points: 0, max: 1 }); // NCSBN partial credit for the last answer
   const [nextReview, setNextReview] = useState(null); // review date the last answer scheduled, if any
   const [lastCat, setLastCat] = useState(null);
+  const [lastRes, setLastRes] = useState(null); // XP result of the answer on screen (src/rewards.js)
+  const resById = useRef({});
+  const shownAt = useRef(0);
   const [sessionN, setSessionN] = useState(0);
   const [mode, setMode] = useState("new"); // new | review
   const [focusOpen, setFocusOpen] = useState(false); // Focus bottom sheet
@@ -1535,6 +1706,7 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
     setNav(navState);
     setQ(question);
     if (view.mode === "review") {
+      setLastRes(resById.current[question.id] ?? null);
       setSel(view.sel);
       setOrder(view.order ?? []);
       setWasCorrect(!!view.wasCorrect);
@@ -1549,6 +1721,8 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
     setWasCorrect(false);
     setCredit({ points: 0, max: 1 });
     setNextReview(null);
+    setLastRes(null);
+    shownAt.current = Date.now();
     setPhase("answering");
   };
 
@@ -1626,7 +1800,9 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
     /* recorded is the only door into stats. A skip never reaches it, and
        neither does a second look at an answer already saved. */
     if (marked.recorded) {
-      record(q, ok);
+      const res = record(q, ok, { ms: Date.now() - shownAt.current }) ?? null;
+      resById.current[q.id] = res;
+      setLastRes(res);
       setSessionN((n) => n + 1);
       setDiffTarget((d) => Math.max(1, Math.min(3, d + (ok ? 1 : -1))));
     }
@@ -1703,13 +1879,20 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
         />
         <p className="small mono">{freshPool.length} new · {reviewPool.length} to review ({duePool.length} due today) · difficulty target {diffTarget}/3</p>
         <div className={"row" + tourMark(tourFocus, "qbank-review")} data-tour="qbank-review">
-          <button className="btn" onClick={() => { setMode("new"); pickFrom(emptyNav(), "new"); }} disabled={!freshPool.length}>{freshPool.length ? "New questions" : "All questions seen"}</button>
-          <button className="btn ghost" onClick={() => { setMode("review"); pickFrom(emptyNav(), "review"); }} disabled={!reviewPool.length}>Review misses ({reviewPool.length})</button>
+          <button className="btn" onClick={() => { onBegin?.(); setMode("new"); pickFrom(emptyNav(), "new"); }} disabled={!freshPool.length}>{freshPool.length ? "New questions" : "All questions seen"}</button>
+          <button className="btn ghost" onClick={() => { onBegin?.(); setMode("review"); pickFrom(emptyNav(), "review"); }} disabled={!reviewPool.length}>Review misses ({reviewPool.length})</button>
         </div>
         {addQuestions && isOwner && <Generator provider={provider} addQuestions={addQuestions} log={log} questions={questions} lowOnNew={freshPool.length < 5} />}
 
         {!freshPool.length && !reviewPool.length && <p className="small tip">Bank cleared with every miss corrected. That's mastery. Check Stats, then keep the flashcard schedule alive.</p>}
       </section>
+    </div>
+  );
+
+  if (phase === "break" && renderBreak) return (
+    <div className="stack">
+      {renderBreak({ onMore: () => continueFrom(nav, { fromBreak: true }), onEnd: endSession })}
+      <Why label="why a checkpoint after 8">Distributed practice beats marathons: the same study minutes spread across days retain dramatically more than one long push. If you stop here, review again within 24 hours, then at 3 and 7 days. Your flashcard queue, your missed-question reviews, and your day streak track that schedule for real.</Why>
     </div>
   );
 
@@ -1962,10 +2145,12 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
           <div className={wasCorrect ? "feedback ok" : "feedback no"}>
             <p className={ra(fbReader, "verdict", "fb-head mono")}>
               <span className="fb-badge" aria-hidden="true">{wasCorrect ? "✓" : credit.points > 0 ? "½" : "✗"}</span>
-              {wasCorrect ? `CORRECT${credit.max > 1 ? ` · ${credit.points}/${credit.max} POINTS` : ""} · +${10 * q.diff} XP`
+              {wasCorrect ? `CORRECT${credit.max > 1 ? ` · ${credit.points}/${credit.max} POINTS` : ""}${lastRes ? (xpNote(lastRes) ? ` · ${xpNote(lastRes).toUpperCase()}` : "") : ` · +${10 * q.diff} XP`}`
                 : credit.points > 0 ? `PARTIAL CREDIT · ${credit.points}/${credit.max} POINTS · IT RETURNS IN REVIEW MISSES`
                 : `INCORRECT${credit.max > 1 ? ` · 0/${credit.max} POINTS` : ""} · IT RETURNS IN REVIEW MISSES`}
             </p>
+            {wasCorrect && justScored.current && <EcgBeat className="fb" />}
+            {justScored.current && lastRes && <ComboChip combo={lastRes.combo} newBest={lastRes.newBest} />}
             {nextReview && (
               <p className="small mono">Next review: {nextReview === addDays(1) ? "tomorrow" : nextReview}</p>
             )}
@@ -1992,7 +2177,9 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
             {q.ai && <p className="small">{calibration[q.id] !== undefined ? "✨ AI-assisted practice item that passed automated quality checks." : "✨ AI-assisted practice item."}</p>}
             {/* Astra-confirmed concept diagrams for this exact question (if any) */}
             <ConceptExplainers key={`dx${q.id}`} q={q} />
-            <TutorExplain key={q.id} q={q} wasCorrect={wasCorrect} provider={provider} isBank={calibration[q.id] !== undefined} />
+            {guest
+              ? <GuestAiNote onSignIn={onGuestSignIn} />
+              : <TutorExplain key={q.id} q={q} wasCorrect={wasCorrect} provider={provider} isBank={calibration[q.id] !== undefined} />}
             <ReportIssue key={`r${q.id}`} itemId={calibration[q.id] !== undefined ? q.id : null} label="question" />
             {nav.index < nav.entries.length - 1 && !justScored.current && (
               <p className="small tip">Answered earlier. This result is not scored again.</p>
@@ -2024,6 +2211,7 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
   const [sel, setSel] = useState([]);
   const [phase, setPhase] = useState("read");
   const [stepScores, setStepScores] = useState({}); // step index -> { points, max }; skips are absent
+  const [stepRes, setStepRes] = useState(null); // XP result of the step just answered
   const [credit, setCredit] = useState({ points: 0, max: 1 });
   const [ok, setOk] = useState(false);
   const [nav, setNav] = useState(() => emptyNav());
@@ -2074,7 +2262,7 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
     setCredit(c);
     if (marked.recorded) {
       setStepScores((m) => ({ ...m, [step]: c }));
-      record({ id: stepId, cat: cs.cat, diff: 3 }, correct, { schedule: false });
+      setStepRes(record({ id: stepId, cat: cs.cat, diff: 3 }, correct, { schedule: false }) ?? null);
     }
     justScored.current = true;
     setNav(marked.nav);
@@ -2266,7 +2454,7 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
             <div className={ok ? "feedback ok" : "feedback no"}>
               <p className={ra(caseFbReader, "verdict", "fb-head mono")}>
                 <span className="fb-badge" aria-hidden="true">{ok ? "✓" : credit.points > 0 ? "½" : "✗"}</span>
-                {ok ? "CORRECT" : credit.points > 0 ? "PARTIAL CREDIT" : "INCORRECT"} · {credit.points}/{credit.max} POINT{credit.max === 1 ? "" : "S"}{ok ? " · +30 XP" : ""}
+                {ok ? "CORRECT" : credit.points > 0 ? "PARTIAL CREDIT" : "INCORRECT"} · {credit.points}/{credit.max} POINT{credit.max === 1 ? "" : "S"}{ok ? (stepRes && justScored.current ? (xpNote(stepRes) ? ` · ${xpNote(stepRes).toUpperCase()}` : "") : " · +30 XP") : ""}
               </p>
               <p className="small mono">Case score so far: {total.points}/{total.max} points</p>
               <ReadAloudBar reader={caseFbReader} label="Listen to the explanation" />
@@ -2344,7 +2532,7 @@ const isCalcCard = (c) => /dosage|calculation|conversion|drip rate|drop factor/i
 
 const GRADE_WORD = { again: "Again", hard: "Hard", good: "Good", easy: "Easy" };
 
-export function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, embedded = false, onDone, fcFlips = 99, onFlip, newAllowance = NEW_PER_DAY, onNewCard, onRefundNewCard, onSession, tourFocus = null }) {
+export function Flashcards({ addXp, onGrade, cards, srsMap, setSrsMap, touchDay, ready = true, embedded = false, onDone, fcFlips = 99, onFlip, newAllowance = NEW_PER_DAY, onNewCard, onRefundNewCard, onSession, tourFocus = null }) {
   const [catFilter, setCatFilter] = useState([]); // empty = all categories
   const [calcOpen, setCalcOpen] = useState(false); // on-screen calculator for dosage cards
   const [focusOpen, setFocusOpen] = useState(false); // Focus bottom sheet
@@ -2417,6 +2605,7 @@ export function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = 
     undoLog.current[id] = { prev: srsMap[id], xp: xpGain };
     setSrsMap((m) => ({ ...m, [id]: nextSchedule(m[id], g) }));
     if (xpGain) addXp(xpGain);
+    onGrade?.();
     setSession(result.nav);
   };
   /* Undo: back on a card graded this sitting, put its previous schedule
@@ -2614,7 +2803,7 @@ export function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = 
 
 /* ================= STATS ================= */
 
-function Stats({ xp = 0, streak = null, bestRun = 0, readiness = null, readyLabel = "", log, catStats, popStats = [], acc, resetAll, provider, setProvider, customCount, examDate, setExamDate, isOwner = false, ent = null, onManagePlan, profile, setProfile, tourFocus = null }) {
+function Stats({ rewards = null, career = null, board = null, week = null, xp = 0, streak = null, bestRun = 0, readiness = null, readyLabel = "", log, catStats, popStats = [], acc, resetAll, provider, setProvider, customCount, examDate, setExamDate, isOwner = false, ent = null, onManagePlan, profile, setProfile, tourFocus = null }) {
 
   const [confirm, setConfirm] = useState(false);
   const p = AI_PROVIDERS.find((x) => x.id === provider) || AI_PROVIDERS[0];
@@ -2626,11 +2815,15 @@ function Stats({ xp = 0, streak = null, bestRun = 0, readiness = null, readyLabe
         <div className="stat-hero">
           <div><span className="stat-big mono">{readiness == null ? "--" : `${Math.round((readiness.low + readiness.high) / 2)}`}</span><span className="stat-cap">Readiness (estimate){readiness == null ? " · 12+ answers needed" : ` · range ${readiness.low}–${readiness.high}%`}</span></div>
           <div><span className="stat-big mono">{log.length ? `${Math.round(acc * 100)}%` : "--"}</span><span className="stat-cap">Accuracy · {log.length} answered</span></div>
-          <div><span className="stat-big mono">🔥 {streak?.count ?? 0}</span><span className="stat-cap">Day streak</span></div>
-          <div><span className="stat-big mono">{xp}</span><span className="stat-cap">XP · {lvl.name}</span></div>
+          <div><span className="stat-big mono"><StreakGlyph size={20} /> {streak?.count ?? 0}</span><span className="stat-cap">Day streak</span></div>
+          <div><span className="stat-big mono">{xp}</span><span className="stat-cap">XP · {career ? career.rank.name : lvl.name}</span></div>
         </div>
         {readyLabel && <p className="small tip">{readyLabel}. Readiness is an estimate from your work in PulseRN.</p>}
       </section>
+      {career && <CareerCard career={career} full />}
+      {board && <BadgeGrid board={board} />}
+      {week && rewards && <RoundsCard week={week} rewards={rewards} />}
+      {rewards && <BestsCard best={rewards.best} bestRun={bestRun} />}
       <section className={"card wide" + tourMark(tourFocus, "stats")} data-tour="stats">
         <p className="eyebrow">Performance</p>
         <h2 className="h2">{log.length ? `${Math.round(acc * 100)}% overall accuracy` : "No questions answered yet"}</h2>
@@ -2955,7 +3148,7 @@ export function Style() {
       .vital-lab{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;color:#6FA394}
       .monitor-note{margin-top:10px;font-size:12px;letter-spacing:.1em;color:#8FBCAD}
       /* buttons & bars */
-      .btn{background:var(--teal);color:var(--btn-ink);border:none;border-radius:10px;padding:12px 16px;font-family:'Archivo',sans-serif;font-weight:700;font-size:14px;cursor:pointer;margin-top:6px}
+      .btn{background:var(--teal);color:var(--btn-ink);border:none;border-radius:10px;padding:12px 16px;font-family:'Archivo',sans-serif;font-weight:700;font-size:14px;cursor:pointer;margin-top:6px;min-height:44px}
       .btn:disabled{opacity:.4;cursor:default}
       .btn.ghost{background:transparent;color:var(--accent-ink);border:1.5px solid var(--teal)}
       .btn:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
