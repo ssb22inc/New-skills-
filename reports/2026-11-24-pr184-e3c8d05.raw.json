@@ -6,7 +6,7 @@
     "head": "e3c8d057929cff9bc310def8007f8e0be2cdf9e1",
     "pr": "184"
   },
-  "reviewedAt": "2026-11-24T10:35:26.203Z",
+  "reviewedAt": "2026-11-24T11:22:36.676Z",
   "filesReviewed": [
     "pulsern/PULSERN_BUILD.md",
     "pulsern/assets/App.portable.jsx",
@@ -62,8 +62,50 @@
     "pulsern/tests/state-migration.test.js"
   ],
   "skipped": [],
-  "findings": [],
-  "usage": null,
-  "error": "The review could not be completed: openai/gpt-6.1-sol: 402 out of credits — This request requires more credits, or fewer max_tokens. You requested up to 64000 tokens, but can only afford 56891. To increase, visit https://openrouter.ai/settings/credits and add more credits\n  Add credits at https://openrouter.ai/settings/credits, then re-run.",
-  "verdict": "FAIL"
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/question-review.js",
+      "line": 80,
+      "title": "Recorded bank misses no longer match the loaded questions",
+      "problem": "applyAnswer writes log and schedule identities such as bank:123, but App loads bank questions without source or key. idOf therefore returns \"123\" for the question while latestResults and missSchedule contain \"bank:123\". expandTrialQuestions repairs only bundled/trial questions, not bank questions. Consequently, newly missed bank questions disappear from Review Misses and scheduled Today reviews. Legacy numeric schedule entries can instead remain perpetually due because subsequent answers update a different, canonical entry.",
+      "failure_scenario": "Answer an approved bank question incorrectly. Its log row and review date use bank:<id>, but the original question still has only its numeric id. Review Misses reports no matching miss, and the question does not return when its scheduled date arrives.",
+      "fix": "Stamp questions with their source and canonical key when constructing the bank and bundled catalogs, before any pool calculation. Use that same identity for recording, pool membership, schedule updates, and the displayed next-review date. Add an integration regression that records an actual loaded bank question and then retrieves it through Review Misses and Today.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/question-review.js",
+      "line": 73,
+      "title": "Trial expansion creates duplicate navigation IDs for different questions",
+      "problem": "A canonical trial row such as builtin:7 expands into a bundled question retaining id 7, even when the loaded bank already contains a different question with id 7. QBank navigation stores raw IDs, and reveal restores with reviewQuestions.find(x => x.id === view.id), which selects the original bank question first. The saved selection, correctness, and credit can therefore be displayed against an unrelated stem and rationale. QBank's freshPool also compares raw log IDs, so answering builtin:7 incorrectly suppresses the unrelated bank:7 from new practice.",
+      "failure_scenario": "Import two missed bundled trial questions whose numeric IDs also exist in the shared bank. Review the first bundled miss, advance to the second, then go Back. The first entry restores the shared-bank question with that ID while retaining the bundled question's recorded answer and verdict.",
+      "fix": "Use canonical keys for freshness checks, navigation entries, held-question sets, and restoration lookups. Keep the numeric database ID separately for API calls. Test navigation with different bank and bundled stems sharing the same numeric ID; the existing prefixed guest-7 test does not cover the identities now produced by mergeGuestIntoBlob.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/guest.js",
+      "line": 270,
+      "title": "Historical trial replay overwrites newer account progress",
+      "problem": "mergeGuestIntoBlob replays historical answers through applyAnswer using each old answer day, then installs state.daily directly. applyAnswer replaces daily whenever its day differs, so importing yesterday's trial into an account with eight answers today changes daily from today's eight answers to yesterday's trial count. Historical rows are also appended after newer account rows, making latestResults treat an older trial miss as newer than a later correction. Meanwhile, updateMissSchedule ignores the supplied answer day and schedules from the import date, so replay is not consistently historical either.",
+      "failure_scenario": "An account has answered eight questions today and correctly answered builtin:7 today. On another browser it has a pending trial from yesterday containing a miss on builtin:7. Choosing Add replaces today's daily counter and makes the older miss the latest result. The next answer today restarts daily.answered at one rather than nine.",
+      "fix": "Give historical imports date-aware semantics: preserve or recompute the current LOCAL day's counter, determine latest results chronologically, and calculate imported review dates from the intended answer date rather than silently using import time. Add a regression with yesterday's trial and newer same-question account answers plus a nonzero daily counter today.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 231645,
+    "completionTokens": 8215,
+    "reasoningTokens": 7250,
+    "costUsd": 0.661261
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Do not ship yet. Canonical question identities are written to progress but are not consistently used by QBank, breaking Review Misses and allowing feedback for the wrong question. Historical trial imports also overwrite current progress counters. The warfarin correction and visible screenshot content look sound. Tests were not executed.",
+  "counts": {
+    "blocker": 3,
+    "major": 0,
+    "minor": 0
+  }
 }
