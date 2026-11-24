@@ -301,6 +301,19 @@ describe("progress handoff into a new account", () => {
     expect(out.missSchedule[9]).toEqual({ interval: 7, due: "2026-12-01" });
     expect(out.missSchedule["builtin:2"].interval).toBe(1);
   });
+  it("a two-day trial reports a two-day streak", () => {
+    let g = emptyGuest(NOW, "2026-11-23");
+    g = guestAnswer(g, mk(1), true, { ms: 9000, today: "2026-11-23" }).guest;
+    g = guestAnswer(g, mk(2), true, { ms: 9000, today: "2026-11-24" }).guest;
+    expect(guestSummary(g).streak).toBe(2);
+  });
+  it("an imported answer uses the catalog stem, so a fast tap stays at 0 XP", () => {
+    const long = mk(1, { stem: "word ".repeat(40) });
+    const answered = guestAnswer(emptyGuest(NOW, TODAY), long, true, { ms: 2500, today: TODAY });
+    const merged = mergeGuestIntoBlob(migrateBlob({}, CATS), answered.guest, { today: TODAY, now: NOW, catalog: [long] });
+    expect(answered.res.xp).toBe(0);
+    expect(merged.summary?.xp ?? merged.blob.xp).toBe(0);
+  });
   it("summarises the trial for the save screen", () => {
     expect(guestSummary(played())).toMatchObject({ n: 3, ok: 2, acc: 67, xp: 50 });
   });

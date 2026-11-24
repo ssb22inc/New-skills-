@@ -10,7 +10,8 @@ function chain(result) {
     get(_target, property) {
       if (property === "then") return (resolve, reject) => Promise.resolve(result).then(resolve, reject);
       if (property === "maybeSingle" || property === "single") return async () => result;
-      if (property === "upsert" || property === "insert") return async () => ({ error: null });
+      if (property === "upsert" || property === "insert" || property === "update") return () => chain({ data: [{ revision: 1 }], error: null });
+      if (property === "abortSignal" || property === "select") return () => api;
       return () => api;
     },
   });

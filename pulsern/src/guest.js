@@ -292,10 +292,26 @@ export function guestAnswer(guest, q, correct, { ms = Infinity, today } = {}) {
   };
 }
 
+function guestStreak(guest) {
+  const days = [...new Set((guest?.log ?? []).map((row) => row?.day).filter((day) => typeof day === "string"))].sort();
+  let count = 0;
+  let prev = null;
+  for (const day of days) {
+    if (!prev) { count = 1; prev = day; continue; }
+    const [y, m, d] = prev.split("-").map(Number);
+    const next = new Date(y, (m || 1) - 1, d || 1);
+    next.setDate(next.getDate() + 1);
+    const expected = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+    count = day === expected ? count + 1 : 1;
+    prev = day;
+  }
+  return count;
+}
+
 export function guestSummary(guest) {
   const n = guest?.log?.length ?? 0;
   const ok = (guest?.log ?? []).filter((l) => l.correct).length;
-  return { n, ok, acc: n ? Math.round((ok / n) * 100) : 0, xp: guest?.xp ?? 0, bestRun: guest?.bestRun ?? 0, cats: [...new Set((guest?.log ?? []).map((l) => l.cat))] };
+  return { n, ok, acc: n ? Math.round((ok / n) * 100) : 0, xp: guest?.xp ?? 0, bestRun: guest?.bestRun ?? 0, streak: guestStreak(guest), cats: [...new Set((guest?.log ?? []).map((l) => l.cat))] };
 }
 
 /* Fold a guest's work into a migrated account blob. `s` is the output of
@@ -327,6 +343,7 @@ function builtinTrialQuestion(entry, catalog) {
     day: entry.day,
     source: "builtin",
     key: canonicalKey("builtin", found.id),
+    stem: typeof found.stem === "string" ? found.stem : "",
   };
 }
 
@@ -369,7 +386,7 @@ function importTrialLive(s, entries, { today, calibration }) {
   let accepted = 0;
   let correct = 0;
   for (const e of entries) {
-    const stem = e.words ? Array.from({ length: e.words }, () => "w").join(" ") : "";
+    const stem = e.stem || (e.words ? Array.from({ length: e.words }, () => "w").join(" ") : "");
     const applied = applyAnswer(state, {
       q: { id: e.id, key: e.key, source: e.source, cat: e.cat, diff: e.diff, stem, population: e.pop },
       correct: e.correct,

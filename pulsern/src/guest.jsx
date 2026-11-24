@@ -129,7 +129,7 @@ export function SaveProgress({ guest, onSignUp, onSignIn, motion = true, deviceS
             </svg>
             <dl className="rw-recap-stats">
               <div><dt>XP</dt><dd className="mono">+{sum.xp}</dd></div>
-              <div><dt>Streak</dt><dd className="mono">Day 1</dd></div>
+              <div><dt>Streak</dt><dd className="mono">Day {sum.streak}</dd></div>
               <div><dt>Best run</dt><dd className="mono">{sum.bestRun}</dd></div>
               <div><dt>Categories</dt><dd className="mono">{sum.cats.length}</dd></div>
             </dl>
@@ -143,7 +143,7 @@ export function SaveProgress({ guest, onSignUp, onSignIn, motion = true, deviceS
           <li><span className="guest-tick" aria-hidden="true" /><span>{sum.xp >= next.xp
             ? <><strong>{sum.xp} XP</strong> banked. {next.name} unlocks at {next.answers} answers</>
             : <><strong>{sum.xp} of {next.xp} XP</strong> toward {next.name}</>}</span></li>
-          <li><span className="guest-tick" aria-hidden="true" /><span><strong><StreakGlyph /> Day 1</strong> of your study streak</span></li>
+          <li><span className="guest-tick" aria-hidden="true" /><span><strong><StreakGlyph /> Day {sum.streak}</strong> of your study streak</span></li>
           <li><span className="guest-tick" aria-hidden="true" /><span><strong>{toReadiness} more answers</strong> to your first readiness estimate</span></li>
         </ul>
         <div className="row guest-ctas">

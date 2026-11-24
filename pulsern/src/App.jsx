@@ -393,16 +393,10 @@ const store = {
     };
     let revision = await finish(writeAt(progressRevision));
     if (!revision && progressRevision === 0 && current()) {
-      let inserted = supabase.from("progress").insert({
+      const inserted = supabase.from("progress").insert({
         user_id: session.user.id, key, blob, revision: 1, updated_at: new Date().toISOString(),
       }).select("revision");
       try { revision = await finish(inserted); } catch { revision = null; }
-    }
-    if (!revision && current()) {
-      const { data } = await supabase.from("progress")
-        .select("revision").eq("user_id", session.user.id).eq("key", key).maybeSingle();
-      if (!current()) throw aborted();
-      revision = await finish(writeAt(Number(data?.revision) || 0));
     }
     if (!revision) {
       const err = new Error("conflict");
