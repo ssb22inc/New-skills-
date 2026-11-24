@@ -459,8 +459,13 @@ function mergeMap(base, server, local) {
   return out;
 }
 
+function legacySignature(row) {
+  return JSON.stringify([row?.id ?? "", row?.correct ?? "", row?.day ?? "", row?.at ?? "", row?.ms ?? "", row?.key ?? "", row?.cat ?? ""]);
+}
+
 function replayUnseen(base, rows) {
-  const seen = new Set((base.log ?? []).map((row) => row?.attempt).filter((id) => id != null && id !== ""));
+  const seen = new Set((base.log ?? []).map((row) => row?.attempt).filter((id) => id != null && id !== "").map(String));
+  const knownLegacy = new Set((base.log ?? []).filter((row) => row && (row.attempt == null || row.attempt === "")).map(legacySignature));
   let state = {
     log: Array.isArray(base.log) ? [...base.log] : [],
     xp: Number(base.xp) || 0,
@@ -473,8 +478,15 @@ function replayUnseen(base, rows) {
     bestRun: base.bestRun ?? 0,
   };
   for (const row of rows ?? []) {
-    if (!row?.attempt || seen.has(row.attempt)) continue;
-    seen.add(row.attempt);
+    if (!row) continue;
+    if (row.attempt != null && row.attempt !== "") {
+      if (seen.has(String(row.attempt))) continue;
+      seen.add(String(row.attempt));
+    } else {
+      const sig = legacySignature(row);
+      if (knownLegacy.has(sig)) continue;
+      knownLegacy.add(sig);
+    }
     const words = Number(row.words);
     const stem = Number.isFinite(words) && words > 0 ? Array.from({ length: words }, () => "w").join(" ") : (row.stem || "");
     const rating = Number(row.rating);
@@ -591,6 +603,35 @@ function replayOrdered(base, mergedLog) {
   return { state: replayUnseen(start, suffix), fromZero: false, redo: true };
 }
 
+function studyDays(log, blobs) {
+  const days = new Set();
+  for (const row of log ?? []) if (typeof row?.day === "string") days.add(row.day);
+  for (const blob of blobs ?? []) for (const op of blob?.rewards?.cardOps ?? []) if (typeof op?.day === "string") days.add(op.day);
+  return [...days].sort();
+}
+
+/* The saved streak already counts a later day. An older day cannot be
+   added on top of it. Rebuild only when the log itself explains the
+   streak, so a long streak is not cut down to the rows still on hand. */
+function streakBeforeInsertedDay(base, log, blobs) {
+  const days = studyDays(log, blobs);
+  const last = base.streak?.lastDay;
+  if (!last || !days.some((day) => day < last)) return null;
+  const explained = new Set();
+  for (const row of base.log ?? []) if (typeof row?.day === "string") explained.add(row.day);
+  for (const op of base.rewards?.cardOps ?? []) if (typeof op?.day === "string") explained.add(op.day);
+  if ((Number(base.streak?.count) || 0) > explained.size) return null;
+  let streak = null;
+  let rewards = emptyRewards();
+  for (const day of days) {
+    if (streakDayCounted(streak, null, day)) continue;
+    const adv = advanceStreak(streak, rewards, day);
+    streak = adv.streak;
+    rewards = adv.rewards;
+  }
+  return streak;
+}
+
 function streakFrom(base, days) {
   let streak = base.streak;
   let rewards = base.rewards ?? emptyRewards();
@@ -676,7 +717,8 @@ export function reconcileProgress(serverBlob, localBlob, baselineBlob = null) {
       if (counted) daily = { ...daily, answered: (daily.answered ?? 0) + counted };
     }
     put(merged, "daily", daily);
-    put(merged, "streak", ordered.redo && sameJson(local.streak, base.streak) && server.streak ? server.streak : (cardDays.length ? streakFrom(base, days) : replayed.streak));
+    const rebuilt = streakBeforeInsertedDay(base, log, [server, local]);
+    put(merged, "streak", rebuilt ?? (ordered.redo && sameJson(local.streak, base.streak) && server.streak ? server.streak : (cardDays.length ? streakFrom(base, days) : replayed.streak)));
   } else if (cardDays.length) {
     if (base.ability || server.ability || local.ability) put(merged, "ability", mergeMap(base.ability, server.ability, local.ability));
     if (base.daily != null || server.daily != null || local.daily != null) put(merged, "daily", choose(base.daily, server.daily, local.daily));
@@ -691,6 +733,9 @@ export function reconcileProgress(serverBlob, localBlob, baselineBlob = null) {
   }
   if (base.srsMap || server.srsMap || local.srsMap) put(merged, "srsMap", mergeMap(base.srsMap, server.srsMap, local.srsMap));
   put(merged, "rewards", mergeRewards(base, server, local, replayed, localReplay, serverReplay, hasBaseline, unseen, hasBaseline && sameJson(changedEntries(base.srsMap, local.srsMap), changedEntries(base.srsMap, server.srsMap)) && ((Number(local.xp) || 0) - (Number(localReplay?.xp) || 0)) === ((Number(server.xp) || 0) - (Number(serverReplay?.xp) || 0)), mergeCardOps(base, server, local)));
+  if (merged.rewards && (Number(merged.streak?.count) || 0) > (Number(merged.rewards.best?.streak) || 0)) {
+    merged.rewards = { ...merged.rewards, best: { ...merged.rewards.best, streak: merged.streak.count } };
+  }
   put(merged, "examResults", mergeExamResults(base.examResults, server.examResults, local.examResults));
   put(merged, "fcNew", mergeFcNew(base.fcNew, server.fcNew, local.fcNew));
   put(merged, "flagged", mergeList(base.flagged, server.flagged, local.flagged));

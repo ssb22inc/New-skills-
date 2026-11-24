@@ -463,6 +463,35 @@ describe("a revision conflict keeps both devices' answers", () => {
     expect(merged.rewards.coverWeeks).toEqual([week]);
   });
 
+  it("keeps the ability update from an answer the older app saved without an attempt id", () => {
+    const blank = { log: [], xp: 0, ability: emptyAbility(ABILITY_CATS), rewards: emptyRewards(), missSchedule: {}, daily: null, streak: null, bestRun: 0 };
+    const pharm = { id: 1, key: "bank:1", source: "bank", cat: "Pharmacology", diff: 1, stem: "eight words are enough here now" };
+    const care = { id: 2, key: "bank:2", source: "bank", cat: "Management of Care", diff: 1, stem: "eight words are enough here now" };
+    const taken = { ms: 9000, today: "2026-11-24", words: 8, rating: 1300 };
+    const legacy = applyAnswer(blank, { q: pharm, correct: true, ...taken, calibration: { 1: { rating: 1300 } } }).state;
+    legacy.log = legacy.log.map(({ attempt, seq, ...row }) => row);
+    const local = applyAnswer(blank, { q: care, correct: true, attempt: "local", ...taken, calibration: { 2: { rating: 1300 } } }).state;
+    const inOrder = applyAnswer(legacy, { q: care, correct: true, attempt: "local", ...taken, calibration: { 2: { rating: 1300 } } }).state;
+    const merged = blobForSave(legacy, local, blank);
+    expect(merged.log.some((row) => row.cat === "Pharmacology" && !row.attempt)).toBe(true);
+    expect(merged.ability.Pharmacology.n).toBe(1);
+    expect(merged.ability["Management of Care"].n).toBe(1);
+    expect(merged.ability.Pharmacology.theta).toBeCloseTo(inOrder.ability.Pharmacology.theta, 4);
+  });
+
+  it("counts Monday, Tuesday, and Wednesday when Monday arrives after Wednesday was answered", () => {
+    const blank = { log: [], xp: 0, ability: emptyAbility(ABILITY_CATS), rewards: emptyRewards(), missSchedule: {}, daily: null, streak: null, bestRun: 0 };
+    const q = { id: 7, key: "bank:7", source: "bank", cat: "Pharmacology", diff: 1, stem: "eight words are enough here now" };
+    const taken = { ms: 9000, words: 8, rating: 1300, calibration: { 7: { rating: 1300 } } };
+    const tuesday = applyAnswer(blank, { q, correct: true, attempt: "tue", at: 2000, today: "2026-11-24", ...taken }).state;
+    const monday = applyAnswer(blank, { q: { ...q, id: 8, key: "bank:8" }, correct: true, attempt: "mon", at: 1000, today: "2026-11-23", ...taken, calibration: { 8: { rating: 1300 } } }).state;
+    const server = applyAnswer(monday, { q, correct: true, attempt: "tue", at: 2000, today: "2026-11-24", ...taken }).state;
+    const local = applyAnswer(tuesday, { q: { ...q, id: 9, key: "bank:9", cat: "Safety & Infection Control" }, correct: true, attempt: "wed", at: 3000, today: "2026-11-25", ...taken, calibration: { 9: { rating: 1300 } } }).state;
+    const merged = blobForSave(server, local, tuesday);
+    expect(merged.log.map((row) => row.day)).toEqual(["2026-11-23", "2026-11-24", "2026-11-25"]);
+    expect(merged.streak).toMatchObject({ count: 3, lastDay: "2026-11-25" });
+  });
+
   it("keeps a legacy new-card count that has no ids when each device adds a different card", () => {
     const today = "2026-11-24";
     const baseline = { log: [], xp: 0, rewards: emptyRewards(), fcNew: { day: today, count: 12 } };
