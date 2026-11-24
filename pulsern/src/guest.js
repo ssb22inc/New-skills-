@@ -618,13 +618,17 @@ function studyDays(log, blobs) {
    added on top of it. Rebuild only when the log itself explains the
    streak, so a long streak is not cut down to the rows still on hand. */
 function streakBeforeInsertedDay(base, log, blobs) {
-  const days = studyDays(log, blobs);
+  const known = new Set();
+  for (const row of base.log ?? []) if (typeof row?.day === "string") known.add(row.day);
+  for (const op of base.rewards?.cardOps ?? []) if (typeof op?.day === "string") known.add(op.day);
+  const incoming = studyDays(log, blobs).filter((day) => !known.has(day));
   const last = base.streak?.lastDay;
-  if (!last || !days.some((day) => day < last)) return null;
+  if (!last || !incoming.some((day) => day < last)) return null;
   const explained = new Set();
   for (const row of base.log ?? []) if (typeof row?.day === "string") explained.add(row.day);
   for (const op of base.rewards?.cardOps ?? []) if (typeof op?.day === "string") explained.add(op.day);
   if ((Number(base.streak?.count) || 0) > explained.size) return null;
+  const days = studyDays(log, blobs);
   let streak = null;
   let rewards = emptyRewards();
   for (const day of days) {

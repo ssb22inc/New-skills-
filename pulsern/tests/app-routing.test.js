@@ -19,6 +19,7 @@ function memoryStorage(initial = {}) {
 describe("/app/ routing and session migration", () => {
   it("maps app authentication paths and redirects to the www /app/ origin", () => {
     expect(authModeFromUrl("https://www.pulsern.app/app/sign-in")).toBe("signin");
+    expect(authModeFromUrl("https://www.pulsern.app/app/sign-in?start=1")).toBe("signin");
     expect(authModeFromUrl("https://www.pulsern.app/app/sign-up")).toBe("signup");
     expect(authModeFromUrl("https://www.pulsern.app/app/reset")).toBe("reset");
     expect(authRedirectUrl("signin", "https://www.pulsern.app")).toBe("https://www.pulsern.app/app/");

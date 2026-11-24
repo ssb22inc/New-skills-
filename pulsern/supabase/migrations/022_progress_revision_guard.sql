@@ -12,13 +12,19 @@ language plpgsql
 as $$
 begin
   if new.revision is null or new.revision = old.revision then
-    -- The older app replaces the whole blob and ignores a rejected write.
-    -- Keep every answer already stored, then append only the incoming
-    -- answers that are not already there, so a newer acknowledged answer
-    -- is not erased by the older snapshot.
-    if jsonb_typeof(old.blob) = 'object' and jsonb_typeof(new.blob) = 'object'
-       and jsonb_typeof(old.blob->'log') = 'array' and jsonb_typeof(new.blob->'log') = 'array' then
-      new.blob := jsonb_set(new.blob, '{log}', (
+    -- No revision-aware save has landed yet: accept the snapshot as the
+    -- older app does today.
+    -- After a newer client has saved (revision > 0), do not replace XP,
+    -- ability, rewards, or schedules with the older snapshot. Keep that
+    -- snapshot and append only incoming answers that are not the same
+    -- occurrence. Occurrence is id + correct, plus day when both rows
+    -- have one, so a relabeled row is not stored twice.
+    if old.revision > 0
+       and jsonb_typeof(old.blob) = 'object'
+       and jsonb_typeof(new.blob) = 'object'
+       and jsonb_typeof(old.blob->'log') = 'array'
+       and jsonb_typeof(new.blob->'log') = 'array' then
+      new.blob := jsonb_set(old.blob, '{log}', (
         select coalesce(jsonb_agg(entry order by ord), '[]'::jsonb)
         from (
           select entry, ord
@@ -27,8 +33,13 @@ begin
           select entry, 1000000 + ord
             from jsonb_array_elements(new.blob->'log') with ordinality as incoming(entry, ord)
            where not exists (
-             select 1 from jsonb_array_elements(old.blob->'log') as already
-              where already = entry
+             select 1
+               from jsonb_array_elements(old.blob->'log') as already
+              where already->>'id' is not distinct from entry->>'id'
+                and already->>'correct' is not distinct from entry->>'correct'
+                and (
+                  not (already ? 'day') or not (entry ? 'day') or already->>'day' = entry->>'day'
+                )
            )
         ) as combined
       ), true);

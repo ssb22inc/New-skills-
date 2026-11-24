@@ -429,6 +429,7 @@ describe("a revision conflict keeps both devices' answers", () => {
     const sql = fs.readFileSync(new URL("../supabase/migrations/022_progress_revision_guard.sql", import.meta.url), "utf8");
     expect(sql).toMatch(/new\.revision := old\.revision \+ 1/);
     expect(sql).toMatch(/jsonb_array_elements/);
+    expect(sql).toMatch(/old\.revision > 0/);
     expect(sql).not.toMatch(/new\.revision is null or new\.revision <= old\.revision then/);
     expect(progressRevisionOnUpdate(4, undefined)).toEqual({ revision: 5, legacy: true });
     expect(progressRevisionOnUpdate(4, 4)).toEqual({ revision: 5, legacy: true });
@@ -489,6 +490,28 @@ describe("a revision conflict keeps both devices' answers", () => {
     expect(merged.ability.Pharmacology.n).toBe(1);
     expect(merged.ability["Management of Care"].n).toBe(1);
     expect(merged.ability.Pharmacology.theta).toBeCloseTo(inOrder.ability.Pharmacology.theta, 4);
+  });
+
+  it("keeps a cover-protected streak when the next answer is the next day", () => {
+    const baseline = {
+      log: [
+        { id: 1, key: "bank:1", source: "bank", cat: "Pharmacology", diff: 1, correct: true, attempt: "mon", at: 1, day: "2026-11-23", ms: 9000, words: 8, rating: 1300 },
+        { id: 2, key: "bank:2", source: "bank", cat: "Pharmacology", diff: 1, correct: true, attempt: "thu", at: 2, day: "2026-11-26", ms: 9000, words: 8, rating: 1300 },
+      ],
+      xp: 20,
+      ability: emptyAbility(ABILITY_CATS),
+      rewards: { ...emptyRewards(), covers: 0, coverWeeks: ["2026-11-23"] },
+      streak: { count: 2, lastDay: "2026-11-26", shield: false },
+      daily: { day: "2026-11-26", answered: 1 },
+      bestRun: 1,
+    };
+    const friday = { id: 3, key: "bank:3", source: "bank", cat: "Safety & Infection Control", diff: 1, stem: "eight words are enough here now" };
+    const local = applyAnswer(baseline, {
+      q: friday, correct: true, attempt: "fri", at: 3, today: "2026-11-27", ms: 9000, words: 8, rating: 1300, calibration: { 3: { rating: 1300 } },
+    }).state;
+    const merged = blobForSave(baseline, local, baseline);
+    expect(local.streak.count).toBe(3);
+    expect(merged.streak).toMatchObject({ count: local.streak.count, lastDay: "2026-11-27", shield: local.streak.shield });
   });
 
   it("counts Monday, Tuesday, and Wednesday when Monday arrives after Wednesday was answered", () => {

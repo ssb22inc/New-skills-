@@ -26,8 +26,12 @@ export function authModeFromUrl(href = window.location.href) {
      keeps the current query, so a reload of /app/try?start=1 must stay
      on the trial. */
   if (url.pathname === APP_TRY) return "try";
-  if (url.pathname === APP_SIGN_UP || url.searchParams.get("start") === "1") return "signup";
+  /* An explicit sign-in or reset path wins over the legacy ?start=1 flag.
+     Try questions keeps that query, then "I have an account" goes to
+     /app/sign-in?start=1. A reload must stay on sign-in. */
+  if (url.pathname === APP_SIGN_IN) return "signin";
   if (url.pathname === APP_RESET) return "reset";
+  if (url.pathname === APP_SIGN_UP || url.searchParams.get("start") === "1") return "signup";
   return "signin";
 }
 
