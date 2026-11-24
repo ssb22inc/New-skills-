@@ -319,7 +319,7 @@ import {
 } from "./rewards-ui.jsx";
 import { mergeGuestIntoBlob, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, readGuestForHandoff, releaseHeldGuest, waitForFlush, accountHasAnswers } from "./guest.js";
 import { applyAnswer, commitLiveAnswer, stampedQuestion, newAttemptId } from "./answer-apply.js";
-import { claimLegacyRow } from "./question-key.js";
+import { claimLegacyAt } from "./question-key.js";
 import { stampCatalogQuestion, stampLoadedCatalog } from "./question-identity.js";
 import { signOutAndForgetTrial as signOut } from "./sign-out.js";
 import { readProgress, parseProgress, clearLegacyProgressBackup, guestHandoff, sessionReadDecision, sweepPendingProgress } from "./progress-load.js";
@@ -991,9 +991,9 @@ export default function App() {
     setRewards((r) => reverseCardDay(r, credited, cardXpGain));
     setDaily((d) => (d.day === credited && d.answered > 0 ? { ...d, answered: d.answered - 1 } : d));
   };
-  const resolveLegacy = (legacyId, chosen) => {
-    if (!chosen?.key || !chosen?.source) return;
-    setLog((rows) => rows.map((row) => claimLegacyRow(row, legacyId, chosen)));
+  const resolveLegacy = (legacyId, chosen, logIndex = -1) => {
+    if (!chosen?.key || !chosen?.source || !Number.isInteger(logIndex) || logIndex < 0) return;
+    setLog((rows) => claimLegacyAt(rows, logIndex, chosen));
     setMissSchedule((schedule) => {
       const map = { ...(schedule ?? {}) };
       const raw = map[legacyId] ?? map[String(legacyId)];
@@ -2194,7 +2194,7 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
     };
     const choose = (candidate) => {
       resolvedLegacy.current.add(String(q.legacyId));
-      onResolveLegacy?.(q.legacyId, candidate);
+      onResolveLegacy?.(q.legacyId, candidate, q.logIndex);
       resume();
     };
     return (

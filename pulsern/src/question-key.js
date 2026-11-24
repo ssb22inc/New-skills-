@@ -23,7 +23,13 @@ export function claimLegacyRow(row, legacyId, chosen) {
   if (!row || !chosen?.key || !chosen?.source) return row;
   if (String(row.id) !== String(legacyId)) return row;
   if (questionIdentity(row)) return row;
-  return { ...row, source: chosen.source, key: chosen.key, unclassified: false };
+  return { ...row, source: chosen.source, key: chosen.key, unclassified: false, unresolved: false };
+}
+
+/* The student named one recorded miss. Other rows that share the number stay as they are. */
+export function claimLegacyAt(log, index, chosen) {
+  if (!Array.isArray(log) || !Number.isInteger(index) || index < 0 || index >= log.length) return log ?? [];
+  return log.map((row, i) => (i === index ? claimLegacyRow(row, row?.id, chosen) : row));
 }
 
 export function keyOf(row) {

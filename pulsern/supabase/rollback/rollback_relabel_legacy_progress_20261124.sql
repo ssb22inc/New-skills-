@@ -1,15 +1,14 @@
--- Restore PulseRN saved progress from schema backup_20261124.
+-- Restore the progress blobs captured before the 2026-11-24 relabel.
 -- Run this only against project xlfdywudgamrnzjwtrtd.
--- The backup was taken before the 2026-11-24 legacy-id relabel.
+-- Exam attempts are not part of this migration and are not touched.
+-- Progress rows created after the backup are left in place.
 begin;
 
-delete from public.progress;
-insert into public.progress (user_id, key, blob, updated_at)
-select user_id, key, blob, updated_at from backup_20261124.progress;
-
-delete from public.exam_attempts;
-insert into public.exam_attempts (user_id, form, started_at, id, items, submitted_at, correct, total, result)
-select user_id, form, started_at, id, items, submitted_at, correct, total, result
-from backup_20261124.exam_attempts;
+update public.progress as live
+   set blob = saved.blob,
+       updated_at = saved.updated_at
+  from backup_20261124.progress as saved
+ where live.user_id = saved.user_id
+   and live.key = saved.key;
 
 commit;

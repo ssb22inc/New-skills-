@@ -144,8 +144,7 @@ declare
   new_schedule jsonb := '{}'::jsonb;
   sched_key text;
   sched_val jsonb;
-  owners text[];
-  unresolved_n int;
+  latest jsonb;
 begin
   if jsonb_typeof(blob) is distinct from 'object' then
     return blob;
@@ -162,16 +161,17 @@ begin
         new_schedule := new_schedule || jsonb_build_object(sched_key, sched_val);
         continue;
       end if;
-      select coalesce(array_agg(distinct elem->>'key') filter (
-               where coalesce(elem->>'unresolved','false') <> 'true'
-                 and coalesce(elem->>'key','') ~ '^(builtin|bank|case):'
-             ), '{}'),
-             count(*) filter (where coalesce(elem->>'unresolved','false') = 'true')
-        into owners, unresolved_n
-      from jsonb_array_elements(new_log) elem
-      where elem->>'id' = sched_key;
-      if unresolved_n = 0 and cardinality(owners) = 1 and not (new_schedule ? owners[1]) then
-        new_schedule := new_schedule || jsonb_build_object(owners[1], sched_val);
+      select elem
+        into latest
+      from jsonb_array_elements(new_log) with ordinality as logged(elem, ordinality)
+      where elem->>'id' = sched_key
+      order by ordinality desc
+      limit 1;
+      if latest is not null
+         and coalesce(latest->>'unresolved','false') <> 'true'
+         and coalesce(latest->>'key','') ~ '^(builtin|bank|case):'
+         and not (new_schedule ? (latest->>'key')) then
+        new_schedule := new_schedule || jsonb_build_object(latest->>'key', sched_val);
       else
         new_schedule := new_schedule || jsonb_build_object(sched_key, sched_val);
       end if;

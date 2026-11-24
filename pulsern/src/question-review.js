@@ -218,11 +218,16 @@ function unresolvedCards(log, questions, index) {
     if (seen.has(num)) return;
     seen.add(num);
     const candidates = (questions ?? []).filter((q) => q && !q.unresolved && String(q.id) === num);
-    const row = (log ?? []).find((item) => item && String(item.id) === num && (item.unclassified || !questionIdentity(item)));
+    let logIndex = -1;
+    (log ?? []).forEach((item, i) => {
+      if (item && String(item.id) === num && (item.unclassified || !questionIdentity(item)) && item.correct === false) logIndex = i;
+    });
+    const row = logIndex >= 0 ? log[logIndex] : null;
     cards.push({
       unresolved: true,
       id: `unresolved:${num}`,
       legacyId: num,
+      logIndex,
       cat: typeof row?.cat === "string" && row.cat ? row.cat : (candidates[0]?.cat ?? "Management of Care"),
       diff: 1,
       type: "mc",
@@ -233,6 +238,11 @@ function unresolvedCards(log, questions, index) {
     });
   };
   for (const [num, correct] of index.unresolved) if (correct === false) add(num);
+  for (const [num, correct] of index.unscoped) {
+    if (correct !== false) continue;
+    const keyed = (questions ?? []).some((q) => questionIdentity(q) && String(q.id) === num);
+    if (keyed) add(num);
+  }
   return cards;
 }
 
