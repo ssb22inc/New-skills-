@@ -640,6 +640,22 @@ function streakBeforeInsertedDay(base, log, blobs) {
   return streak;
 }
 
+/* Walk study days in order from the shared streak, so a cover spent on
+   one device is not charged when the other device filled that gap. */
+function replayActivity(base, log, blobs) {
+  const days = studyDays(log, blobs);
+  let streak = base.streak ?? null;
+  let rewards = base.rewards ?? emptyRewards();
+  for (const day of days) {
+    if (streak?.lastDay && day < streak.lastDay) continue;
+    if (streakDayCounted(streak, null, day)) continue;
+    const adv = advanceStreak(streak, rewards, day);
+    streak = adv.streak;
+    rewards = adv.rewards;
+  }
+  return { streak, rewards };
+}
+
 function streakFrom(base, days) {
   let streak = base.streak;
   let rewards = base.rewards ?? emptyRewards();
@@ -741,6 +757,20 @@ export function reconcileProgress(serverBlob, localBlob, baselineBlob = null) {
   }
   if (base.srsMap || server.srsMap || local.srsMap) put(merged, "srsMap", mergeMap(base.srsMap, server.srsMap, local.srsMap));
   put(merged, "rewards", mergeRewards(base, server, local, replayed, localReplay, serverReplay, hasBaseline, unseen, hasBaseline && sameJson(changedEntries(base.srsMap, local.srsMap), changedEntries(base.srsMap, server.srsMap)) && ((Number(local.xp) || 0) - (Number(localReplay?.xp) || 0)) === ((Number(server.xp) || 0) - (Number(serverReplay?.xp) || 0)), mergeCardOps(base, server, local)));
+  if (!streakBeforeInsertedDay(base, log, [server, local])) {
+    const played = replayActivity(base, log, [server, local]);
+    const settingOnly = sameJson(local.streak, base.streak) && server.streak;
+    if (!settingOnly && played.streak) merged.streak = played.streak;
+    if (merged.rewards) {
+      const baseWeeks = new Set(base.rewards?.coverWeeks ?? []);
+      const grants = (merged.rewards.coverWeeks ?? []).filter((week) => !baseWeeks.has(week)).length;
+      merged.rewards = {
+        ...merged.rewards,
+        covers: Math.max(0, Math.min(MAX_COVERS, (Number(played.rewards?.covers) || 0) + grants)),
+        coverDays: played.rewards?.coverDays ?? merged.rewards.coverDays,
+      };
+    }
+  }
   if (merged.rewards && (Number(merged.streak?.count) || 0) > (Number(merged.rewards.best?.streak) || 0)) {
     merged.rewards = { ...merged.rewards, best: { ...merged.rewards.best, streak: merged.streak.count } };
   }

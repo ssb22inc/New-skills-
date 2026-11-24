@@ -492,6 +492,32 @@ describe("a revision conflict keeps both devices' answers", () => {
     expect(merged.ability.Pharmacology.theta).toBeCloseTo(inOrder.ability.Pharmacology.theta, 4);
   });
 
+  it("refunds a cover when the other device studied the day that cover was bridging", () => {
+    const friday = "2026-11-27";
+    const saturday = "2026-11-28";
+    const monday = "2026-11-30";
+    const baseline = {
+      log: [{ id: 1, key: "bank:1", source: "bank", cat: "Pharmacology", diff: 1, correct: true, attempt: "fri", at: 1, day: friday, ms: 9000, words: 8, rating: 1300 }],
+      xp: 10,
+      ability: emptyAbility(ABILITY_CATS),
+      rewards: { ...emptyRewards(), covers: 1 },
+      streak: { count: 1, lastDay: friday, shield: true },
+      daily: { day: friday, answered: 1 },
+      bestRun: 1,
+    };
+    const mondayQ = { id: 2, key: "bank:2", source: "bank", cat: "Pharmacology", diff: 1, stem: "eight words are enough here now" };
+    const saturdayQ = { id: 3, key: "bank:3", source: "bank", cat: "Safety & Infection Control", diff: 1, stem: "eight words are enough here now" };
+    const taken = { ms: 9000, words: 8, rating: 1300 };
+    const afterMonday = applyAnswer(baseline, { q: mondayQ, correct: true, attempt: "mon", at: 3, today: monday, ...taken, calibration: { 2: { rating: 1300 } } }).state;
+    const afterSaturday = applyAnswer(baseline, { q: saturdayQ, correct: true, attempt: "sat", at: 2, today: saturday, ...taken, calibration: { 3: { rating: 1300 } } }).state;
+    expect(afterMonday.rewards.covers).toBe(0);
+    expect(afterSaturday.rewards.covers).toBe(1);
+    const merged = blobForSave(afterMonday, afterSaturday, baseline);
+    expect(merged.rewards.covers).toBe(1);
+    expect(merged.rewards.coverDays).not.toContain(saturday);
+    expect(merged.streak.lastDay).toBe(monday);
+  });
+
   it("keeps a cover-protected streak when the next answer is the next day", () => {
     const baseline = {
       log: [
