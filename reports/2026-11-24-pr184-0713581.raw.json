@@ -1,0 +1,103 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "eb424692027abe76ce7276142f6bdd881f852946",
+    "head": "07135819814be042071abf39c4260a179a63e432",
+    "pr": "184"
+  },
+  "reviewedAt": "2026-11-24T08:08:08.546Z",
+  "filesReviewed": [
+    "pulsern/PULSERN_BUILD.md",
+    "pulsern/assets/App.portable.jsx",
+    "pulsern/ops/capture-product-screenshots.mjs",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/public/product/pulsern-adaptive-practice.png",
+    "pulsern/public/product/pulsern-lab-reference.png",
+    "pulsern/public/product/pulsern-today-dashboard.png",
+    "pulsern/src/App.jsx",
+    "pulsern/src/app-routing.js",
+    "pulsern/src/auth.jsx",
+    "pulsern/src/case-studies.js",
+    "pulsern/src/effects.js",
+    "pulsern/src/guest.js",
+    "pulsern/src/guest.jsx",
+    "pulsern/src/lab-fab.jsx",
+    "pulsern/src/lab-panel.jsx",
+    "pulsern/src/progress-load.js",
+    "pulsern/src/question-review.js",
+    "pulsern/src/rewards-ui.jsx",
+    "pulsern/src/rewards.js",
+    "pulsern/src/sign-out.js",
+    "pulsern/src/state.js",
+    "pulsern/tests/browser/announcer-harness.jsx",
+    "pulsern/tests/browser/announcer.html",
+    "pulsern/tests/browser/guest-harness.jsx",
+    "pulsern/tests/browser/guest.html",
+    "pulsern/tests/capture-fonts.test.js",
+    "pulsern/tests/card-nav-browser.test.js",
+    "pulsern/tests/effects.test.js",
+    "pulsern/tests/exam-leave-browser.test.js",
+    "pulsern/tests/flashcards-undo-browser.test.js",
+    "pulsern/tests/guest-browser.test.js",
+    "pulsern/tests/guest.test.js",
+    "pulsern/tests/lab-fab-browser.test.js",
+    "pulsern/tests/progress-load-browser.test.js",
+    "pulsern/tests/question-nav-browser.test.js",
+    "pulsern/tests/question-review.test.js",
+    "pulsern/tests/read-aloud-hook.test.js",
+    "pulsern/tests/review2-blockers.test.js",
+    "pulsern/tests/review2-fixes.test.js",
+    "pulsern/tests/review3-browser.test.js",
+    "pulsern/tests/review3.test.js",
+    "pulsern/tests/rewards.test.js",
+    "pulsern/tests/state-migration.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/App.jsx",
+      "line": 513,
+      "title": "Sign-out discards the newest queued progress",
+      "problem": "The sign-out handler invalidates the save queue before ensuring its latest payload has been persisted. invalidate() makes queued saves return stale without executing, and signing out then removes the session needed to write them. The checked answers exist only in component memory and disappear when AuthGate unmounts App.",
+      "failure_scenario": "An upsert is slow while the student answers another question. The second answer's autosave queues behind that request. The student signs out before the first request finishes: the queued payload containing the second answer is invalidated and never sent. Signing back in loses that answer and its associated progress.",
+      "fix": "Expose a queue flush operation and await successful persistence of the newest snapshot before signing out. On failure, keep the student signed in and offer retry or explicit confirmation that unsaved work will be lost. Add a browser test with one delayed in-flight upsert, a newer queued answer, and an actual sign-out/unmount.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/App.jsx",
+      "line": 1024,
+      "title": "Earning a cover can erase a simultaneous promotion",
+      "problem": "The promotion effect queues a functional markMomentsSeen update, but the following cover effect replaces rewards with g.rewards computed from the older rewardsRef.current. When both effects run after the same answer, the replacement discards the new rankHigh and badgesSeen markers. Neither effect's relevant dependencies change afterward to repair those markers.",
+      "failure_scenario": "The eighth question on the fifth study day of a week also satisfies a promotion or badge threshold. Both celebrations appear, but the saved rewards retain the old rankHigh/badgesSeen values. If accuracy subsequently slips, the supposedly permanent earned rank can disappear; the badge can also be celebrated again.",
+      "fix": "Apply the cover grant against the latest queued rewards state rather than replacing it with a render-time snapshot. Prefer one reducer/transition that preserves both the grant and moment markers. Add an integration test where one answer earns a cover and promotion together, then verify the persisted markers survive a reload and later accuracy decline.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/guest.js",
+      "line": 159,
+      "title": "Trial questions become fresh, fully rewarded questions again in offline fallback",
+      "problem": "The handoff changes a built-in answer's ID to guest-<id>, but the signed-in built-in fallback still uses its original numeric ID. QBank's freshPool and answerXp do not connect those identities. expandTrialQuestions creates the prefixed review copy without excluding or aliasing the identical numeric original.",
+      "failure_scenario": "A visitor correctly answers built-in question 7, earns XP, and creates an account. If the shared-bank fetch fails, signed-in practice uses QUESTIONS. Numeric question 7 is considered unseen despite the guest-7 answer, so the same stem and already-revealed answer are served as a new question and earn full first-answer XP again.",
+      "fix": "Preserve built-in provenance and use a consistent identity, or provenance-aware aliases, across guest handoff, fallback fresh-question filtering, and XP repeat detection. Do not alias an unrelated shared-bank item merely because its numeric ID matches. Test a real guest handoff followed by a failed bank fetch and verify the answered built-in is not treated as fresh or paid twice.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 230940,
+    "completionTokens": 10692,
+    "reasoningTokens": 9840,
+    "costUsd": 0.6842685
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Do not ship yet. The new save queue can discard answered questions on sign-out, and two reward-state paths produce incorrect results. I reviewed the supplied diffs and images; I did not execute the tests.",
+  "counts": {
+    "blocker": 2,
+    "major": 1,
+    "minor": 0
+  }
+}
