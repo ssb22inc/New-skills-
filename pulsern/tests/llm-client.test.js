@@ -101,6 +101,16 @@ describe("what goes over the wire", () => {
 });
 
 describe("what comes back", () => {
+  it("forwards finish_reason from a nonempty response", async () => {
+    stubFetch({
+      ok: true, status: 200, headers: { get: () => null },
+      json: async () => ({ id: "gen-1", model: "x", choices: [{ finish_reason: "length", message: { content: "verdict" } }], usage: { prompt_tokens: 10, completion_tokens: 5, cost: 0 } }),
+    });
+    const r = await llmCall({ model: REVIEW_MODEL, prompt: "x" });
+    expect(r.text).toBe("verdict");
+    expect(r.finishReason).toBe("length");
+  });
+
   it("returns the text and the real cost", async () => {
     stubFetch(ok("verdict", { prompt_tokens: 1000, completion_tokens: 200, cost: 0.02, completion_tokens_details: { reasoning_tokens: 150 } }));
     const r = await llmCall({ model: REVIEW_MODEL, prompt: "x" });
