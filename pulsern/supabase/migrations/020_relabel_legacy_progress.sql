@@ -240,8 +240,8 @@ revoke all on function backup_20261124.relabel_answer(jsonb) from public, anon, 
 revoke all on function backup_20261124.schedule_owner(jsonb, text) from public, anon, authenticated;
 revoke all on function backup_20261124.relabel_blob(jsonb) from public, anon, authenticated;
 
--- Self-check. A bad log must not abort the migration, and a review date
--- shared by a bank question and a later case step stays with the bank question.
+-- Self-check. Uses rows this migration inserts and deletes. It does not
+-- read production question 101 or any other live bank row.
 do $$
 declare
   blob jsonb;
@@ -259,32 +259,43 @@ begin
   if backup_20261124.relabel_blob(blob) is distinct from blob then
     raise exception 'missing log was rewritten';
   end if;
+
+  insert into backup_20261124.builtin_questions (id, cat)
+  values ('fixture-sched', 'Pharmacology')
+  on conflict (id) do update set cat = excluded.cat;
+  insert into backup_20261124.bundled_cases (legacy_id, cat, case_id)
+  values ('fixture-sched', 'Physiological Adaptation', 'case-fixture-1')
+  on conflict (legacy_id) do update set cat = excluded.cat, case_id = excluded.case_id;
+
   blob := jsonb_build_object(
     'log', jsonb_build_array(
-      jsonb_build_object('id', 101, 'cat', 'Pharmacology', 'correct', false),
-      jsonb_build_object('id', 101, 'cat', 'Physiological Adaptation', 'correct', true)
+      jsonb_build_object('id', 'fixture-sched', 'cat', 'Pharmacology', 'correct', false),
+      jsonb_build_object('id', 'fixture-sched', 'cat', 'Physiological Adaptation', 'correct', true)
     ),
-    'missSchedule', jsonb_build_object('101', jsonb_build_object('interval', 3, 'due', '2026-12-01'))
+    'missSchedule', jsonb_build_object('fixture-sched', jsonb_build_object('interval', 3, 'due', '2026-12-01'))
   );
   out := backup_20261124.relabel_blob(blob);
-  if not (out->'missSchedule' ? 'bank:101') then
-    raise exception 'review date did not stay with the bank question';
+  if (out->'missSchedule'->'builtin:fixture-sched') is distinct from jsonb_build_object('interval', 3, 'due', '2026-12-01')
+     or out->'missSchedule' ? 'case:case-fixture-1'
+     or out->'missSchedule' ? 'fixture-sched' then
+    raise exception 'review date did not stay with the built-in answer';
   end if;
-  if out->'missSchedule' ? 'case:case-sepsis-1' or out->'missSchedule' ? '101' then
-    raise exception 'review date moved onto a case step or stayed on the shared number';
-  end if;
+
   blob := jsonb_build_object(
     'log', jsonb_build_array(
-      jsonb_build_object('id', '101', 'cat', 'Pharmacology', 'correct', false, 'source', 'bank', 'key', 'bank:101'),
-      jsonb_build_object('id', '101', 'cat', 'Physiological Adaptation', 'correct', true, 'source', 'case', 'key', 'case:case-sepsis-1')
+      jsonb_build_object('id', 'fixture-sched', 'cat', 'Pharmacology', 'correct', false, 'source', 'bank', 'key', 'bank:fixture-sched'),
+      jsonb_build_object('id', 'fixture-sched', 'cat', 'Physiological Adaptation', 'correct', true, 'source', 'case', 'key', 'case:case-fixture-1')
     ),
-    'missSchedule', jsonb_build_object('case:case-sepsis-1', jsonb_build_object('interval', 3, 'due', '2026-12-01'))
+    'missSchedule', jsonb_build_object('case:case-fixture-1', jsonb_build_object('interval', 3, 'due', '2026-12-01'))
   );
   out := backup_20261124.relabel_blob(blob);
-  if (out->'missSchedule'->'bank:101') is distinct from jsonb_build_object('interval', 3, 'due', '2026-12-01')
-     or out->'missSchedule' ? 'case:case-sepsis-1' then
-    raise exception 'a case review date was not returned to the bank question';
+  if (out->'missSchedule'->'bank:fixture-sched') is distinct from jsonb_build_object('interval', 3, 'due', '2026-12-01')
+     or out->'missSchedule' ? 'case:case-fixture-1' then
+    raise exception 'a case review date was not returned to the bank answer';
   end if;
+
+  delete from backup_20261124.builtin_questions where id = 'fixture-sched';
+  delete from backup_20261124.bundled_cases where legacy_id = 'fixture-sched';
 end $$;
 
 -- Idempotent: a second run leaves canonical and unresolved rows untouched.

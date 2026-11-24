@@ -1,7 +1,7 @@
 /* Try before sign-up (src/guest.js): only free built-in content, a hard
    question limit, the same XP rules as an account, and a one-time,
    collision-free handoff into the account blob. */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import {
   GUEST_KEY, GUEST_LIMIT, GUEST_HOLD_KEY, guestPool, emptyGuest, guestAnswer, guestRemaining, mergeGuestIntoBlob, loadGuest, saveGuest, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, linkBuiltInGuest, holdGuestTrial, clearHeldMemory, peekHeldGuest, releaseHeldGuest, readGuestForHandoff, guestFresh, guestSummary, guestImportIdentity, waitForFlush,
@@ -244,26 +244,40 @@ describe("progress handoff into a new account", () => {
     expect(order).toEqual(["b"]);
   });
   it("a stalled write unblocks the next save and does not land afterward", async () => {
-    const queue = createSaveQueue({ attemptMs: 30 });
+    vi.useFakeTimers();
+    try {
+    const queue = createSaveQueue({ attemptMs: 1000 });
     const writes = [];
     let release;
+    let started;
+    let seenSignal;
     const gate = new Promise((resolve) => { release = resolve; });
+    const startedGate = new Promise((resolve) => { started = resolve; });
     const first = queue.enqueue(queue.next(), async ({ signal }) => {
-      await new Promise((resolve, reject) => {
+      seenSignal = signal;
+      started();
+      await new Promise((resolvePromise, reject) => {
         const fail = () => reject(Object.assign(new Error("aborted"), { code: "aborted" }));
         if (signal.aborted) fail();
         else signal.addEventListener("abort", fail, { once: true });
-        gate.then(resolve);
+        gate.then(resolvePromise);
       });
       writes.push("first");
     });
+    await startedGate;
+    expect(seenSignal.aborted).toBe(false);
     const second = queue.enqueue(queue.next(), async () => { writes.push("second"); });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(seenSignal.aborted).toBe(true);
     await expect(first).resolves.toMatchObject({ stale: true });
     await expect(second).resolves.toEqual({ ok: true });
     expect(writes).toEqual(["second"]);
     release();
-    await new Promise((resolve) => setTimeout(resolve, 15));
+    await vi.advanceTimersByTimeAsync(0);
     expect(writes).toEqual(["second"]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
   it("says saved only after the merged write succeeds", () => {
     expect(handoffAfterSave({ ok: true, pending: true })).toBe("saved");

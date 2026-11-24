@@ -122,8 +122,14 @@ export function scheduleEntry(question, schedule, questions = null, log = null, 
 export function deriveMissSchedule(log, existing) {
   const map = existing && typeof existing === "object" && !Array.isArray(existing) ? { ...existing } : {};
   const today = todayStr();
-  for (const [id, ok] of Object.entries(latestResults(log))) {
-    if (!ok && map[id] === undefined) map[id] = { interval: 1, due: today };
+  const latest = new Map();
+  for (const row of log ?? []) {
+    const id = answerIdentity(row);
+    if (id) latest.set(id, row);
+  }
+  for (const [id, row] of latest) {
+    if (row.correct || row.source === "case" || row.schedule === false || String(id).startsWith("case:")) continue;
+    if (map[id] === undefined) map[id] = { interval: 1, due: today };
   }
   return map;
 }
@@ -184,6 +190,7 @@ function legacyCaseSteps(cases, num, rowCat) {
         stem: step.stem,
         type: step.type || "mc",
         schedule: false,
+        candidateOnly: true,
       });
     });
   });
@@ -223,7 +230,7 @@ export function unseenQuestions(questions, log) {
     if (correct === false && (peers.get(num) ?? 0) > 1) blocked.add(num);
   }
   return (questions ?? []).filter((q) => {
-    if (!q || blocked.has(String(q.id))) return false;
+    if (!q || q.candidateOnly || blocked.has(String(q.id))) return false;
     const settled = settledResult(q, log, questions, index, peers);
     return settled.state === "none";
   });
@@ -298,8 +305,9 @@ function unresolvedCards(log, questions, index) {
   return cards;
 }
 
-/* A saved bank or case miss whose question is not in the loaded catalog.
-   It stays a miss. It is not treated as corrected, and it is not dropped. */
+/* A saved bank miss whose question is not in the loaded catalog.
+   Case steps are not QBank questions, so they are not cards here.
+   The miss stays visible. It is not treated as corrected or dropped. */
 function catalogMissCards(log, questions) {
   const keyedCatalog = (questions ?? []).some((q) => questionIdentity(q));
   if (!keyedCatalog) return [];
@@ -311,7 +319,7 @@ function catalogMissCards(log, questions) {
   const latest = new Map();
   (log ?? []).forEach((row, i) => {
     const id = questionIdentity(row);
-    if (!id || (!id.startsWith("bank:") && !id.startsWith("case:"))) return;
+    if (!id || !id.startsWith("bank:") || row.source === "case" || row.schedule === false) return;
     latest.set(id, { correct: row.correct === true, row, i });
   });
   const cards = [];
@@ -321,7 +329,7 @@ function catalogMissCards(log, questions) {
       catalogMiss: true,
       id: `unavailable:${id}`,
       key: id,
-      source: id.startsWith("case:") ? "case" : "bank",
+      source: "bank",
       cat: typeof info.row.cat === "string" && info.row.cat ? info.row.cat : "Management of Care",
       population: info.row.pop,
       type: info.row.type,
@@ -348,7 +356,7 @@ export function reviewPools(questions, log, schedule, today = todayStr()) {
     return scheduleEntry(q, schedule, questions, log, index, peers);
   };
   const cards = [...unresolvedCards(log, questions, index), ...catalogMissCards(log, questions)];
-  const pool = [...(questions ?? []).filter((q) => q && !q.unresolved && !q.catalogMiss), ...cards];
+  const pool = [...(questions ?? []).filter((q) => q && !q.unresolved && !q.catalogMiss && !q.candidateOnly), ...cards];
   const due = pool.filter((q) => {
     const entry = dueOf(q);
     return !!entry && typeof entry.due === "string" && entry.due <= today;

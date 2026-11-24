@@ -6,7 +6,7 @@ import { applyAnswer, commitLiveAnswer } from "../src/answer-apply.js";
 import { emptyGuest, guestAnswer, mergeGuestIntoBlob, holdGuestTrial, peekHeldGuest, releaseHeldGuest, GUEST_KEY, GUEST_HOLD_KEY } from "../src/guest.js";
 import { classifyLog, resolveLegacyRow, canonicalKey, rekeySchedule, claimLegacyRow, claimLegacyAt, claimLegacySchedule } from "../src/question-key.js";
 import { stampCatalogQuestion, stampLoadedCatalog, questionIdentity } from "../src/question-identity.js";
-import { reviewPools, todayPool, sessionPool, unseenQuestions, questionByIdentity, latestResults, expandTrialQuestions, settledResult, legacyCandidates, scheduleEntry } from "../src/question-review.js";
+import { reviewPools, todayPool, sessionPool, unseenQuestions, questionByIdentity, latestResults, expandTrialQuestions, settledResult, legacyCandidates, scheduleEntry, deriveMissSchedule } from "../src/question-review.js";
 import { emptyNav, appendQuestion, goBack, present } from "../src/question-nav.js";
 import { itemRating } from "../src/ability-engine.js";
 import { emptyRewards, REVIEW_FIX_BONUS, caseStepIds } from "../src/rewards.js";
@@ -252,10 +252,8 @@ describe("review, restore, and import use the canonical key", () => {
     const bank101 = stampCatalogQuestion({ id: 101, stem: "Bank 101.", cat: "Pharmacology", diff: 2 }, []);
     const caseSchedule = { 101: { interval: 1, due: "2026-01-16" } };
     expect(scheduleEntry(bank101, caseSchedule, [bank101], [caseRow])).toBeNull();
-    const caseMiss = reviewPools([bank101], [caseRow], caseSchedule, "2026-01-16").review;
-    expect(caseMiss.map((item) => item.key)).toEqual(["case:case-sepsis-1"]);
-    expect(caseMiss[0].catalogMiss).toBe(true);
-    expect(caseMiss.some((item) => item.key === "bank:101")).toBe(false);
+    expect(reviewPools([bank101], [caseRow], caseSchedule, "2026-01-16").review).toEqual([]);
+    expect(deriveMissSchedule([caseRow], {})["case:case-sepsis-1"]).toBeUndefined();
   });
 
   it("does not rebuild ability over legacy rows that have no key", () => {

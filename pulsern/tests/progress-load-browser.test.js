@@ -16,7 +16,12 @@ import { NGN_SAMPLES, CALC_SAMPLES, COVERAGE_SAMPLES } from "../src/ngn-samples.
 const STUB = `
 const offline = { data: null, error: { message: "offline" } };
 const q = new Proxy({}, { get(_t, p) { if (p === "then") return (res) => Promise.resolve(offline).then(res); return () => q; } });
+const cases = new Proxy({}, { get(_t, p) {
+  if (p === "then") return (res) => Promise.resolve(window.__casesOk ? { data: [], error: null } : offline).then(res);
+  return () => cases;
+} });
 const questions = new Proxy({}, { get(_t, p) {
+  if (p === "range") return (from) => { (window.__questionRanges ||= []).push(from); return questions; };
   if (p === "then") return (res) => {
     const script = window.__questionPages;
     if (!Array.isArray(script)) return Promise.resolve(offline).then(res);
@@ -74,7 +79,7 @@ export const supabase = {
     onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
     signOut: async () => { window.__signOuts = (window.__signOuts || 0) + 1; return { error: null }; },
   },
-  from: (t) => (t === "progress" ? progress : t === "questions" ? questions : q),
+  from: (t) => (t === "progress" ? progress : t === "questions" ? questions : t === "case_studies" ? cases : q),
   rpc: () => q,
 };`;
 const supabaseStub = {
@@ -104,18 +109,18 @@ const guest = (startedAt) => ({ v: 1, startedAt, lastAt: startedAt + 60_000, day
 ], xp: 20, run: 0, bestRun: 1, ability: null, missSchedule: {} });
 const existingRow = { theme: "light", tourSeen: true, xp: 500, bestRun: 7, log: Array.from({ length: 30 }, (_, i) => ({ id: 1000 + i, cat: "Pharmacology", diff: 1, correct: true })), streak: { count: 20, lastDay: "2020-01-01", shield: true } };
 
-async function open({ session, row = null, readError = false, guestData = null, nullBlob = false, oldBackup = false, stallSave = false, pendingKey = false, questionPages = null }) {
+async function open({ session, row = null, readError = false, guestData = null, nullBlob = false, oldBackup = false, stallSave = false, pendingKey = false, questionPages = null, casesOk = false }) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await ctx.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   await page.route("**/api/**", (r) => r.fulfill({ status: 503, contentType: "application/json", body: "{}" }));
-  await page.addInitScript(({ session, row, readError, guestData, nullBlob, oldBackup, stallSave, pendingKey, questionPages }) => {
+  await page.addInitScript(({ session, row, readError, guestData, nullBlob, oldBackup, stallSave, pendingKey, questionPages, casesOk }) => {
     if (oldBackup && !sessionStorage.getItem("backupSeeded")) { localStorage.setItem("pulsern-progress-backup-v1", JSON.stringify([{ userId: "someone-else", raw: "{}" }])); sessionStorage.setItem("backupSeeded", "1"); }
     if (pendingKey) localStorage.setItem("pulsern-pending-progress-v1:leftover", JSON.stringify({ log: [{ id: 1, correct: true }] }));
-    window.__session = session; window.__row = row; window.__readError = readError; window.__nullBlob = nullBlob; window.__upserts = []; window.__stallSave = stallSave; window.__questionPages = questionPages; window.__questionPageIndex = 0;
+    window.__session = session; window.__row = row; window.__readError = readError; window.__nullBlob = nullBlob; window.__upserts = []; window.__stallSave = stallSave; window.__questionPages = questionPages; window.__questionPageIndex = 0; window.__casesOk = casesOk;
     if (guestData && !sessionStorage.getItem("seeded")) { localStorage.setItem("pulsern-guest-v1", JSON.stringify(guestData)); sessionStorage.setItem("seeded", "1"); }
-  }, { session, row, readError, guestData, nullBlob, oldBackup, stallSave, pendingKey, questionPages });
+  }, { session, row, readError, guestData, nullBlob, oldBackup, stallSave, pendingKey, questionPages, casesOk });
   await page.goto(`${base}ops/product-screenshot.html`, { waitUntil: "networkidle" });
   return { ctx, page, errors };
 }
@@ -407,28 +412,55 @@ describe("Review misses can open an unresolved card again in the same screen", (
 });
 
 describe("a failed catalog page keeps a saved bank miss visible", () => {
-  it("shows the miss and does not install the partial page", async () => {
-    const partialStem = "Partial catalog stem that must stay hidden from the student.";
-    const row = {
-      theme: "light", tourSeen: true, xp: 10, bestRun: 1,
-      log: [{ id: 2500, source: "bank", key: "bank:2500", cat: "Pharmacology", diff: 1, correct: false }],
-      streak: { count: 1, lastDay: "2020-01-01", shield: true },
-      fcNew: { day: todayStr(), count: 20 },
-      srsMap: {},
-    };
-    const questionPages = [
-      { data: [{ id: 1, cat: "Pharmacology", diff: 1, type: "mc", stem: partialStem, options: ["One", "Two", "Three"], answer: 0, rationale: "A rationale long enough to pass the catalog validator for this row.", elo_rating: 1200 }], error: null },
-      { data: null, error: { message: "page failed" } },
-    ];
-    const { ctx, page } = await open({ session: sessionFor(NOW - 90 * 86400000), row, questionPages });
+  const partialStem = "Partial catalog stem that must stay hidden from the student.";
+  const loadedStem = "Loaded bank miss stem for question 2500 now.";
+  const valid = (id, stem) => ({
+    id, cat: "Pharmacology", diff: 1, type: "mc", stem,
+    options: ["Alpha choice", "Beta choice", "Gamma choice"], answer: 0,
+    rationale: "A rationale long enough to pass the catalog validator for this row.",
+    elo_rating: 1200,
+  });
+  const row = {
+    theme: "light", tourSeen: true, xp: 10, bestRun: 1,
+    log: [{ id: 2500, source: "bank", key: "bank:2500", cat: "Pharmacology", diff: 1, correct: false }],
+    streak: { count: 1, lastDay: "2020-01-01", shield: true },
+    fcNew: { day: todayStr(), count: 20 },
+    srsMap: {},
+  };
+  const failedPages = [
+    { data: Array.from({ length: 1000 }, (_, i) => valid(i + 1, partialStem)), error: null },
+    { data: null, error: { message: "page failed" } },
+  ];
+
+  it("requests the failing second page and does not install the first page", async () => {
+    const { ctx, page } = await open({ session: sessionFor(NOW - 90 * 86400000), row, questionPages: failedPages, casesOk: true });
+    try {
+      await page.getByRole("heading", { name: "The question catalog didn't load" }).waitFor({ timeout: 30_000 });
+      expect(await page.evaluate(() => window.__questionRanges || [])).toContain(1000);
+      await page.getByRole("button", { name: "Practice", exact: true }).click();
+      await page.getByRole("button", { name: /New questions/ }).click();
+      await page.getByRole("button", { name: "Check answer" }).waitFor({ timeout: 15_000 });
+      expect(await page.getByText(partialStem).count()).toBe(0);
+    } finally { await ctx.close(); }
+  }, 120_000);
+
+  it("opens the saved miss after Retry replaces the placeholder", async () => {
+    const { ctx, page } = await open({ session: sessionFor(NOW - 90 * 86400000), row, questionPages: failedPages, casesOk: true });
     try {
       await page.getByRole("heading", { name: "The question catalog didn't load" }).waitFor({ timeout: 30_000 });
       await page.getByRole("button", { name: "Practice", exact: true }).click();
       await page.getByRole("button", { name: /Review misses/ }).click();
       await page.getByRole("heading", { name: "This question didn't load" }).waitFor({ timeout: 15_000 });
-      expect(await page.getByText("This saved miss is still here. Retry to open the question.").count()).toBe(1);
-      expect(await page.getByText(partialStem).count()).toBe(0);
-      expect(await page.getByText("No misses to fix").count()).toBe(0);
+      await page.evaluate((full) => {
+        window.__questionPages = [full];
+        window.__questionPageIndex = 0;
+        window.__casesOk = true;
+      }, { data: [valid(2500, loadedStem)], error: null });
+      await page.getByRole("button", { name: "Retry" }).first().click();
+      await page.getByText(loadedStem).waitFor({ timeout: 15_000 });
+      await page.getByRole("radio", { name: /Alpha choice/ }).click();
+      await page.getByRole("button", { name: "Check answer" }).click();
+      await page.getByText(/CORRECT|INCORRECT/).first().waitFor({ timeout: 15_000 });
     } finally { await ctx.close(); }
   }, 120_000);
 });

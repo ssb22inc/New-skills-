@@ -1965,6 +1965,22 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
   const { due: dueAll, review: reviewAll } = reviewPools(reviewQuestions, log, missSchedule, todayStr());
   const duePool = dueAll.filter(inFocus);
   const reviewPool = reviewAll.filter(inFocus);
+  const loadedKey = q?.catalogMiss && questionByIdentity(reviewQuestions, q.key)?.catalogMiss !== true
+    && questionByIdentity(reviewQuestions, q.key)
+    ? q.key
+    : null;
+  useEffect(() => {
+    if (!loadedKey) return;
+    const real = questionByIdentity(reviewQuestions, loadedKey);
+    if (!real || real.catalogMiss) return;
+    shownAt.current = Date.now();
+    setSel([]);
+    setOrder([]);
+    setPhase("answering");
+    setQ(real);
+    // The key appearing in the catalog is the change. The question object is read once then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadedKey]);
 
   const remember = (item) => {
     const id = item ? answerIdentity(item) : null;

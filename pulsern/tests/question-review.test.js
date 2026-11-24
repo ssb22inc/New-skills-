@@ -1,6 +1,6 @@
 /* Missed questions come back on a real LOCAL calendar date. */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { updateMissSchedule, deriveMissSchedule, reviewPools, todayPool, sessionPool, expandTrialQuestions, legacyCandidates } from "../src/question-review.js";
+import { updateMissSchedule, deriveMissSchedule, reviewPools, todayPool, sessionPool, expandTrialQuestions, legacyCandidates, unseenQuestions } from "../src/question-review.js";
 import { migrateBlob } from "../src/state.js";
 
 const CATS = [
@@ -182,6 +182,9 @@ describe("Today round and Review Misses pools", () => {
     const card = reviewPools(list, log, {}).review.find((item) => item.unresolved);
     expect(card.candidates.map((item) => item.key).sort()).toEqual(["bank:101", "case:case-sepsis-1"]);
     expect(card.candidates.find((item) => item.source === "case").stem).toMatch(/complication/);
+    const fresh = unseenQuestions(list, log);
+    expect(fresh.some((item) => item.candidateOnly || item.source === "case")).toBe(false);
+    expect(sessionPool(list, { log, schedule: {}, fresh, mode: "new" }).some((item) => item.candidateOnly)).toBe(false);
   });
 
   it("keeps a canonical bank miss visible when that question is not in the loaded catalog", () => {
