@@ -50,7 +50,8 @@ describe("combos", () => {
     expect(comboFor(2)).toBeNull();
     expect(comboFor(3)).toMatchObject({ n: 3 });
     expect(comboFor(4)).toBeNull();
-    expect(comboFor(10).label).toMatch(/Clinical judgment/);
+    expect(comboFor(10).label).toBe("Sustained focus");
+    expect(comboFor(10).label).not.toMatch(/clinical judgment/i);
   });
 });
 

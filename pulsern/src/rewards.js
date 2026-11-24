@@ -9,7 +9,8 @@
        answer given faster than the stem can be read earns 0 XP. The answer
        still counts toward stats and readiness, so the data stays honest.
      - Correcting an earlier miss (spaced retrieval of an error) earns a
-       small bonus, because error correction is where memory is built.
+       small bonus, once per question, and never more than answering it
+       right the first time: missing on purpose can never pay.
      - Ranks and badges need accuracy over a recent window, not volume. */
 
 /* ---------------- dates (LOCAL) ---------------- */
@@ -60,7 +61,7 @@ export const TEST_PLAN = {
 };
 export const SHORT_CAT = {
   "Management of Care": "Management of Care",
-  "Safety & Infection Control": "Safety & Infection",
+  "Safety & Infection Control": "Safety and Infection Prevention and Control", // 2026 test-plan name; the stored key is unchanged
   "Health Promotion & Maintenance": "Health Promotion",
   "Psychosocial Integrity": "Psychosocial",
   "Basic Care & Comfort": "Basic Care",
@@ -121,18 +122,35 @@ export function minThinkMs(q) {
 /* log = the answer log BEFORE this answer. */
 export function answerXp({ q, correct, ms = Infinity, log = [], skipped = false }) {
   if (skipped) return { xp: 0, reason: "skip", base: 0, bonus: 0 };
-  let last = null;
-  for (let i = log.length - 1; i >= 0; i--) if (String(log[i].id) === String(q.id)) { last = log[i]; break; }
+  const key = String(q.id);
+  let last = null, everCorrect = false;
+  for (let i = log.length - 1; i >= 0; i--) {
+    if (String(log[i].id) !== key) continue;
+    if (!last) last = log[i];
+    if (log[i].correct) { everCorrect = true; break; }
+  }
   if (!correct) return { xp: 0, reason: "incorrect", base: 0, bonus: 0, fix: false };
-  if (last && last.correct) return { xp: 0, reason: "repeat", base: 0, bonus: 0, fix: false };
+  /* Any earlier correct answer to this question means its XP (first-try or
+     fix) was already available once: wrong-right-wrong-right cycles earn 0. */
+  if (everCorrect) return { xp: 0, reason: "repeat", base: 0, bonus: 0, fix: false };
   if (Number.isFinite(ms) && ms < minThinkMs(q)) return { xp: 0, reason: "too-fast", base: 0, bonus: 0, fix: false };
-  const fix = !!(last && !last.correct);
+  const fix = !!last;
   /* A corrected miss earns the fix bonus only, never the full first-try XP:
      wrong-then-right must never pay more than right the first time
      (otherwise "miss on purpose, read the rationale, re-answer" farms XP). */
   if (fix) return { xp: REVIEW_FIX_BONUS, reason: "fix", base: 0, bonus: REVIEW_FIX_BONUS, fix };
   const base = 10 * (q.diff || 1);
   return { xp: base, reason: "correct", base, bonus: 0, fix };
+}
+
+/* Flashcards: Good pays 5 XP and Easy 8, but only when the grade comes at
+   least CARD_MIN_GRADE_MS after the answer was shown (time to compare it
+   with what you recalled). Again and Hard pay 0, as before. */
+export const CARD_MIN_GRADE_MS = 1500;
+export function cardXp(grade, msSinceFlip = Infinity) {
+  const base = grade === "good" ? 5 : grade === "easy" ? 8 : 0;
+  if (!base) return 0;
+  return Number.isFinite(msSinceFlip) && msSinceFlip < CARD_MIN_GRADE_MS ? 0 : base;
 }
 
 export function xpNote(res) {
@@ -147,7 +165,7 @@ export function xpNote(res) {
 /* ---------------- combos ---------------- */
 export function comboFor(run) {
   if (!COMBO_STEPS.includes(run)) return null;
-  const label = run >= 10 ? "Clinical judgment, locked in" : run >= 5 ? "Steady hands" : "On a roll";
+  const label = run >= 10 ? "Sustained focus" : run >= 5 ? "Steady hands" : "On a roll";
   return { n: run, label };
 }
 
@@ -181,6 +199,10 @@ export function shiftStatus({ day, answeredToday = 0, dueCount = 0, missesOpen =
   const complete = done === tasks.length && (answeredToday > 0 || d.cards > 0);
   return { tasks, done, total: tasks.length, complete };
 }
+
+/* Questions (not flashcards) answered on a LOCAL day. Today's shift, the
+   weekly rounds and the shift-cover grant all read this one number. */
+export const questionsOn = (rewards, day) => num(rewards?.days?.[day]?.q);
 
 /* A day "counts as a shift" in history when 8+ questions were answered. */
 export const dayShiftDone = (d) => !!d && d.q >= SHIFT_QUESTIONS;
@@ -224,6 +246,9 @@ export function advanceStreak(streak, rewards, today) {
   if (s.lastDay === today) return { streak: s, rewards, event: "same", milestone: null };
   let next, event, r = rewards, protectedDays = [];
   const gap = s.lastDay ? daysBetween(s.lastDay, today) : null;
+  /* lastDay in the future (westward travel, a clock change): keep the
+     streak as it is rather than restarting it. */
+  if (gap != null && gap <= 0) return { streak: s, rewards, event: "same", milestone: null };
   if (gap === 1) {
     const n = s.count + 1;
     next = { ...s, count: n, lastDay: today, shield: s.shield || n % 7 === 0 };

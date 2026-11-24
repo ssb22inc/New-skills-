@@ -7,6 +7,9 @@
        off whenever effects are reduced. */
 
 export const DEFAULT_PREFS = { sound: false, haptics: true, reduceFx: false };
+/* An anonymous visitor on the trial never gets vibration they did not ask
+   for: no sound, no haptics. Motion still follows the OS setting. */
+export const GUEST_PREFS = { sound: false, haptics: false, reduceFx: false };
 
 export function systemReducedMotion(win = typeof window !== "undefined" ? window : null) {
   try { return !!win?.matchMedia?.("(prefers-reduced-motion: reduce)").matches; } catch { return false; }
@@ -16,14 +19,15 @@ export function motionAllowed(prefs = DEFAULT_PREFS, win) {
   return !prefs?.reduceFx && !systemReducedMotion(win);
 }
 
-export function hapticsAllowed(prefs = DEFAULT_PREFS, nav = typeof navigator !== "undefined" ? navigator : null) {
-  return !!prefs?.haptics && !prefs?.reduceFx && typeof nav?.vibrate === "function";
+/* The OS "reduce motion" setting turns haptics off too, like Reduce effects. */
+export function hapticsAllowed(prefs = DEFAULT_PREFS, nav = typeof navigator !== "undefined" ? navigator : null, win) {
+  return !!prefs?.haptics && !prefs?.reduceFx && !systemReducedMotion(win) && typeof nav?.vibrate === "function";
 }
 
 const PATTERNS = { correct: 12, combo: [10, 40, 10], milestone: [14, 60, 14, 60, 24], recap: 18 };
 
-export function buzz(kind, prefs, nav = typeof navigator !== "undefined" ? navigator : null) {
-  if (!hapticsAllowed(prefs, nav)) return false;
+export function buzz(kind, prefs, nav = typeof navigator !== "undefined" ? navigator : null, win) {
+  if (!hapticsAllowed(prefs, nav, win)) return false;
   try { return nav.vibrate(PATTERNS[kind] ?? 10) !== false; } catch { return false; }
 }
 
