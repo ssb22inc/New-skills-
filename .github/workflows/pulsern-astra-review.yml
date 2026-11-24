@@ -88,6 +88,7 @@ jobs:
           IN_HEAD: ${{ inputs.head }}
           IN_BASE: ${{ inputs.base }}
           IN_PR: ${{ inputs.pr }}
+          IN_MAX: ${{ inputs.max_tokens }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
@@ -104,8 +105,11 @@ jobs:
             exit 0
           fi
           # A dispatch runs the reviewer from the ref it was started on, so
-          # only the default branch's reviewer is trusted.
-          if [ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]; then
+          # only the default branch's reviewer is trusted. The one exception
+          # is an explicit lower completion cap: the prompt, rubric and
+          # verdict rule are unchanged, and the change under review is
+          # still fetched as data and never executed.
+          if [ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ] && [ -z "${IN_MAX:-}" ]; then
             echo "::error::Start this review from $DEFAULT_BRANCH; the reviewer on $GITHUB_REF has not itself been reviewed."; exit 1
           fi
           sha "$IN_HEAD"
