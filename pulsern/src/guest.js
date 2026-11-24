@@ -445,6 +445,31 @@ function addDelta(base, server, local, key) {
   return b + ((Number(server?.[key]) || 0) - b) + ((Number(local?.[key]) || 0) - b);
 }
 
+function reviewStamp(entry) {
+  if (entry && Number.isFinite(Number(entry.at))) return `n:${String(Math.trunc(Number(entry.at))).padStart(16, "0")}`;
+  return typeof entry?.seen === "string" ? `d:${entry.seen}` : "";
+}
+
+/* Two devices can grade the same card. The later review stands. A tie
+   keeps this device's copy, which is the save being written. */
+function mergeScheduleMap(base, server, local) {
+  const keys = new Set([...Object.keys(base ?? {}), ...Object.keys(server ?? {}), ...Object.keys(local ?? {})]);
+  const out = {};
+  for (const key of keys) {
+    const b = base?.[key];
+    const s = server?.[key];
+    const l = local?.[key];
+    const localChanged = !sameJson(l, b);
+    const serverChanged = !sameJson(s, b);
+    if (localChanged && serverChanged) out[key] = reviewStamp(s) > reviewStamp(l) ? s : l;
+    else if (localChanged) out[key] = l;
+    else if (serverChanged) out[key] = s;
+    else if (s !== undefined) out[key] = s;
+    else if (l !== undefined) out[key] = l;
+  }
+  return out;
+}
+
 function mergeMap(base, server, local) {
   const out = { ...(base ?? {}) };
   const keys = new Set([...Object.keys(base ?? {}), ...Object.keys(server ?? {}), ...Object.keys(local ?? {})]);
@@ -757,7 +782,7 @@ export function reconcileProgress(serverBlob, localBlob, baselineBlob = null) {
   if (base.missSchedule || server.missSchedule || local.missSchedule) {
     put(merged, "missSchedule", mergeMap(base.missSchedule, server.missSchedule, unseen ? replayed.missSchedule : local.missSchedule));
   }
-  if (base.srsMap || server.srsMap || local.srsMap) put(merged, "srsMap", mergeMap(base.srsMap, server.srsMap, local.srsMap));
+  if (base.srsMap || server.srsMap || local.srsMap) put(merged, "srsMap", mergeScheduleMap(base.srsMap, server.srsMap, local.srsMap));
   put(merged, "rewards", mergeRewards(base, server, local, replayed, localReplay, serverReplay, hasBaseline, unseen, hasBaseline && sameJson(changedEntries(base.srsMap, local.srsMap), changedEntries(base.srsMap, server.srsMap)) && ((Number(local.xp) || 0) - (Number(localReplay?.xp) || 0)) === ((Number(server.xp) || 0) - (Number(serverReplay?.xp) || 0)), mergeCardOps(base, server, local)));
   if (!streakBeforeInsertedDay(base, log, [server, local])) {
     const played = replayActivity(base, log, [server, local]);

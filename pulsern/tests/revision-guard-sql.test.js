@@ -43,7 +43,7 @@ describe("revision-less saves merge into a newer row", () => {
   it("keeps an old tab's later card grade and scores its new answer", async () => {
     const stored = {
       log: [{ id: 1, cat: "Management of Care", diff: 1, correct: true, attempt: "new-client", day: "2026-11-24", source: "bank", rating: 1300 }],
-      ability: { "Management of Care": { theta: 1200, n: 0 }, Pharmacology: { theta: 1200, n: 0 } },
+      ability: { "Management of Care": { theta: 1225.6, n: 1 }, Pharmacology: { theta: 1200, n: 0 } },
       xp: 10,
       bestRun: 1,
       theme: "dim",
@@ -79,7 +79,7 @@ describe("revision-less saves merge into a newer row", () => {
     expect(saved.blob.srsMap["card-new"]).toMatchObject({ interval: 7, seen: "2026-11-25" });
     expect(saved.blob.ability.Pharmacology.n).toBe(1);
     expect(saved.blob.ability.Pharmacology.theta).toBeGreaterThan(1200);
-    expect(saved.blob.ability["Management of Care"].n).toBe(1);
+    expect(saved.blob.ability["Management of Care"]).toMatchObject({ theta: 1225.6, n: 1 });
     expect(saved.blob.ability.Pharmacology.theta).not.toBe(9999);
     expect(saved.blob.xp).toBe(40);
     expect(saved.blob.bestRun).toBe(4);
@@ -88,6 +88,58 @@ describe("revision-less saves merge into a newer row", () => {
     expect(saved.blob.rewards.days["2026-11-25"].cards).toBe(1);
     expect(saved.blob.rewards.best.streak).toBe(3);
     expect(saved.blob.streak).toMatchObject({ count: 2, lastDay: "2026-11-25" });
+    expect(saved.blob.theme).toBe("light");
+  });
+
+  it("keeps a repeated undated miss and does not rewrite calibrated ability", async () => {
+    const historical = { id: 4, cat: "Pharmacology", diff: 1, correct: false };
+    const stored = {
+      log: [historical, { id: 4, cat: "Pharmacology", diff: 1, correct: true, attempt: "fixed", day: "2026-11-24", source: "bank", rating: 2000 }],
+      ability: { Pharmacology: { theta: 1239.6, n: 8 } },
+      xp: 100,
+    };
+    const incoming = {
+      log: [historical, historical],
+      ability: { Pharmacology: { theta: 1100, n: 2 } },
+      xp: 120,
+    };
+    await db.query(`delete from public.progress where user_id = $1`, [userId]);
+    await db.query(
+      `insert into public.progress (user_id, key, blob, revision) values ($1, 'pulsern-v1', $2::jsonb, 3)`,
+      [userId, JSON.stringify(stored)],
+    );
+    await db.query(
+      `update public.progress set blob = $2::jsonb where user_id = $1 and key = 'pulsern-v1'`,
+      [userId, JSON.stringify(incoming)],
+    );
+    const saved = await row(db);
+    expect(saved.blob.log.filter((entry) => entry.correct === false)).toHaveLength(2);
+    expect(saved.blob.log.some((entry) => entry.attempt === "fixed")).toBe(true);
+    expect(saved.blob.ability.Pharmacology.n).toBe(9);
+    expect(saved.blob.ability.Pharmacology.theta).not.toBe(1100);
+    expect(saved.blob.xp).toBe(120);
+  });
+
+  it("does not replay rating-less history over a calibrated ability", async () => {
+    const historical = { id: 4, cat: "Pharmacology", diff: 1, correct: true };
+    const stored = {
+      log: [historical],
+      ability: { Pharmacology: { theta: 1239.6, n: 8 } },
+      xp: 100,
+      theme: "dim",
+    };
+    await db.query(`delete from public.progress where user_id = $1`, [userId]);
+    await db.query(
+      `insert into public.progress (user_id, key, blob, revision) values ($1, 'pulsern-v1', $2::jsonb, 3)`,
+      [userId, JSON.stringify(stored)],
+    );
+    await db.query(
+      `update public.progress set blob = $2::jsonb where user_id = $1 and key = 'pulsern-v1'`,
+      [userId, JSON.stringify({ ...stored, ability: { Pharmacology: { theta: 1100, n: 1 } }, theme: "light" })],
+    );
+    const saved = await row(db);
+    expect(saved.blob.log).toHaveLength(1);
+    expect(saved.blob.ability.Pharmacology).toMatchObject({ theta: 1239.6, n: 8 });
     expect(saved.blob.theme).toBe("light");
   });
 

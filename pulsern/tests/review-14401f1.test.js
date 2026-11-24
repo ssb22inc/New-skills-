@@ -477,6 +477,14 @@ describe("a revision conflict keeps both devices' answers", () => {
     expect(merged.ability.Pharmacology.n).toBe(inOrder.ability.Pharmacology.n);
   });
 
+  it("keeps the later flashcard grade when the older device saves second", () => {
+    const baseline = { log: [], xp: 0, rewards: emptyRewards(), srsMap: { c1: { interval: 3, due: "2026-11-26", seen: "2026-11-22" } } };
+    const server = { ...baseline, srsMap: { c1: { interval: 7, due: "2026-12-01", seen: "2026-11-24" } } };
+    const local = { ...baseline, srsMap: { c1: { interval: 1, due: "2026-11-24", seen: "2026-11-23" } } };
+    const merged = blobForSave(server, local, baseline);
+    expect(merged.srsMap.c1).toMatchObject({ interval: 7, seen: "2026-11-24" });
+  });
+
   it("keeps a shift cover earned on the other device when this device only changes a setting", () => {
     const week = "2026-11-23";
     const baseline = { log: [], xp: 0, ability: emptyAbility(ABILITY_CATS), rewards: emptyRewards(), theme: "light", srsMap: {} };

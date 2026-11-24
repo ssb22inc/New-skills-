@@ -62,53 +62,101 @@ as $$
   ) merged
 $$;
 
-create or replace function public.progress_merge_log(stored jsonb, incoming jsonb)
-returns jsonb
-language sql
+create or replace function public.progress_answer_matches(stored jsonb, incoming jsonb)
+returns boolean
+language plpgsql
 immutable
 set search_path = public
 as $$
-  select coalesce(jsonb_agg(entry order by ord), '[]'::jsonb)
-  from (
-    select entry, ord
-      from jsonb_array_elements(case when jsonb_typeof(stored) = 'array' then stored else '[]'::jsonb end)
-        with ordinality as kept(entry, ord)
-    union all
-    select entry, 1000000 + ord
-      from jsonb_array_elements(case when jsonb_typeof(incoming) = 'array' then incoming else '[]'::jsonb end)
-        with ordinality as added(entry, ord)
-     where not exists (
-       select 1
-         from jsonb_array_elements(case when jsonb_typeof(stored) = 'array' then stored else '[]'::jsonb end) as already
-        where already->>'id' is not distinct from entry->>'id'
-          and already->>'correct' is not distinct from entry->>'correct'
-          and (
-            not (already ? 'day') or not (entry ? 'day') or already->>'day' = entry->>'day'
-          )
-     )
-  ) as combined
+declare
+  key text;
+begin
+  if jsonb_typeof(stored) <> 'object' or jsonb_typeof(incoming) <> 'object' then
+    return false;
+  end if;
+  if coalesce(stored->>'attempt', '') <> '' and stored->>'attempt' = incoming->>'attempt' then
+    return true;
+  end if;
+  if stored ? 'day' and incoming ? 'day'
+     and stored->>'day' = incoming->>'day'
+     and stored->>'id' is not distinct from incoming->>'id'
+     and stored->>'correct' is not distinct from incoming->>'correct' then
+    return true;
+  end if;
+  -- An undated legacy row can echo one stored row. It must not swallow a
+  -- later repeat of the same outcome, so the caller consumes each match once.
+  if coalesce(incoming->>'attempt', '') = '' and not (incoming ? 'day')
+     and stored->>'id' is not distinct from incoming->>'id'
+     and stored->>'correct' is not distinct from incoming->>'correct' then
+    for key in select jsonb_object_keys(incoming) loop
+      if stored->>key is distinct from incoming->>key then
+        return false;
+      end if;
+    end loop;
+    return true;
+  end if;
+  return false;
+end;
 $$;
 
-create or replace function public.progress_ability_from_log(answer_log jsonb)
+create or replace function public.progress_merge_log(stored jsonb, incoming jsonb)
 returns jsonb
 language plpgsql
 immutable
 set search_path = public
 as $$
 declare
-  cats text[] := array[
-    'Management of Care',
-    'Safety & Infection Control',
-    'Health Promotion & Maintenance',
-    'Psychosocial Integrity',
-    'Basic Care & Comfort',
-    'Pharmacology',
-    'Reduction of Risk',
-    'Physiological Adaptation'
-  ];
-  ability jsonb := '{}'::jsonb;
-  cat text;
-  row jsonb;
+  stored_rows jsonb[] := '{}';
+  consumed boolean[] := '{}';
+  entry jsonb;
+  i int;
+  found boolean;
+  merged jsonb := '[]'::jsonb;
+  added jsonb := '[]'::jsonb;
+begin
+  if jsonb_typeof(stored) = 'array' then
+    select coalesce(array_agg(value order by ord), '{}')
+      into stored_rows
+      from jsonb_array_elements(stored) with ordinality as kept(value, ord);
+  end if;
+  if stored_rows is null then
+    stored_rows := '{}';
+  end if;
+  if coalesce(array_length(stored_rows, 1), 0) > 0 then
+    consumed := array_fill(false, array[array_length(stored_rows, 1)]);
+    for i in 1..array_length(stored_rows, 1) loop
+      merged := merged || jsonb_build_array(stored_rows[i]);
+    end loop;
+  end if;
+  if jsonb_typeof(incoming) = 'array' then
+    for entry in select value from jsonb_array_elements(incoming) as incoming_rows(value) loop
+      found := false;
+      if coalesce(array_length(stored_rows, 1), 0) > 0 then
+        for i in 1..array_length(stored_rows, 1) loop
+          if not consumed[i] and public.progress_answer_matches(stored_rows[i], entry) then
+            consumed[i] := true;
+            found := true;
+            exit;
+          end if;
+        end loop;
+      end if;
+      if not found then
+        merged := merged || jsonb_build_array(entry);
+        added := added || jsonb_build_array(entry);
+      end if;
+    end loop;
+  end if;
+  return jsonb_build_object('log', merged, 'added', added);
+end;
+$$;
+
+create or replace function public.progress_apply_answer(ability jsonb, answer_row jsonb)
+returns jsonb
+language plpgsql
+immutable
+set search_path = public
+as $$
+declare
   qcat text;
   diff int;
   source text;
@@ -119,43 +167,31 @@ declare
   expected double precision;
   actual double precision;
 begin
-  foreach cat in array cats loop
-    ability := ability || jsonb_build_object(cat, jsonb_build_object('theta', 1200, 'n', 0));
-  end loop;
-  if jsonb_typeof(answer_log) <> 'array' then
-    return ability;
+  if jsonb_typeof(answer_row) <> 'object' or not (answer_row ? 'cat') or not (answer_row ? 'correct') then
+    return coalesce(ability, '{}'::jsonb);
   end if;
-  for row in select value from jsonb_array_elements(answer_log) as answers(value) loop
-    if jsonb_typeof(row) <> 'object' or not (row ? 'cat') or not (row ? 'correct') then
-      continue;
-    end if;
-    qcat := row->>'cat';
-    if qcat is null or qcat = '' then
-      continue;
-    end if;
-    if not (ability ? qcat) then
-      ability := ability || jsonb_build_object(qcat, jsonb_build_object('theta', 1200, 'n', 0));
-    end if;
-    theta := (ability->qcat->>'theta')::double precision;
-    n := coalesce((ability->qcat->>'n')::int, 0);
-    diff := nullif(row->>'diff', '')::int;
-    source := row->>'source';
-    if source in ('builtin', 'case') or coalesce(jsonb_typeof(row->'rating'), '') <> 'number' then
-      rating := case diff when 1 then 1100 when 2 then 1300 when 3 then 1500 else 1300 end;
-    else
-      rating := (row->>'rating')::double precision;
-    end if;
-    k := case when n < 10 then 40 when n < 30 then 24 else 12 end;
-    expected := 1.0 / (1.0 + power(10::double precision, (rating - theta) / 400.0));
-    actual := case when coalesce((row->>'correct')::boolean, false) then 1 else 0 end;
-    theta := theta + k * (actual - expected);
-    ability := jsonb_set(
-      ability,
-      array[qcat],
-      jsonb_build_object('theta', theta, 'n', n + 1)
-    );
-  end loop;
-  return ability;
+  qcat := answer_row->>'cat';
+  if qcat is null or qcat = '' then
+    return coalesce(ability, '{}'::jsonb);
+  end if;
+  ability := coalesce(ability, '{}'::jsonb);
+  if not (ability ? qcat) or jsonb_typeof(ability->qcat) <> 'object' then
+    ability := ability || jsonb_build_object(qcat, jsonb_build_object('theta', 1200, 'n', 0));
+  end if;
+  theta := coalesce((ability->qcat->>'theta')::double precision, 1200);
+  n := coalesce((ability->qcat->>'n')::int, 0);
+  diff := nullif(answer_row->>'diff', '')::int;
+  source := answer_row->>'source';
+  if source in ('builtin', 'case') or coalesce(jsonb_typeof(answer_row->'rating'), '') <> 'number' then
+    rating := case diff when 1 then 1100 when 2 then 1300 when 3 then 1500 else 1300 end;
+  else
+    rating := (answer_row->>'rating')::double precision;
+  end if;
+  k := case when n < 10 then 40 when n < 30 then 24 else 12 end;
+  expected := 1.0 / (1.0 + power(10::double precision, (rating - theta) / 400.0));
+  actual := case when coalesce((answer_row->>'correct')::boolean, false) then 1 else 0 end;
+  theta := theta + k * (actual - expected);
+  return jsonb_set(ability, array[qcat], jsonb_build_object('theta', theta, 'n', n + 1));
 end;
 $$;
 
@@ -289,17 +325,23 @@ as $$
 declare
   base jsonb := case when jsonb_typeof(stored) = 'object' then stored else '{}'::jsonb end;
   added jsonb := case when jsonb_typeof(incoming) = 'object' then incoming else '{}'::jsonb end;
-  merged_log jsonb := public.progress_merge_log(base->'log', added->'log');
+  log_parts jsonb := public.progress_merge_log(base->'log', added->'log');
+  merged_log jsonb := log_parts->'log';
   result jsonb := base;
+  ability jsonb := case when jsonb_typeof(base->'ability') = 'object' then base->'ability' else '{}'::jsonb end;
+  answer jsonb;
   key text;
   structural text[] := array[
     'log', 'ability', 'xp', 'bestRun', 'run', 'rewards', 'srsMap', 'missSchedule',
     'streak', 'daily', 'fcNew', 'examResults'
   ];
 begin
+  for answer in select value from jsonb_array_elements(coalesce(log_parts->'added', '[]'::jsonb)) as new_answers(value) loop
+    ability := public.progress_apply_answer(ability, answer);
+  end loop;
   result := result || jsonb_build_object(
     'log', merged_log,
-    'ability', public.progress_ability_from_log(merged_log),
+    'ability', ability,
     'srsMap', public.progress_merge_card_map(base->'srsMap', added->'srsMap'),
     'missSchedule', public.progress_merge_card_map(base->'missSchedule', added->'missSchedule'),
     'rewards', public.progress_merge_rewards(base->'rewards', added->'rewards')
