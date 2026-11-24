@@ -12,7 +12,7 @@
    account that already has answer history does not take the trial.
    Each trial answer is stored as builtin:<id>. A shared-bank question
    with the same number is bank:<id> and is a different question. */
-import { answerXp, answerCountsForRun, emptyRewards, MAX_COVERS, advanceStreak, streakDayCounted } from "./rewards.js";
+import { answerXp, answerCountsForRun, emptyRewards, MAX_COVERS, advanceStreak, streakDayCounted, bumpDay } from "./rewards.js";
 import { applyAnswer, stampedQuestion } from "./answer-apply.js";
 import { emptyAbility, ABILITY_CATS, undoAbility } from "./ability-engine.js";
 import { canonicalKey } from "./question-key.js";
@@ -444,6 +444,26 @@ function replayUnseen(base, rows) {
   return state;
 }
 
+function undoReviewStep(schedule, key, correct) {
+  const entry = schedule?.[key];
+  if (!entry) return schedule ?? {};
+  const interval = Number(entry.interval) || 0;
+  if (!correct) {
+    if (interval !== 1) return schedule;
+    const next = { ...schedule };
+    delete next[key];
+    return next;
+  }
+  if (interval === 3) {
+    const next = { ...schedule };
+    delete next[key];
+    return next;
+  }
+  const prev = (interval - 1) / 2;
+  if (Number.isInteger(prev) && prev >= 1) return { ...schedule, [key]: { ...entry, interval: prev } };
+  return schedule;
+}
+
 function questionXp(logBefore, row) {
   const words = Number(row?.words);
   const stem = Number.isFinite(words) && words > 0 ? Array.from({ length: words }, () => "w").join(" ") : (row?.stem || "");
@@ -492,17 +512,45 @@ function replayOrdered(base, mergedLog) {
   const redoRows = (base.log ?? []).filter((row) => redo.has(attemptId(row))).sort((a, b) => Number(b.at) - Number(a.at));
   for (const row of redoRows) {
     const before = prefixRows.concat(redoRows.filter((item) => Number(item.at) < Number(row.at)));
-    start.xp = Math.max(0, (Number(start.xp) || 0) - questionXp(before, row));
+    const gained = questionXp(before, row);
+    const scored = answerXp({
+      q: { id: row.id, key: row.key, source: row.source, cat: row.cat, diff: row.diff, stem: Number(row.words) > 0 ? Array.from({ length: Number(row.words) }, () => "w").join(" ") : "" },
+      correct: !!row.correct,
+      ms: Number.isFinite(row.ms) ? row.ms : Infinity,
+      log: before,
+    });
+    start.xp = Math.max(0, (Number(start.xp) || 0) - gained);
     const rating = Number(row.rating);
     start.ability = undoAbility(start.ability, {
       id: row.id, key: row.key, source: row.source, cat: row.cat, diff: row.diff,
     }, !!row.correct, Number.isFinite(rating) ? { [row.id]: { rating } } : {});
+    if (row.day && start.rewards) {
+      start.rewards = bumpDay(start.rewards, row.day, {
+        q: -1, ok: row.correct ? -1 : 0, xp: -gained, fixes: scored.reason === "fix" ? -1 : 0,
+      });
+    }
+    if (start.daily?.day === row.day) start.daily = { ...start.daily, answered: Math.max(0, (start.daily.answered ?? 0) - 1) };
+    if (row.key && before.some((item) => item?.key === row.key && item.correct === false)) {
+      start.missSchedule = undoReviewStep(start.missSchedule, row.key, !!row.correct);
+    }
   }
   const suffix = (mergedLog ?? []).filter((row) => {
     const id = attemptId(row);
     return id && (redo.has(id) || !baseAttempts.has(id));
   });
   return { state: replayUnseen(start, suffix), fromZero: false, redo: true };
+}
+
+function streakFrom(base, days) {
+  let streak = base.streak;
+  let rewards = base.rewards ?? emptyRewards();
+  for (const day of days) {
+    if (streakDayCounted(streak, null, day)) continue;
+    const adv = advanceStreak(streak, rewards, day);
+    streak = adv.streak;
+    rewards = adv.rewards;
+  }
+  return streak;
 }
 
 function activityDays(base, log, blobs) {
@@ -578,17 +626,11 @@ export function reconcileProgress(serverBlob, localBlob, baselineBlob = null) {
       if (counted) daily = { ...daily, answered: (daily.answered ?? 0) + counted };
     }
     put(merged, "daily", daily);
-    if (cardDays.length) {
-      let streak = base.streak;
-      let rewards = base.rewards ?? emptyRewards();
-      for (const day of days) {
-        if (streakDayCounted(streak, null, day)) continue;
-        const adv = advanceStreak(streak, rewards, day);
-        streak = adv.streak;
-        rewards = adv.rewards;
-      }
-      put(merged, "streak", streak);
-    } else put(merged, "streak", replayed.streak);
+    put(merged, "streak", cardDays.length ? streakFrom(base, days) : replayed.streak);
+  } else if (cardDays.length) {
+    if (base.ability || server.ability || local.ability) put(merged, "ability", mergeMap(base.ability, server.ability, local.ability));
+    if (base.daily != null || server.daily != null || local.daily != null) put(merged, "daily", choose(base.daily, server.daily, local.daily));
+    put(merged, "streak", streakFrom(base, days));
   } else {
     if (base.ability || server.ability || local.ability) put(merged, "ability", mergeMap(base.ability, server.ability, local.ability));
     if (base.daily != null || server.daily != null || local.daily != null) put(merged, "daily", choose(base.daily, server.daily, local.daily));

@@ -6,7 +6,8 @@ begin;
 
 update public.progress as live
    set blob = saved.blob,
-       updated_at = saved.updated_at
+       updated_at = saved.updated_at,
+       revision = live.revision + 1
   from backup_20261124.progress as saved
  where live.user_id = saved.user_id
    and live.key = saved.key;

@@ -333,6 +333,44 @@ describe("a revision conflict keeps both devices' answers", () => {
     for (const cat of ABILITY_CATS) if (cat !== "Pharmacology") expect(merged.ability[cat]).toEqual({ theta: 1200, n: 0 });
   });
 
+  it("does not count a saved answer twice when an older answer arrives", () => {
+    const baseline = { log: [], xp: 0, ability: emptyAbility(ABILITY_CATS), rewards: emptyRewards(), daily: null, missSchedule: {}, streak: null, bestRun: 0 };
+    const taken = { ms: 9000, today: "2026-11-24", words: 8, rating: 1300 };
+    const first = { id: 1, key: "bank:1", source: "bank", cat: "Pharmacology", diff: 1, stem: "eight words are enough here now" };
+    const second = { id: 2, key: "bank:2", source: "bank", cat: "Management of Care", diff: 1, stem: "eight words are enough here now" };
+    const newer = applyAnswer(baseline, { q: first, correct: true, attempt: "newer", at: 2000, ...taken, calibration: { 1: { rating: 1300 } } }).state;
+    const older = applyAnswer(baseline, { q: second, correct: true, attempt: "older", at: 1000, ...taken, calibration: { 2: { rating: 1300 } } }).state;
+    const inOrder = applyAnswer(older, { q: first, correct: true, attempt: "newer", at: 2000, ...taken, calibration: { 1: { rating: 1300 } } }).state;
+    const merged = blobForSave(inOrder, newer, newer);
+    expect(merged.log.map((row) => row.attempt)).toEqual(["older", "newer"]);
+    expect(merged.daily).toMatchObject({ day: "2026-11-24", answered: 2 });
+    expect(merged.rewards.days["2026-11-24"].q).toBe(2);
+    expect(merged.xp).toBe(inOrder.xp);
+  });
+
+  it("combines card days from two devices into one streak", () => {
+    const baseline = {
+      log: [], xp: 0, ability: {}, rewards: emptyRewards(), srsMap: {}, bestRun: 0,
+      streak: { count: 5, lastDay: "2026-11-22", shield: true },
+      daily: { day: "2026-11-22", answered: 4 },
+    };
+    const monday = {
+      ...baseline, xp: 5,
+      rewards: { ...bumpDay(emptyRewards(), "2026-11-23", { cards: 1, xp: 5 }), cardOps: [{ id: "mon", day: "2026-11-23", xp: 5, cards: 1 }] },
+      streak: { count: 6, lastDay: "2026-11-23", shield: true },
+      srsMap: { c1: { interval: 3, due: "2026-11-26", seen: "2026-11-23" } },
+    };
+    const tuesday = {
+      ...baseline, xp: 5,
+      rewards: { ...bumpDay(emptyRewards(), "2026-11-24", { cards: 1, xp: 5 }), cardOps: [{ id: "tue", day: "2026-11-24", xp: 5, cards: 1 }] },
+      streak: { count: 6, lastDay: "2026-11-24", shield: false },
+      srsMap: { c2: { interval: 3, due: "2026-11-27", seen: "2026-11-24" } },
+    };
+    const merged = blobForSave(monday, tuesday, baseline);
+    expect(merged.streak).toMatchObject({ count: 7, lastDay: "2026-11-24", shield: true });
+    expect(merged.rewards.cardOps.map((op) => op.id).sort()).toEqual(["mon", "tue"]);
+  });
+
   it("rejects a progress update that does not advance the revision", () => {
     const sql = fs.readFileSync(new URL("../supabase/migrations/022_progress_revision_guard.sql", import.meta.url), "utf8");
     expect(sql).toMatch(/before update on public\.progress/i);
@@ -344,6 +382,8 @@ describe("a revision conflict keeps both devices' answers", () => {
     expect(() => guard(4, 4)).toThrow(/revision conflict/);
     expect(() => guard(4, null)).toThrow(/revision conflict/);
     expect(guard(4, 5)).toBe(5);
+    const rollback = fs.readFileSync(new URL("../supabase/rollback/rollback_relabel_legacy_progress_20261124.sql", import.meta.url), "utf8");
+    expect(rollback).toMatch(/revision = live\.revision \+ 1/);
   });
 
   it("scores a delayed older miss before the newer answer already saved", () => {
