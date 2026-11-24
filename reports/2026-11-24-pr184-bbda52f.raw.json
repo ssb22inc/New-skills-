@@ -1,0 +1,103 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "7754eb156d043fd74a4c9b76fbbb2a0b3dc86e4e",
+    "head": "bbda52fda451efa5b470b2996f00ef0688b2f5e0",
+    "pr": "184"
+  },
+  "reviewedAt": "2026-11-24T08:39:44.760Z",
+  "filesReviewed": [
+    "pulsern/PULSERN_BUILD.md",
+    "pulsern/assets/App.portable.jsx",
+    "pulsern/ops/capture-product-screenshots.mjs",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/public/product/pulsern-adaptive-practice.png",
+    "pulsern/public/product/pulsern-lab-reference.png",
+    "pulsern/public/product/pulsern-today-dashboard.png",
+    "pulsern/src/App.jsx",
+    "pulsern/src/app-routing.js",
+    "pulsern/src/auth.jsx",
+    "pulsern/src/case-studies.js",
+    "pulsern/src/effects.js",
+    "pulsern/src/guest.js",
+    "pulsern/src/guest.jsx",
+    "pulsern/src/lab-fab.jsx",
+    "pulsern/src/lab-panel.jsx",
+    "pulsern/src/progress-load.js",
+    "pulsern/src/question-review.js",
+    "pulsern/src/rewards-ui.jsx",
+    "pulsern/src/rewards.js",
+    "pulsern/src/sign-out.js",
+    "pulsern/src/state.js",
+    "pulsern/tests/browser/announcer-harness.jsx",
+    "pulsern/tests/browser/announcer.html",
+    "pulsern/tests/browser/guest-harness.jsx",
+    "pulsern/tests/browser/guest.html",
+    "pulsern/tests/capture-fonts.test.js",
+    "pulsern/tests/card-nav-browser.test.js",
+    "pulsern/tests/effects.test.js",
+    "pulsern/tests/exam-leave-browser.test.js",
+    "pulsern/tests/flashcards-undo-browser.test.js",
+    "pulsern/tests/guest-browser.test.js",
+    "pulsern/tests/guest.test.js",
+    "pulsern/tests/lab-fab-browser.test.js",
+    "pulsern/tests/progress-load-browser.test.js",
+    "pulsern/tests/question-nav-browser.test.js",
+    "pulsern/tests/question-review.test.js",
+    "pulsern/tests/read-aloud-hook.test.js",
+    "pulsern/tests/review2-blockers.test.js",
+    "pulsern/tests/review2-fixes.test.js",
+    "pulsern/tests/review3-browser.test.js",
+    "pulsern/tests/review3.test.js",
+    "pulsern/tests/rewards.test.js",
+    "pulsern/tests/state-migration.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/guest.jsx",
+      "line": 38,
+      "title": "Failed device saves silently discard trial answers during sign-up",
+      "problem": "saveGuest returns false when localStorage cannot be written, but this effect ignores the result. The trial continues and displays \"Saved on this device for 7 days\". Creating an account unmounts GuestTrial, while the signed-in handoff reads only localStorage, so answers held only in React state disappear.",
+      "failure_scenario": "localStorage.setItem throws QuotaExceededError during the trial. The student completes five questions and selects Create free account. The account receives either no trial answers or only the older subset successfully stored, despite the save confirmation.",
+      "fix": "Track device-save failures and do not claim persistence when a write fails. Preserve the current trial through the authentication transition using an explicit in-memory handoff, or require a successful retry before discarding the component's only copy. Add a browser test where reads succeed but setItem throws, then complete the sign-up transition.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/guest.js",
+      "line": 116,
+      "title": "Trial-question aliases depend on unrelated database identity values",
+      "problem": "linkBuiltInGuest requires both the built-in numeric id and stem to match. A shared-bank copy of the same built-in question can have a different generated database id. In that case the helper supplies no guest alias, so QBank treats the already-answered question as fresh and answerXp awards first-answer XP again.",
+      "failure_scenario": "The student answers built-in question 7 during the trial, producing guest-7 after import. The approved bank contains that same stem under id 700 because it was seeded after other rows. New questions serves it again, and a correct answer receives full XP rather than repeat handling.",
+      "fix": "Resolve copies using a stable content/source identity rather than equality between built-in and database ids. For existing rows, match the verified built-in content independently of the database id and attach the corresponding guest alias. Test a different-id/same-content bank copy through both fresh-pool exclusion and XP calculation.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/App.jsx",
+      "line": 944,
+      "title": "Captured run state loses increments when scored answers arrive in a batch",
+      "problem": "The previous functional setRun updater accumulated every recording. The replacement calculates nextRun from the render-captured run and then calls setRun(nextRun). Two correct recordings through the same callback therefore both write the same increment, undercounting the run and personal best. The new tests exercise substitute record handlers rather than this App handler.",
+      "failure_scenario": "Starting at run 0, deliver several correct exam results through one captured record callback: each calculates nextRun as 1, so the resulting run and bestRun are 1 instead of the number of consecutive correct answers. The supplied diff omits ExamCenter's scoring implementation, so whether it refreshes the callback between results could not be verified.",
+      "fix": "Accumulate per-answer run state using a reducer or synchronously advanced state reference, preserving correct return values for combo feedback. Add an integration test that sends a multi-item exam result through the real App recording handler and verifies run and bestRun.",
+      "confidence": "medium"
+    }
+  ],
+  "usage": {
+    "promptTokens": 234045,
+    "completionTokens": 11718,
+    "reasoningTokens": 10876,
+    "costUsd": 0.702291
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Do not merge yet. The guest flow can discard answers after a device-storage failure, and its question-linking logic can re-serve trial questions as new. The run-counter rewrite also introduces a batch-recording regression that needs verification against the real exam scorer. Review was limited to the supplied diffs and images; tests and build were not executed.",
+  "counts": {
+    "blocker": 1,
+    "major": 2,
+    "minor": 0
+  }
+}
