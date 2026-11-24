@@ -181,6 +181,26 @@ function mergeLogs(serverLog, localLog, baselineLog = null) {
 /* Rows that remember when they were taken trade places by that time.
    Rows that do not stay where the merge left them, so an old history
    is not reshuffled just because a new answer carries a clock. */
+function answerSeq(row, index) {
+  const seq = Number(row?.seq);
+  return Number.isFinite(seq) ? seq : index;
+}
+
+/* Time first, then the device's own sequence, then the row's place in
+   the log. A shared millisecond does not make two answers simultaneous. */
+function compareAnswerTime(a, aIndex, b, bIndex) {
+  const at = Number(a?.at);
+  const bt = Number(b?.at);
+  if (Number.isFinite(at) && Number.isFinite(bt) && at !== bt) return at - bt;
+  const seq = answerSeq(a, aIndex) - answerSeq(b, bIndex);
+  if (seq) return seq;
+  return aIndex - bIndex;
+}
+
+function appliedBefore(item, row) {
+  return compareAnswerTime(item, item._i ?? 0, row, row._i ?? 0) < 0;
+}
+
 function orderAnswers(rows) {
   const timed = [];
   rows.forEach((row, index) => {
@@ -189,7 +209,7 @@ function orderAnswers(rows) {
   });
   if (timed.length < 2) return rows;
   const slots = timed.map((item) => item.index);
-  const ordered = [...timed].sort((a, b) => a.at - b.at || a.index - b.index);
+  const ordered = [...timed].sort((a, b) => compareAnswerTime(rows[a.index], a.index, rows[b.index], b.index));
   const out = rows.slice();
   slots.forEach((slot, i) => { out[slot] = rows[ordered[i].index]; });
   return out;
@@ -275,9 +295,23 @@ function mergeFcNew(base, server, local) {
     const day = [s.day, l.day].filter((item) => typeof item === "string").sort().pop() ?? null;
     return l.day === day ? l : s;
   }
-  const ids = mergeIdSet(b.ids, s.ids, l.ids);
-  const counted = Array.isArray(s.ids) || Array.isArray(l.ids) || Array.isArray(b.ids);
-  return { day: s.day ?? null, count: counted ? ids.length : Math.max(0, addNum(b.count, s.count, l.count)), ...(ids.length ? { ids } : {}) };
+  const listed = (value) => (Array.isArray(value) ? value.filter((id) => id != null) : null);
+  const baseIds = listed(b.ids) ?? [];
+  const serverIds = listed(s.ids);
+  const localIds = listed(l.ids);
+  const anonymous = Math.max(0, (Number(b.count) || 0) - baseIds.length);
+  const added = [];
+  const pushNew = (id) => {
+    if (!baseIds.includes(id) && !added.includes(id)) added.push(id);
+  };
+  for (const id of serverIds ?? []) pushNew(id);
+  for (const id of localIds ?? []) pushNew(id);
+  const removed = new Set();
+  if (serverIds) for (const id of baseIds) if (!serverIds.includes(id)) removed.add(id);
+  if (localIds) for (const id of baseIds) if (!localIds.includes(id)) removed.add(id);
+  const ids = [...baseIds.filter((id) => !removed.has(id)), ...added];
+  const count = Math.max(anonymous + ids.length, Number(s.count) || 0, Number(l.count) || 0);
+  return { day: s.day ?? null, count, ...(ids.length ? { ids } : {}) };
 }
 
 function dayNum(rewards, day, key) {
@@ -364,13 +398,19 @@ function mergeRewards(base, server, local, replayed, localReplay, serverReplay, 
     badgesSeen[key] = Math.max(Number(b?.badgesSeen?.[key]) || 0, Number(s?.badgesSeen?.[key]) || 0, Number(l?.badgesSeen?.[key]) || 0);
   }
   const ranks = [b?.rankHigh, s?.rankHigh, l?.rankHigh].filter((rank) => Number.isInteger(rank));
-  const coverOf = (side, replay) => (Number(side?.covers) || 0) - (Number(replay?.rewards?.covers) || 0);
-  const covers = Math.max(0, Math.min(MAX_COVERS, (Number(replayRewards.covers) || 0) + coverOf(l, localReplay) + (duplicate ? 0 : coverOf(s, serverReplay))));
+  const baseWeeks = new Set(b?.coverWeeks ?? []);
+  const coverWeeks = [...new Set([...(b?.coverWeeks ?? []), ...(s?.coverWeeks ?? []), ...(l?.coverWeeks ?? [])])];
+  const grants = (side) => (side?.coverWeeks ?? []).filter((week) => !baseWeeks.has(week)).length;
+  const consumed = (side) => Math.max(0, grants(side) - ((Number(side?.covers) || 0) - (Number(b?.covers) || 0)));
+  const serverUsed = consumed(s);
+  const localUsed = consumed(l);
+  const used = serverUsed === localUsed && sameJson(s?.coverDays, l?.coverDays) ? serverUsed : serverUsed + localUsed;
+  const covers = Math.max(0, Math.min(MAX_COVERS, (Number(b?.covers) || 0) + coverWeeks.filter((week) => !baseWeeks.has(week)).length - used));
   return {
     ...(l ?? s ?? b),
     days,
     covers,
-    coverWeeks: [...new Set([...(b?.coverWeeks ?? []), ...(s?.coverWeeks ?? []), ...(l?.coverWeeks ?? [])])],
+    coverWeeks,
     coverDays: [...new Set([...(b?.coverDays ?? []), ...(s?.coverDays ?? []), ...(l?.coverDays ?? [])])],
     best,
     milestones: [...new Set([...(b?.milestones ?? []), ...(s?.milestones ?? []), ...(l?.milestones ?? [])])].filter(Number.isFinite),
@@ -383,6 +423,17 @@ function mergeRewards(base, server, local, replayed, localReplay, serverReplay, 
 
 /* A save that is no longer the newest snapshot must not become the
    baseline. The next save still has to see what the other device wrote. */
+/* Same rule as migration 022. A missing or unchanged revision is an
+   older client: keep the write and advance the counter. A client that
+   sends a revision must send a greater one. */
+export function progressRevisionOnUpdate(oldRevision, incoming) {
+  const oldRev = Number(oldRevision) || 0;
+  if (incoming == null || Number(incoming) === oldRev) return { revision: oldRev + 1, legacy: true };
+  const next = Number(incoming);
+  if (!Number.isFinite(next) || next < oldRev) throw new Error("progress revision conflict");
+  return { revision: next, legacy: false };
+}
+
 export function bindCommittedProgress(state, commit) {
   if (!commit?.current || commit.seenEpoch !== commit.epoch) return state;
   return { accepted: commit.blob, baseline: commit.blob, revision: Number(commit.revision) || 0 };
@@ -505,9 +556,12 @@ function replayOrdered(base, mergedLog) {
   if (!redo.size) return { state: replayUnseen(base, mergedLog), fromZero: false, redo: false };
   const prefixRows = (base.log ?? []).filter((row) => !redo.has(attemptId(row)));
   const start = { ...blankScore(base), log: prefixRows.map((row) => ({ ...row })) };
-  const redoRows = (base.log ?? []).filter((row) => redo.has(attemptId(row))).sort((a, b) => Number(b.at) - Number(a.at));
+  const redoRows = (base.log ?? [])
+    .map((row, index) => ({ ...row, _i: index }))
+    .filter((row) => redo.has(attemptId(row)))
+    .sort((a, b) => compareAnswerTime(b, b._i, a, a._i));
   for (const row of redoRows) {
-    const before = prefixRows.concat(redoRows.filter((item) => Number(item.at) < Number(row.at)));
+    const before = prefixRows.concat(redoRows.filter((item) => appliedBefore(item, row)));
     const gained = questionXp(before, row);
     const scored = answerXp({
       q: { id: row.id, key: row.key, source: row.source, cat: row.cat, diff: row.diff, stem: Number(row.words) > 0 ? Array.from({ length: Number(row.words) }, () => "w").join(" ") : "" },

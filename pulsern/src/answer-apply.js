@@ -47,6 +47,15 @@ export function newAttemptId() {
   return `live:${nonce}`;
 }
 
+/* Same-millisecond answers on one device still have an order. The counter
+   only moves forward in this tab, so a reload cannot reuse a sequence
+   number for a timestamp that already passed. */
+let deviceAnswerSeq = 0;
+export function nextAnswerSeq() {
+  deviceAnswerSeq += 1;
+  return deviceAnswerSeq;
+}
+
 /* `state` is the plain progress object (log, xp, ability, streak,
    rewards, daily, missSchedule, run, bestRun). A repeated attempt id
    is ignored. An unclassified question is stored and then left out of
@@ -62,6 +71,7 @@ export function applyAnswer(state, input) {
   const correct = !!input.correct;
   const calibration = input.calibration ?? {};
   const at = Number.isFinite(Number(input.at)) ? Number(input.at) : Date.now();
+  const seq = Number.isFinite(Number(input.seq)) ? Number(input.seq) : nextAnswerSeq();
   const res = q.unclassified
     ? { xp: 0, reason: "unclassified", base: 0, bonus: 0, fix: false }
     : answerXp({ q, correct, ms, log });
@@ -77,6 +87,7 @@ export function applyAnswer(state, input) {
     correct,
     ...(input.attempt != null ? { attempt: String(input.attempt) } : {}),
     at,
+    seq,
     ...(today ? { day: today } : {}),
     ...(q.population ? { pop: q.population } : {}),
     ...(Number.isFinite(ms) ? { ms } : {}),

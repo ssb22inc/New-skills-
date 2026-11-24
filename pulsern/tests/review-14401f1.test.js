@@ -8,7 +8,7 @@ import { emptyRewards, bumpDay, reverseCardDay, recordCardGrade } from "../src/r
 import { migrateBlob } from "../src/state.js";
 import { signOutAndForgetTrial } from "../src/sign-out.js";
 import fs from "node:fs";
-import { recoverProgressWrite, blobForSave, reconcileProgress, storageOrNull, createProgressEpoch, noteAccountRead, saveGuest, holdGuestTrial, mergeGuestIntoBlob, bindCommittedProgress, readGuestForHandoff, releaseHeldGuest } from "../src/guest.js";
+import { recoverProgressWrite, blobForSave, reconcileProgress, storageOrNull, createProgressEpoch, noteAccountRead, saveGuest, holdGuestTrial, mergeGuestIntoBlob, bindCommittedProgress, readGuestForHandoff, releaseHeldGuest, progressRevisionOnUpdate } from "../src/guest.js";
 import { refreshedUnresolved, latestResults } from "../src/question-review.js";
 
 const answer = (attempt, id = 1) => ({ id, key: `bank:${id}`, source: "bank", cat: "Pharmacology", diff: 1, correct: true, attempt });
@@ -408,16 +408,70 @@ describe("a revision conflict keeps both devices' answers", () => {
   it("rejects a progress update that does not advance the revision", () => {
     const sql = fs.readFileSync(new URL("../supabase/migrations/022_progress_revision_guard.sql", import.meta.url), "utf8");
     expect(sql).toMatch(/before update on public\.progress/i);
-    expect(sql).toMatch(/new\.revision <= old\.revision/);
-    const guard = (oldRevision, newRevision) => {
-      if (newRevision == null || newRevision <= oldRevision) throw new Error("progress revision conflict");
-      return newRevision;
-    };
-    expect(() => guard(4, 4)).toThrow(/revision conflict/);
-    expect(() => guard(4, null)).toThrow(/revision conflict/);
-    expect(guard(4, 5)).toBe(5);
+    expect(sql).toMatch(/new\.revision < old\.revision/);
+    expect(progressRevisionOnUpdate(4, undefined)).toEqual({ revision: 5, legacy: true });
+    expect(progressRevisionOnUpdate(4, 5)).toEqual({ revision: 5, legacy: false });
+    expect(() => progressRevisionOnUpdate(4, 3)).toThrow(/revision conflict/);
     const rollback = fs.readFileSync(new URL("../supabase/rollback/rollback_relabel_legacy_progress_20261124.sql", import.meta.url), "utf8");
     expect(rollback).toMatch(/revision = live\.revision \+ 1/);
+  });
+
+  it("keeps a save that does not send a revision and rejects one that sends an older revision", () => {
+    const sql = fs.readFileSync(new URL("../supabase/migrations/022_progress_revision_guard.sql", import.meta.url), "utf8");
+    expect(sql).toMatch(/new\.revision := old\.revision \+ 1/);
+    expect(sql).not.toMatch(/new\.revision is null or new\.revision <= old\.revision then/);
+    expect(progressRevisionOnUpdate(4, undefined)).toEqual({ revision: 5, legacy: true });
+    expect(progressRevisionOnUpdate(4, 4)).toEqual({ revision: 5, legacy: true });
+    expect(progressRevisionOnUpdate(4, 6).revision).toBe(6);
+    expect(() => progressRevisionOnUpdate(4, 3)).toThrow(/revision conflict/);
+  });
+
+  it("undoes two answers from the same millisecond in the order they were applied", () => {
+    const blank = { log: [], xp: 0, ability: emptyAbility(ABILITY_CATS), rewards: emptyRewards(), missSchedule: {}, daily: null, streak: null, bestRun: 0 };
+    const taken = { ms: 9000, today: "2026-11-24", words: 8, rating: 1300 };
+    const correct = { id: 1, key: "bank:1", source: "bank", cat: "Pharmacology", diff: 1, stem: "eight words are enough here now" };
+    const wrong = { id: 2, key: "bank:2", source: "bank", cat: "Pharmacology", diff: 1, stem: "eight words are enough here now" };
+    const earlyQ = { id: 3, key: "bank:3", source: "bank", cat: "Management of Care", diff: 1, stem: "eight words are enough here now" };
+    const stamp = (state, seq) => ({ ...state, log: state.log.map((row, index) => index === state.log.length - 1 ? { ...row, seq } : row) });
+    const step = (state, q, correctAnswer, attempt, at, seq) => stamp(applyAnswer(state, {
+      q, correct: correctAnswer, attempt, at, ms: taken.ms, today: taken.today, words: taken.words, rating: taken.rating,
+      calibration: { [q.id]: { rating: 1300 } },
+    }).state, seq);
+    const saved = step(step(blank, correct, true, "a", 5000, 1), wrong, false, "b", 5000, 2);
+    let inOrder = step(blank, earlyQ, true, "e", 1000, 1);
+    inOrder = step(inOrder, correct, true, "a", 5000, 1);
+    inOrder = step(inOrder, wrong, false, "b", 5000, 2);
+    const merged = blobForSave(inOrder, saved, saved);
+    expect(merged.ability.Pharmacology.theta).toBeCloseTo(inOrder.ability.Pharmacology.theta, 4);
+    expect(merged.ability.Pharmacology.n).toBe(inOrder.ability.Pharmacology.n);
+  });
+
+  it("keeps a shift cover earned on the other device when this device only changes a setting", () => {
+    const week = "2026-11-23";
+    const baseline = { log: [], xp: 0, ability: emptyAbility(ABILITY_CATS), rewards: emptyRewards(), theme: "light", srsMap: {} };
+    const q = { id: 6, key: "bank:6", source: "bank", cat: "Pharmacology", diff: 1, stem: "eight words are enough here now" };
+    const answered = applyAnswer(baseline, {
+      q, correct: true, ms: 9000, today: "2026-11-27", attempt: "cover", words: 8, rating: 1300, calibration: { 6: { rating: 1300 } },
+    }).state;
+    const server = {
+      ...answered,
+      rewards: { ...answered.rewards, covers: 1, coverWeeks: [week] },
+    };
+    const merged = blobForSave(server, { ...baseline, theme: "dim" }, baseline);
+    expect(merged.theme).toBe("dim");
+    expect(merged.rewards.covers).toBe(1);
+    expect(merged.rewards.coverWeeks).toEqual([week]);
+  });
+
+  it("keeps a legacy new-card count that has no ids when each device adds a different card", () => {
+    const today = "2026-11-24";
+    const baseline = { log: [], xp: 0, rewards: emptyRewards(), fcNew: { day: today, count: 12 } };
+    const server = { ...baseline, fcNew: { day: today, count: 13, ids: ["cA"] } };
+    const local = { ...baseline, fcNew: { day: today, count: 13, ids: ["cB"] } };
+    const merged = blobForSave(server, local, baseline);
+    expect(merged.fcNew.day).toBe(today);
+    expect(merged.fcNew.ids.sort()).toEqual(["cA", "cB"]);
+    expect(merged.fcNew.count).toBe(14);
   });
 
   it("scores a delayed older miss before the newer answer already saved", () => {
