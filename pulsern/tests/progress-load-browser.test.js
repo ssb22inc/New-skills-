@@ -38,6 +38,7 @@ let server, browser, base;
 beforeAll(async () => {
   server = await createServer({
     configFile: false, root: process.cwd(), plugins: [supabaseStub, react()], logLevel: "silent",
+    cacheDir: "node_modules/.vite-progress-load-test", // own dep cache: parallel suites re-optimizing a shared cache can 504 this page
     server: { port: 0, host: "127.0.0.1" },
     optimizeDeps: { include: ["react", "react-dom", "react-dom/client", "react/jsx-dev-runtime"] },
   });

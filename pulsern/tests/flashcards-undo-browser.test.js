@@ -20,6 +20,7 @@ let server, browser, base;
 beforeAll(async () => {
   server = await createServer({
     configFile: false, root: process.cwd(), plugins: [supabaseStub, react()], logLevel: "silent",
+    cacheDir: "node_modules/.vite-flashcards-undo-test", // own dep cache so a parallel suite cannot re-optimize it mid-test
     server: { port: 0, host: "127.0.0.1" },
     optimizeDeps: { include: ["react", "react-dom", "react-dom/client", "react/jsx-dev-runtime"] },
   });
@@ -40,7 +41,8 @@ describe("Flashcards undo handler", () => {
     await page.waitForFunction(() => window.T?.ready && document.body.textContent.includes("OLD CARD"));
 
     const show = () => page.getByRole("button", { name: "Show answer" }).click();
-    const grade = (name) => page.getByRole("button", { name: new RegExp(`^${name}`) }).click();
+    // Card XP needs 1.5 s between the flip and the grade (REVIEW-2 m2), so wait like a reader would.
+    const grade = async (name) => { await page.waitForTimeout(1600); await page.getByRole("button", { name: new RegExp(`^${name}`) }).click(); };
     const back = () => page.getByRole("button", { name: "Back to the previous card" }).click();
     const undo = () => page.getByRole("button", { name: "Undo grade" }).click();
     const initial = await page.evaluate(() => window.T.initial);
