@@ -353,8 +353,10 @@ const store = {
       throw err;
     }
     const session = result.data.session;
+    const seenEpoch = accountEpoch;
     const { data, error } = await supabase.from("progress")
       .select("blob, revision").eq("user_id", session.user.id).eq("key", key).maybeSingle();
+    if (seenEpoch !== accountEpoch) return data ? JSON.stringify(data.blob) : null;
     /* A read error must never look like "no saved progress": the caller
        would treat the account as new and autosave defaults over it. */
     if (error) throw new Error(error.message || "Could not read saved progress");
@@ -609,7 +611,7 @@ export default function App() {
   const saveQueue = useRef(null);
   const accountId = useRef(null);
   if (!saveQueue.current) saveQueue.current = createSaveQueue();
-  useEffect(() => () => { saveQueue.current?.invalidate(); }, []);
+  useEffect(() => () => { saveQueue.current?.invalidate(); store.releaseAccount(); }, []);
   const openAbout = async () => {
     setMenuOpen(false);
     if (saveQueue.current.pending()) {

@@ -76,6 +76,30 @@ describe("a revision conflict keeps both devices' answers", () => {
     expect(holdGuestTrial({ log: [{ id: 1 }] }, null)).toBe(false);
   });
 
+  it("does not award XP twice when the committed write's response was lost", () => {
+    const baseline = { log: [], xp: 100, ability: {}, rewards: emptyRewards(), bestRun: 0 };
+    const once = applyAnswer(baseline, {
+      q: { id: 1, key: "bank:1", source: "bank", cat: "Pharmacology", diff: 1 },
+      correct: true, ms: 9000, today: "2026-11-24", attempt: "once",
+    }).state;
+    const retry = blobForSave(once, once, baseline);
+    expect(retry.log).toHaveLength(1);
+    expect(retry.xp).toBe(once.xp);
+  });
+
+  it("scores both devices' new answers from the shared baseline", () => {
+    const baseline = { log: [], xp: 0, ability: {}, rewards: emptyRewards(), daily: null, bestRun: 0 };
+    const a = { ...answer("a", 1), day: "2026-11-24", ms: 9000, words: 8, rating: 1300, diff: 1 };
+    const b = { ...answer("b", 2), day: "2026-11-24", ms: 9000, words: 8, rating: 1300, diff: 1, cat: "Management of Care" };
+    const server = { ...baseline, log: [a], xp: 10, ability: { Pharmacology: { n: 1, theta: 1200 } } };
+    const local = { ...baseline, log: [b], xp: 10, ability: { "Management of Care": { n: 1, theta: 1200 } } };
+    const merged = blobForSave(server, local, baseline);
+    expect(merged.log.map((row) => row.attempt)).toEqual(["a", "b"]);
+    expect(merged.ability.Pharmacology.n).toBe(1);
+    expect(merged.ability["Management of Care"].n).toBe(1);
+    expect(merged.xp).toBe(20);
+  });
+
   it("does not add XP again on the save after the answer was acknowledged", () => {
     const baseline = { log: [], xp: 0, bestRun: 0 };
     const saved = { log: [answer("a")], xp: 10, bestRun: 1, theme: "light" };

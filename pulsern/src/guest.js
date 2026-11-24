@@ -12,7 +12,7 @@
    account that already has answer history does not take the trial.
    Each trial answer is stored as builtin:<id>. A shared-bank question
    with the same number is bank:<id> and is a different question. */
-import { answerXp, answerCountsForRun } from "./rewards.js";
+import { answerXp, answerCountsForRun, emptyRewards } from "./rewards.js";
 import { applyAnswer, stampedQuestion } from "./answer-apply.js";
 import { canonicalKey } from "./question-key.js";
 
@@ -189,26 +189,66 @@ function mergeMap(base, server, local) {
   return out;
 }
 
+function replayUnseen(base, rows) {
+  const seen = new Set((base.log ?? []).map((row) => row?.attempt).filter((id) => id != null && id !== ""));
+  let state = {
+    log: Array.isArray(base.log) ? [...base.log] : [],
+    xp: Number(base.xp) || 0,
+    ability: base.ability ?? {},
+    streak: base.streak,
+    rewards: base.rewards ?? emptyRewards(),
+    daily: base.daily,
+    missSchedule: { ...(base.missSchedule ?? {}) },
+    run: base.run ?? 0,
+    bestRun: base.bestRun ?? 0,
+  };
+  for (const row of rows ?? []) {
+    if (!row?.attempt || seen.has(row.attempt)) continue;
+    seen.add(row.attempt);
+    const words = Number(row.words);
+    const stem = Number.isFinite(words) && words > 0 ? Array.from({ length: words }, () => "w").join(" ") : (row.stem || "");
+    const rating = Number(row.rating);
+    const applied = applyAnswer(state, {
+      q: { id: row.id, key: row.key, source: row.source, cat: row.cat, diff: row.diff, stem, population: row.pop },
+      correct: !!row.correct,
+      ms: Number.isFinite(row.ms) ? row.ms : Infinity,
+      today: row.day,
+      attempt: row.attempt,
+      words: Number.isFinite(words) ? words : undefined,
+      rating: Number.isFinite(rating) ? rating : undefined,
+      calibration: Number.isFinite(rating) ? { [row.id]: { rating } } : {},
+      schedule: row.schedule !== false,
+    });
+    if (!applied.duplicate) state = applied.state;
+  }
+  return state;
+}
+
 /* Rows already stored stay rows. A legacy identity correction updates the
-   matching row. New attempts are copied, not scored again. XP from both
-   sides is added from the shared baseline. Fields this device changed are kept. */
+   matching row. New live attempts are scored once from the shared baseline,
+   so a lost acknowledgement cannot add their XP a second time. */
 export function reconcileProgress(serverBlob, localBlob, baselineBlob = null) {
   const server = serverBlob && typeof serverBlob === "object" && !Array.isArray(serverBlob) ? serverBlob : {};
   const local = localBlob && typeof localBlob === "object" && !Array.isArray(localBlob) ? localBlob : {};
   const base = baselineBlob && typeof baselineBlob === "object" && !Array.isArray(baselineBlob) ? baselineBlob : server;
   const log = mergeLogs(server.log, local.log);
+  const replayed = replayUnseen(base, log);
+  const unseen = log.some((row) => row?.attempt && !(base.log ?? []).some((item) => item?.attempt === row.attempt));
   const merged = { ...local, log };
-  if (server.ability && JSON.stringify(local.ability) === JSON.stringify(base.ability)) merged.ability = server.ability;
-  const nextXp = addDelta(base, server, local, "xp");
+  const nextXp = unseen ? replayed.xp : Math.max(Number(server.xp) || 0, Number(local.xp) || 0);
   if (nextXp !== (Number(local.xp) || 0)) merged.xp = nextXp;
-  const nextBest = Math.max(Number(base.bestRun) || 0, Number(server.bestRun) || 0, Number(local.bestRun) || 0);
-  if (nextBest !== (Number(local.bestRun) || 0)) merged.bestRun = nextBest;
-  if (server.srsMap || local.srsMap || base.srsMap) merged.srsMap = mergeMap(base.srsMap, server.srsMap, local.srsMap);
-  if (server.missSchedule || local.missSchedule || base.missSchedule) merged.missSchedule = mergeMap(base.missSchedule, server.missSchedule, local.missSchedule);
-  for (const key of new Set([...Object.keys(server), ...Object.keys(base)])) {
-    if (key === "log" || key === "xp" || key === "bestRun" || key === "ability") continue;
-    if (JSON.stringify(local[key]) === JSON.stringify(base[key]) && JSON.stringify(server[key]) !== JSON.stringify(base[key])) merged[key] = server[key];
+  if (unseen) {
+    merged.ability = replayed.ability;
+    merged.daily = replayed.daily;
+    merged.rewards = replayed.rewards;
+    merged.streak = replayed.streak;
   }
+  if (base.bestRun != null || server.bestRun != null || local.bestRun != null || unseen) {
+    const nextBest = Math.max(Number(base.bestRun) || 0, Number(server.bestRun) || 0, Number(local.bestRun) || 0, Number(replayed.bestRun) || 0);
+    if (nextBest !== (Number(local.bestRun) || 0)) merged.bestRun = nextBest;
+  }
+  if (base.missSchedule || server.missSchedule || local.missSchedule) merged.missSchedule = mergeMap(base.missSchedule, server.missSchedule, unseen ? replayed.missSchedule : local.missSchedule);
+  if (base.srsMap || server.srsMap || local.srsMap) merged.srsMap = mergeMap(base.srsMap, server.srsMap, local.srsMap);
   return merged;
 }
 
