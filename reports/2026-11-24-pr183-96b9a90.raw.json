@@ -1,0 +1,115 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "da6c612a142b75910987b47f8e9e542896e96a3f",
+    "head": "96b9a902eb97cd0376a918be52cdabfaca2a0d18",
+    "pr": "183"
+  },
+  "reviewedAt": "2026-11-24T00:26:50.921Z",
+  "filesReviewed": [
+    "pulsern/app/index.html",
+    "pulsern/ops/test-signup-flow.mjs",
+    "pulsern/src/App.jsx",
+    "pulsern/src/auth.jsx",
+    "pulsern/src/card-nav.js",
+    "pulsern/src/choice-state.js",
+    "pulsern/src/clinical-welcome.jsx",
+    "pulsern/src/first-answer.js",
+    "pulsern/src/float-pos.js",
+    "pulsern/src/focus-sheet.jsx",
+    "pulsern/src/lab-fab.jsx",
+    "pulsern/src/lab-lookup.js",
+    "pulsern/src/lab-panel.jsx",
+    "pulsern/src/question-nav.jsx",
+    "pulsern/src/study-keys.js",
+    "pulsern/src/tab-icons.jsx",
+    "pulsern/src/tour.js",
+    "pulsern/src/tour.jsx",
+    "pulsern/tests/browser/lab-fab-harness.jsx",
+    "pulsern/tests/browser/lab-fab.html",
+    "pulsern/tests/fixtures/lab-ai-prompt.txt",
+    "pulsern/tests/flagship-ux.test.js",
+    "pulsern/tests/float-pos.test.js",
+    "pulsern/tests/lab-fab-browser.test.js",
+    "pulsern/tests/lab-lookup.test.js",
+    "pulsern/tests/question-nav-browser.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/App.jsx",
+      "line": 2370,
+      "title": "Undo records are keyed by card, but grades belong to individual visits",
+      "problem": "undoLog[id] is overwritten by every grade, while canUndoGrade identifies the last opened visit rather than the most recent grading operation. Earlier skipped visits remain gradable even after a later visit to the same card has been graded. Undo can therefore apply another visit's schedule snapshot and XP adjustment.",
+      "failure_scenario": "Skip card A, grade its requeued visit Good, then walk Back to the original ungraded A and grade it Easy. Return to the later visit, which still says Good, and choose Undo. The stored record now belongs to the Easy grade: Undo deducts 8 XP instead of 5 and restores the wrong schedule while clearing the Good visit's grade.",
+      "fix": "Prevent grading obsolete earlier visits once a later visit has graded that card. Associate undo records with a stable visit identifier and allow rollback only when that visit still owns the latest schedule update. Add an integration test asserting the resulting srsMap and XP for this sequence.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/App.jsx",
+      "line": 2142,
+      "title": "Beginning an AI case removes its attribution and reporting control",
+      "problem": "The replacement chartBody omits both the cs.ai attribution and ReportIssue. Those controls now exist only in the introductory branch, whereas the previous chart section remained present throughout the case. During answering, an AI-generated case has no visible AI attribution, contrary to the publication rule requiring AI content to remain labeled.",
+      "failure_scenario": "Open an AI-generated bank case and select Begin case. Its AI label and report control disappear for every question step, including when the patient chart is expanded.",
+      "fix": "Keep the AI attribution, required verification note, and case-report control available throughout the case. Put the attribution outside the collapsible chart so it remains visible on phones.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/lab-fab.jsx",
+      "line": 84,
+      "title": "Reset position is dispatched while its listener is disconnected",
+      "problem": "Opening the toolkit sets LabFab.hidden=true, which removes the LABFAB_RESET_EVENT listener. The toolkit's reset button clears storage and dispatches that event while the listener is absent. The mounted LabFab retains its old anchor, and closing the toolkit only settles that old anchor; it does not reload storage.",
+      "failure_scenario": "Drag the floating button to the left edge, open the toolkit, select Reset button position, and close it. The button remains at the old anchor until a reload or remount.",
+      "fix": "Keep the reset listener registered while hidden, or lift the anchor/reset state into a shared owner. Test resetting through the actual toolkit button without reloading.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/lab-fab.jsx",
+      "line": 72,
+      "title": "The floating button still covers answers when no clear position exists",
+      "problem": "findClearSpot explicitly returns clear=false when both edges are occupied, but every caller discards that flag and renders the button at the overlapping fallback coordinates. Long answer options can occupy the entire usable vertical band on a phone, with gaps too small for the floating button.",
+      "failure_scenario": "On a short phone viewport, scroll into several long, full-width answer options. Neither edge has a clear 52-pixel slot, so settling places the floating toolkit directly over an answer and intercepts taps intended for it.",
+      "fix": "Handle clear=false explicitly, for example by temporarily hiding the floating control and retaining access through the header menu. Add a browser test with a fully occupied usable band; the existing unit test only verifies that the failure flag is returned.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/focus-sheet.jsx",
+      "line": 47,
+      "title": "New modal sheets allow keyboard access to the underlying study screen",
+      "problem": "FocusBar declares aria-modal=true but neither traps Tab nor makes the background inert. Toolkit has a related escape: it initially focuses its tabindex=-1 title, but Shift+Tab from that title is not handled by its first/last-control trap. Both dialogs allow focus to reach controls behind the overlay.",
+      "failure_scenario": "Open Focus and Tab past Done: focus reaches the underlying study controls, which Enter can activate while the sheet remains open. Alternatively, open Toolkit and immediately press Shift+Tab; focus escapes to background navigation, allowing the student to leave the current screen from behind the modal.",
+      "fix": "Use a shared modal implementation that makes background siblings inert and contains focus even when the current focus is a heading or another non-tab-stop element. Add browser tests for forward wrapping, reverse wrapping from initial focus, and blocked background activation.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/App.jsx",
+      "line": null,
+      "title": "The Again grade becomes unreadable in dim mode",
+      "problem": "The changed .grade.again rule uses background:var(--danger-ink) with white text. In dim mode --danger-ink is #F2A296, giving white text approximately 2.0:1 contrast, well below the required 4.5:1. Nearby wrong-answer badges correctly switch to dark text in dim mode, but this grade button does not.",
+      "failure_scenario": "Enable night mode and flip a flashcard. The active Again button displays white text on the pale coral background.",
+      "fix": "Provide a dim-mode foreground/background pair meeting 4.5:1, and test the actual grade-button color combinations in both themes.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 115825,
+    "completionTokens": 10184,
+    "reasoningTokens": 8804,
+    "costUsd": 0.391401
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Changes requested. The new undo path can restore the wrong flashcard schedule and XP, AI case attribution disappears during the case, and the toolkit has reproducible reset, obstruction, and accessibility defects. Tests were not executed; this assessment is based on the supplied diffs.",
+  "counts": {
+    "blocker": 2,
+    "major": 4,
+    "minor": 0
+  }
+}
