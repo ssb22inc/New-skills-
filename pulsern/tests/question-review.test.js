@@ -14,6 +14,18 @@ beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 9, 16, 21
 afterEach(() => vi.useRealTimers());
 
 describe("schedule progression", () => {
+  it("keeps a corrected unresolved miss on the due queue", () => {
+    const builtin = { id: 7, source: "builtin", key: "builtin:7", cat: "Pharmacology", diff: 1, type: "mc", stem: "built in" };
+    const bank = { id: 7, source: "bank", key: "bank:7", cat: "Pharmacology", diff: 1, type: "mc", stem: "bank" };
+    const log = [
+      { id: 7, cat: "Pharmacology", diff: 1, correct: false, unclassified: true },
+      { id: 7, cat: "Pharmacology", diff: 1, correct: true, unclassified: true },
+    ];
+    const schedule = { 7: { interval: 3, due: "2026-10-16" } };
+    const due = reviewPools([builtin, bank], log, schedule, "2026-10-16").due.map((item) => item.id);
+    expect(due).toContain("unresolved:7");
+  });
+
   it("a miss schedules a review for the next local day", () => {
     const m = updateMissSchedule({}, 7, false);
     expect(m[7]).toMatchObject({ interval: 1, due: "2026-10-17" });

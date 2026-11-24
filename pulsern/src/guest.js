@@ -446,6 +446,29 @@ function pendingRowKey(row) {
   return `l:${row.id}:${row.correct}:${row.day ?? ""}:${row.at ?? ""}:${row.ms ?? ""}`;
 }
 
+/* Identical undated rows are separate sittings. A stored copy consumes
+   one of them; the rest are new. */
+function rowsNotYetStored(currentLog, mergedLog) {
+  const left = new Map();
+  for (const row of currentLog ?? []) {
+    const key = pendingRowKey(row);
+    left.set(key, (left.get(key) ?? 0) + 1);
+  }
+  const added = [];
+  for (const row of mergedLog ?? []) {
+    const key = pendingRowKey(row);
+    const count = left.get(key) ?? 0;
+    if (count > 0) left.set(key, count - 1);
+    else added.push(row);
+  }
+  return added;
+}
+
+function savedItemRating(row) {
+  const rating = Number(row?.rating);
+  return Number.isFinite(rating) && row?.source !== "builtin" && row?.source !== "case";
+}
+
 function answerInput(row) {
   const words = Number(row?.words);
   const stem = Number.isFinite(words) && words > 0 ? Array.from({ length: words }, () => "w").join(" ") : (row?.stem || "");
@@ -469,15 +492,35 @@ export function foldPendingProgress(stored, snapshots) {
   for (const snapshot of snapshots ?? []) {
     if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) continue;
     const reconciled = reconcileProgress(current, snapshot, current);
-    const newRows = (reconciled.log ?? []).filter((row) => !((current.log ?? []).some((item) => pendingRowKey(item) === pendingRowKey(row))));
+    const newRows = rowsNotYetStored(current.log, reconciled.log);
     let ability = current.ability ?? {};
     let xp = Number(current.xp) || 0;
     let log = [...(current.log ?? [])];
+    const unrated = new Map();
     for (const row of newRows) {
       const input = answerInput(row);
       xp += answerXp({ q: input.q, correct: input.correct, ms: input.ms, log }).xp || 0;
-      if (row?.cat) ability = updateAbility(ability, input.q, input.correct, input.calibration).ability;
       log = [...log, row];
+      if (!row?.cat) continue;
+      if (savedItemRating(row)) {
+        ability = updateAbility(ability, input.q, input.correct, input.calibration).ability;
+      } else {
+        const list = unrated.get(row.cat) ?? [];
+        list.push(row);
+        unrated.set(row.cat, list);
+      }
+    }
+    for (const [cat, rows] of unrated) {
+      const snap = snapshot.ability?.[cat];
+      const have = Number(ability?.[cat]?.n) || 0;
+      if (snap && Number(snap.n) === have + rows.length && Number.isFinite(Number(snap.theta))) {
+        ability = { ...ability, [cat]: { theta: Number(snap.theta), n: Number(snap.n) } };
+      } else {
+        for (const row of rows) {
+          const input = answerInput(row);
+          ability = updateAbility(ability, input.q, input.correct, input.calibration).ability;
+        }
+      }
     }
     const scheduleChanged = snapshot.srsMap && !sameJson(snapshot.srsMap, current.srsMap);
     if (newRows.length) xp = Math.max(xp, Number(reconciled.xp) || 0);

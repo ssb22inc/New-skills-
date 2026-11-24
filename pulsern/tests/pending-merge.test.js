@@ -83,6 +83,42 @@ describe("a parked snapshot uses the device conflict merge", () => {
     expect(foldPendingProgress(folded, [pending]).srsMap.c1.due).toBe("2026-12-01");
   });
 
+  it("keeps a second identical undated miss in a parked snapshot", () => {
+    const miss = { id: 9, cat: "Pharmacology", diff: 1, correct: false };
+    const ability = updateAbility(emptyAbility(ABILITY_CATS), { id: 9, cat: "Pharmacology", diff: 1 }, false).ability;
+    const stored = {
+      log: [miss],
+      xp: 0,
+      ability,
+      rewards: emptyRewards(),
+      streak: { count: 1, lastDay: "2026-11-24", shield: false },
+    };
+    const pending = { log: [miss, { ...miss }], xp: 0, ability };
+    const folded = foldPendingProgress(stored, [pending]);
+    expect(folded.log.filter((row) => row.id === 9 && row.correct === false)).toHaveLength(2);
+    expect(folded.ability.Pharmacology.n).toBe(ability.Pharmacology.n + 1);
+    const again = foldPendingProgress(folded, [pending]);
+    expect(again.log).toHaveLength(2);
+    expect(again.ability.Pharmacology.n).toBe(folded.ability.Pharmacology.n);
+  });
+
+  it("uses the old client's ability when a parked answer has no item rating", () => {
+    const start = emptyAbility(ABILITY_CATS);
+    const calibrated = updateAbility(start, { id: 9, cat: "Pharmacology", diff: 1, source: "bank" }, true, { 9: { rating: 1700 } }).ability;
+    const seeded = updateAbility(start, { id: 9, cat: "Pharmacology", diff: 1 }, true).ability;
+    const stored = { log: [], xp: 0, ability: start, rewards: emptyRewards(), streak: { count: 0, lastDay: null, shield: true } };
+    const pending = {
+      log: [{ id: 9, cat: "Pharmacology", diff: 1, correct: true }],
+      xp: 10,
+      ability: calibrated,
+    };
+    const folded = foldPendingProgress(stored, [pending]);
+    expect(folded.log).toHaveLength(1);
+    expect(folded.ability.Pharmacology.n).toBe(1);
+    expect(folded.ability.Pharmacology.theta).toBeCloseTo(calibrated.Pharmacology.theta, 4);
+    expect(Math.abs(folded.ability.Pharmacology.theta - seeded.Pharmacology.theta)).toBeGreaterThan(1);
+  });
+
   it("migrates a parked snapshot that has no rewards object", () => {
     const stored = { log: [answer("a", 1, "Pharmacology", "2026-11-24")], xp: 10 };
     const pending = { log: [{ id: 9, cat: "Pharmacology", diff: 1, correct: true }], xp: 10 };

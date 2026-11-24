@@ -271,7 +271,12 @@ export function expandTrialQuestions(questions, log, registry = null, schedule =
 
 /* A legacy number that still belongs to more than one question. The miss
    stays reviewable here, and neither catalog question inherits it. */
-function unresolvedCards(log, questions, index) {
+function rawReview(schedule, num) {
+  const raw = schedule?.[num] ?? schedule?.[Number(num)];
+  return raw && typeof raw.due === "string" ? raw : null;
+}
+
+function unresolvedCards(log, questions, index, schedule) {
   const cards = [];
   const seen = new Set();
   const add = (num) => {
@@ -302,9 +307,9 @@ function unresolvedCards(log, questions, index) {
       candidates,
     });
   };
-  for (const [num, correct] of index.unresolved) if (correct === false) add(num);
+  for (const [num, correct] of index.unresolved) if (correct === false || rawReview(schedule, num)) add(num);
   for (const [num, correct] of index.unscoped) {
-    if (correct !== false) continue;
+    if (correct !== false && !rawReview(schedule, num)) continue;
     const keyed = (questions ?? []).some((q) => questionIdentity(q) && String(q.id) === num);
     if (keyed) add(num);
   }
@@ -375,7 +380,7 @@ export function reviewPools(questions, log, schedule, today = todayStr()) {
     }
     return scheduleEntry(q, schedule, questions, log, index, peers);
   };
-  const cards = [...unresolvedCards(log, questions, index), ...catalogMissCards(log, questions, schedule, today)];
+  const cards = [...unresolvedCards(log, questions, index, schedule), ...catalogMissCards(log, questions, schedule, today)];
   const pool = [...(questions ?? []).filter((q) => q && !q.unresolved && !q.catalogMiss && !q.candidateOnly), ...cards];
   const due = pool.filter((q) => {
     const entry = dueOf(q);
