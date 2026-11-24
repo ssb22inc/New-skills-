@@ -142,12 +142,22 @@ function progressRowKey(row) {
   return `r:${row.key ?? ""}:${row.id ?? ""}:${row.correct}:${row.day ?? ""}:${row.at ?? ""}`;
 }
 
-/* The server row wins. Answers that exist only on this device are applied
-   on top of it, through the same live-answer function, so the other
-   device's blob is not replaced. */
-export function reconcileProgress(serverBlob, localBlob) {
+const ANSWER_FIELDS = new Set(["log", "xp", "ability", "streak", "rewards", "daily", "missSchedule", "run", "bestRun"]);
+
+function stemForReplay(row) {
+  if (typeof row?.stem === "string" && row.stem.trim()) return row.stem;
+  const words = Number(row?.words);
+  if (Number.isFinite(words) && words > 0) return Array.from({ length: words }, () => "w").join(" ");
+  return "";
+}
+
+/* The server row wins for answers already stored. Answers that exist only
+   on this device are replayed with the original word count and item rating.
+   A field this device changed since the shared baseline is kept. */
+export function reconcileProgress(serverBlob, localBlob, baselineBlob = null) {
   const server = serverBlob && typeof serverBlob === "object" && !Array.isArray(serverBlob) ? serverBlob : {};
   const local = localBlob && typeof localBlob === "object" && !Array.isArray(localBlob) ? localBlob : {};
+  const base = baselineBlob && typeof baselineBlob === "object" && !Array.isArray(baselineBlob) ? baselineBlob : server;
   const serverLog = Array.isArray(server.log) ? server.log : [];
   const localLog = Array.isArray(local.log) ? local.log : [];
   const seen = new Set(serverLog.map(progressRowKey));
@@ -164,21 +174,24 @@ export function reconcileProgress(serverBlob, localBlob) {
     bestRun: server.bestRun ?? 0,
   };
   for (const row of pending) {
+    const rating = Number(row.rating);
     const applied = applyAnswer(state, {
       q: {
         id: row.id, key: row.key, source: row.source, cat: row.cat, diff: row.diff,
-        stem: row.stem, population: row.pop, unclassified: row.unclassified,
+        stem: stemForReplay(row), population: row.pop, unclassified: row.unclassified,
       },
       correct: !!row.correct,
       ms: Number.isFinite(row.ms) ? row.ms : Infinity,
       today: row.day || "2026-11-24",
       attempt: row.attempt,
       words: row.words,
+      rating: Number.isFinite(rating) ? rating : undefined,
+      calibration: Number.isFinite(rating) ? { [row.id]: { rating } } : {},
       schedule: row.schedule !== false,
     });
     if (!applied.duplicate) state = applied.state;
   }
-  return {
+  const merged = {
     ...server,
     log: state.log,
     xp: state.xp,
@@ -190,6 +203,18 @@ export function reconcileProgress(serverBlob, localBlob) {
     run: state.run,
     bestRun: state.bestRun,
   };
+  for (const key of new Set([...Object.keys(server), ...Object.keys(local), ...Object.keys(base)])) {
+    if (ANSWER_FIELDS.has(key)) continue;
+    if (JSON.stringify(local[key]) !== JSON.stringify(base[key])) merged[key] = local[key];
+  }
+  return merged;
+}
+
+/* Fold the last accepted server blob into a later local snapshot so a
+   stale autosave cannot delete the other device's answers. */
+export function blobForSave(accepted, local) {
+  if (!accepted) return local;
+  return reconcileProgress(accepted, local, accepted);
 }
 
 /* knownRevision matches: this device still owns the row, so its blob lands.
@@ -307,13 +332,14 @@ export function createSaveQueue({ attemptMs = SAVE_ATTEMPT_MS } = {}) {
           }, attemptMs);
         });
         try {
-          await Promise.race([
+          const result = await Promise.race([
             Promise.resolve().then(() => task({ signal: ctrl.signal, isCurrent })),
             timeout,
           ]);
-          if (!isCurrent()) return { stale: true };
+          const extra = result && typeof result === "object" ? result : {};
+          if (!isCurrent()) return { stale: true, ...extra };
           if (seq === latest) settled = seq;
-          return { ok: true };
+          return { ok: true, ...extra };
         } catch (error) {
           if (seq !== latest) return { stale: true };
           return { ok: false, error };

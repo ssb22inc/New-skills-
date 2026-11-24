@@ -317,7 +317,7 @@ import {
   RewardsStyle, StreakGlyph, EcgBeat, ComboChip, MomentSheet, streakMoment, ShiftCard, CareerCard,
   BadgeGrid, RoundsCard, BestsCard, SessionRecap, EffectsCard, comboSpeech, useAnnouncer,
 } from "./rewards-ui.jsx";
-import { mergeGuestIntoBlob, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, readGuestForHandoff, releaseHeldGuest, waitForFlush, accountHasAnswers, reconcileProgress, createProgressEpoch, storageOrNull } from "./guest.js";
+import { mergeGuestIntoBlob, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, readGuestForHandoff, releaseHeldGuest, waitForFlush, accountHasAnswers, reconcileProgress, blobForSave, createProgressEpoch, storageOrNull } from "./guest.js";
 import { applyAnswer, commitLiveAnswer, stampedQuestion, newAttemptId } from "./answer-apply.js";
 import { claimLegacyAt, claimLegacySchedule } from "./question-key.js";
 import { stampCatalogQuestion, stampLoadedCatalog } from "./question-identity.js";
@@ -339,6 +339,7 @@ const STORE_KEY = "pulsern-v1";
    Each method returns/accepts a JSON string and is async-safe.
 ------------------------------------------------------------------------ */
 const progressGate = createProgressEpoch();
+let acceptedBlob = null;
 const store = {
   async get(key) {
     const result = await supabase.auth.getSession();
@@ -354,6 +355,7 @@ const store = {
     /* A read error must never look like "no saved progress": the caller
        would treat the account as new and autosave defaults over it. */
     if (error) throw new Error(error.message || "Could not read saved progress");
+    acceptedBlob = data ? data.blob : null;
     if (!data) { progressGate.note(0, progressGate.epoch()); return null; }
     progressGate.note(Number(data.revision) || 0, progressGate.epoch());
     return JSON.stringify(data.blob);
@@ -376,7 +378,8 @@ const store = {
       err.code = decision;
       throw err;
     }
-    const blob = JSON.parse(value);
+    const raw = JSON.parse(value);
+    const blob = blobForSave(acceptedBlob, raw);
     const writeAt = (expected, payload) => {
       const patch = { blob: payload, revision: expected + 1, updated_at: new Date().toISOString() };
       return supabase.from("progress").update(patch)
@@ -407,13 +410,18 @@ const store = {
       if (!fresh) {
         try { revision = await finish(insertAt(blob)); } catch { revision = null; }
       } else {
-        const merged = reconcileProgress(fresh.blob, blob);
+        const merged = reconcileProgress(fresh.blob, raw, acceptedBlob);
         const unchanged = JSON.stringify(merged) === JSON.stringify(fresh.blob);
         if (unchanged) {
           progressGate.note(Number(fresh.revision) || 0, epoch);
-          return;
+          acceptedBlob = fresh.blob;
+          return JSON.stringify(merged) === JSON.stringify(raw) ? undefined : { reconciled: true, blob: merged };
         }
         revision = await finish(writeAt(Number(fresh.revision) || 0, merged));
+        if (revision) {
+          acceptedBlob = merged;
+          return { reconciled: true, blob: merged };
+        }
       }
     }
     if (!revision) {
@@ -421,9 +429,12 @@ const store = {
       err.code = "conflict";
       throw err;
     }
+    acceptedBlob = blob;
+    return JSON.stringify(blob) === JSON.stringify(raw) ? undefined : { reconciled: true, blob };
   },
   async delete(key) {
     progressGate.abandon();
+    acceptedBlob = null;
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     await supabase.from("progress").delete().eq("user_id", session.user.id).eq("key", key);
@@ -703,6 +714,7 @@ export default function App() {
     const note = pendingHandoff.current;
     const userId = accountId.current;
     saveQueue.current.enqueue(seq, (ctx) => store.set(STORE_KEY, payload, userId, ctx)).then((res) => {
+      if (res?.reconciled && res.blob) applyBlob(res.blob);
       if (!res || res.stale || res.error?.code === "account-changed" || res.error?.code === "aborted") return;
       if (res.error?.code === "signed-out") {
         setSaveFailed(true);
