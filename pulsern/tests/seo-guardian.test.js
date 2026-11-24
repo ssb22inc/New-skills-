@@ -1032,6 +1032,11 @@ describe("product screenshot capture", () => {
     expect(src).toMatch(/animation:none !important/);
     expect(src).toMatch(/pulsern-labfab-v1/);
     expect(src).toMatch(/canonicalPng/);
+    expect(src).toMatch(/MutationObserver/);
+    expect(src).toMatch(/DOMContentLoaded/);
+    expect(src).toMatch(/addStyleTag/);
+    expect(src).toMatch(/data-pulsern-capture-freeze/);
+    expect(src).toMatch(/capture is not frozen/);
     expect(src).toMatch(/PulseRN Capture Symbols/);
     expect(src).toMatch(/export const CAPTURE_TIME = "\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"/);
     expect(src).toMatch(/Study toolkit/);

@@ -7,7 +7,7 @@ import process from "node:process";
 import { chromium } from "playwright";
 import react from "@vitejs/plugin-react";
 import { createServer } from "vite";
-import { canonicalPng } from "./png-canonical.mjs";
+import { canonicalPng, decodePng, encodeCanonicalPng } from "./png-canonical.mjs";
 
 /* The fixed moment every capture is taken at (UTC). */
 export const CAPTURE_TIME = "2026-10-30T12:00:00Z";
@@ -24,6 +24,28 @@ const CAPTURE_STYLE = `
   :focus,:focus-visible{outline:none !important}
 `;
 
+/* The init script can run before the parser has created <html>. Appending
+   then throws and the freeze never lands. Install only once documentElement
+   exists; otherwise watch for it, and also try again on DOMContentLoaded. */
+export function installCaptureFreeze(css) {
+  Math.random = () => 0.125;
+  try { localStorage.setItem("pulsern-labfab-v1", JSON.stringify({ side: "right", y: 0.62 })); } catch { /* private mode */ }
+  const install = () => {
+    const root = document.documentElement;
+    if (!root) return false;
+    if (root.querySelector("style[data-pulsern-capture-freeze]")) return true;
+    const style = document.createElement("style");
+    style.setAttribute("data-pulsern-capture-freeze", "");
+    style.textContent = css;
+    root.appendChild(style);
+    return true;
+  };
+  if (install()) return;
+  const observer = new MutationObserver(() => { if (install()) observer.disconnect(); });
+  observer.observe(document, { childList: true });
+  document.addEventListener("DOMContentLoaded", () => { if (install()) observer.disconnect(); }, { once: true });
+}
+
 async function sourceHashes(directory = "src") {
   const files = [];
   async function walk(current) {
@@ -39,24 +61,64 @@ async function sourceHashes(directory = "src") {
 }
 
 async function settle(page) {
-  await page.evaluate(async () => {
+  const result = await page.evaluate(async () => {
     if (document.fonts?.ready) await document.fonts.ready;
     if (document.fonts?.load) await document.fonts.load("16px 'PulseRN Capture Symbols'");
     const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+    const style = document.querySelector("style[data-pulsern-capture-freeze]");
+    const freeze = !!style && (style.textContent || "").includes("animation:none");
     const fabBox = () => {
       const fab = document.querySelector(".lab-fab");
-      if (!fab) return "";
+      if (!fab) return "hidden";
       const r = fab.getBoundingClientRect();
       return `${Math.round(r.x)},${Math.round(r.y)},${Math.round(r.width)},${Math.round(r.height)}`;
     };
-    let last = fabBox();
-    for (let i = 0; i < 8; i++) {
+    let last = null;
+    let stable = false;
+    for (let i = 0; i < 12; i++) {
       await frame();
       const next = fabBox();
-      if (i > 1 && next === last) return;
+      if (last != null && next === last) { stable = true; break; }
       last = next;
     }
+    return { freeze, stable, box: last };
   });
+  if (!result.freeze || !result.stable) {
+    throw new Error(`capture is not frozen: freeze style ${result.freeze ? "present" : "missing"}, study button ${result.stable ? "stable" : "still moving"} (${result.box ?? "unread"})`);
+  }
+}
+
+/* Product shots must show the question, not the study button sitting on it. */
+async function assertStudyButtonClear(page, selectors) {
+  const hit = await page.evaluate((wanted) => {
+    const fab = document.querySelector(".lab-fab");
+    if (!fab) return "";
+    const a = fab.getBoundingClientRect();
+    const overlaps = (b) => a.left < b.right - 0.5 && a.right > b.left + 0.5 && a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5;
+    for (const sel of wanted) {
+      for (const el of document.querySelectorAll(sel)) {
+        const b = el.getBoundingClientRect();
+        if (b.width < 1 || b.height < 1) continue;
+        if (overlaps(b)) return `${sel} "${(el.getAttribute("aria-label") || el.textContent || "").trim().slice(0, 80)}"`;
+      }
+    }
+    return "";
+  }, selectors);
+  if (hit) throw new Error(`study button covers ${hit}`);
+}
+
+function rgbCanonical(raw) {
+  const decoded = decodePng(Buffer.from(raw));
+  if (decoded.colour === 2) return canonicalPng(Buffer.from(raw));
+  if (decoded.colour !== 6) throw new Error(`screenshot is not 8-bit RGB (colour type ${decoded.colour})`);
+  const rgb = Buffer.alloc(decoded.width * decoded.height * 3);
+  for (let i = 0, j = 0; i < decoded.pixels.length; i += 4, j += 3) {
+    if (decoded.pixels[i + 3] !== 255) throw new Error("screenshot has partial transparency");
+    rgb[j] = decoded.pixels[i];
+    rgb[j + 1] = decoded.pixels[i + 1];
+    rgb[j + 2] = decoded.pixels[i + 2];
+  }
+  return encodeCanonicalPng({ width: decoded.width, height: decoded.height, colour: 2, pixels: rgb });
 }
 
 async function screenshot(page, name, expectedText) {
@@ -69,7 +131,7 @@ async function screenshot(page, name, expectedText) {
     }
   }
   const raw = await page.screenshot({ type: "png", fullPage: false });
-  const buffer = canonicalPng(Buffer.from(raw));
+  const buffer = rgbCanonical(raw);
   await fs.writeFile(file, buffer);
   const viewport = page.viewportSize();
   return {
@@ -117,15 +179,14 @@ export async function captureProductScreenshots() {
        a running clock gave a different question on a different day. */
     const page = await browser.newPage({ viewport: { width: 720, height: 1000 }, deviceScaleFactor: 1, timezoneId: "UTC" });
     await page.clock.setFixedTime(new Date(CAPTURE_TIME));
-    await page.addInitScript((css) => {
-      Math.random = () => 0.125;
-      try { localStorage.setItem("pulsern-labfab-v1", JSON.stringify({ side: "right", y: 0.62 })); } catch { /* private mode */ }
-      const style = document.createElement("style");
-      style.textContent = css;
-      document.documentElement.appendChild(style);
-    }, CAPTURE_STYLE);
+    await page.addInitScript(installCaptureFreeze, CAPTURE_STYLE);
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("http://127.0.0.1:4174/ops/product-screenshot.html", { waitUntil: "networkidle" });
+    await page.evaluate(installCaptureFreeze, CAPTURE_STYLE);
+    if (!await page.evaluate(() => !!document.querySelector("style[data-pulsern-capture-freeze]"))) {
+      const tag = await page.addStyleTag({ content: CAPTURE_STYLE });
+      await tag.evaluate((el) => el.setAttribute("data-pulsern-capture-freeze", ""));
+    }
     await settle(page);
     await page.getByRole("button", { name: "Skip", exact: true }).click();
     try {
@@ -143,6 +204,8 @@ export async function captureProductScreenshots() {
     await page.getByRole("button", { name: "New questions", exact: true }).click();
     await page.getByRole("main").waitFor();
     await page.setViewportSize({ width: 720, height: 620 });
+    await settle(page);
+    await assertStudyButtonClear(page, [".stem", ".opt", ".q-nav-wrap"]);
     images.push(await screenshot(page, "pulsern-adaptive-practice.png", ["Practice", "Check answer"]));
 
     await page.setViewportSize({ width: 430, height: 932 });
