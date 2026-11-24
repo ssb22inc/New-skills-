@@ -1,0 +1,93 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "607421664bcfc2abbaedd107d389d1eb621d1520",
+    "head": "5bb234fe79e4820032fb4ddc7507f77b01d0fddc",
+    "pr": "184"
+  },
+  "reviewedAt": "2026-11-24T08:23:36.730Z",
+  "filesReviewed": [
+    "pulsern/PULSERN_BUILD.md",
+    "pulsern/assets/App.portable.jsx",
+    "pulsern/ops/capture-product-screenshots.mjs",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/public/product/pulsern-adaptive-practice.png",
+    "pulsern/public/product/pulsern-lab-reference.png",
+    "pulsern/public/product/pulsern-today-dashboard.png",
+    "pulsern/src/App.jsx",
+    "pulsern/src/app-routing.js",
+    "pulsern/src/auth.jsx",
+    "pulsern/src/case-studies.js",
+    "pulsern/src/effects.js",
+    "pulsern/src/guest.js",
+    "pulsern/src/guest.jsx",
+    "pulsern/src/lab-fab.jsx",
+    "pulsern/src/lab-panel.jsx",
+    "pulsern/src/progress-load.js",
+    "pulsern/src/question-review.js",
+    "pulsern/src/rewards-ui.jsx",
+    "pulsern/src/rewards.js",
+    "pulsern/src/sign-out.js",
+    "pulsern/src/state.js",
+    "pulsern/tests/browser/announcer-harness.jsx",
+    "pulsern/tests/browser/announcer.html",
+    "pulsern/tests/browser/guest-harness.jsx",
+    "pulsern/tests/browser/guest.html",
+    "pulsern/tests/capture-fonts.test.js",
+    "pulsern/tests/card-nav-browser.test.js",
+    "pulsern/tests/effects.test.js",
+    "pulsern/tests/exam-leave-browser.test.js",
+    "pulsern/tests/flashcards-undo-browser.test.js",
+    "pulsern/tests/guest-browser.test.js",
+    "pulsern/tests/guest.test.js",
+    "pulsern/tests/lab-fab-browser.test.js",
+    "pulsern/tests/progress-load-browser.test.js",
+    "pulsern/tests/question-nav-browser.test.js",
+    "pulsern/tests/question-review.test.js",
+    "pulsern/tests/read-aloud-hook.test.js",
+    "pulsern/tests/review2-blockers.test.js",
+    "pulsern/tests/review2-fixes.test.js",
+    "pulsern/tests/review3-browser.test.js",
+    "pulsern/tests/review3.test.js",
+    "pulsern/tests/rewards.test.js",
+    "pulsern/tests/state-migration.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/src/guest.jsx",
+      "line": 84,
+      "title": "The question navigation's Labs button does nothing for guests",
+      "problem": "QBank renders QuestionNav, whose Labs control dispatches OPEN_LABS_EVENT. Only App subscribes to that event; GuestTrial renders QBank without App and never installs an equivalent listener. Its toolkit can therefore open through the floating button, but not through the question navigation.",
+      "failure_scenario": "An anonymous student opens /app/try and taps Labs in the question navigation. Nothing opens. The guest browser tests miss this because they open the toolkit exclusively through .lab-fab.",
+      "fix": "Subscribe to OPEN_LABS_EVENT in GuestTrial, select the labs section, open the toolkit, and remove the listener on unmount. Add a browser test that opens it through the question-navigation control.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/app-routing.js",
+      "line": 26,
+      "title": "Legacy signup query prevents a partially completed trial from reopening",
+      "problem": "authModeFromUrl checks start=1 before APP_TRY. AuthGate's onTry handler preserves the current query string, so entering the trial from the supported /app/?start=1 signup URL produces /app/try?start=1, which is subsequently classified as signup rather than try.",
+      "failure_scenario": "A visitor arrives at /app/?start=1, chooses Try questions first, answers one question, and reloads. They land on signup instead of resuming the trial. Because AuthScreen hides the Try button when saved trial answers exist, there is no visible way to finish the remaining questions.",
+      "fix": "Give the explicit APP_TRY pathname precedence over the legacy start=1 fallback, or remove that mode-selection parameter when navigating into the trial. Test reloading a partially completed trial entered from /app/?start=1 through the real AuthGate.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 233019,
+    "completionTokens": 9652,
+    "reasoningTokens": 9150,
+    "costUsd": 0.679066
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Two defects remain in the guest-trial flow. The warfarin correction is appropriate. Review was based on the supplied code and images; tests were not executed.",
+  "counts": {
+    "blocker": 0,
+    "major": 2,
+    "minor": 0
+  }
+}
