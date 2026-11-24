@@ -9,9 +9,10 @@
      - A failed read is NOT a new account. The app shows a retry, and
        autosave and the trial merge stay blocked until a read succeeds, so
        defaults can never be written over a real progress row.
-     - Trial answers fold in automatically only for a brand-new account
-       created after the trial started (no saved progress yet). Any other
-       account is asked first, and nothing merges unless the student says so. */
+     - Trial answers import through the live answer function only when the
+       account has no saved answers. Creation date is not part of the
+       decision. An account that already has answers keeps the trial on
+       this device until the student taps Discard practice answers. */
 import { guestFresh } from "./guest.js";
 
 /* A session lookup that errors, or returns no user, is not "no saved row".
