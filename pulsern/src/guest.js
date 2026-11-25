@@ -490,9 +490,16 @@ function keepUnmentionedCards(currentMap, snapshotMap, reconciledMap) {
   return out;
 }
 
-/* A legacy row often has no item rating. If one device already stored
-   the ability for exactly those answers, keep that theta instead of
-   replaying the difficulty seed. */
+/* A legacy row often has no item rating, so replaying it from the difficulty
+   seed gives a different theta than the one the old client actually reached
+   with the item's calibration. When a device stored an ability for exactly
+   its own answers in a category, and at least one of those answers has no
+   saved rating, that stored theta is the ANCHOR for them. Only the merged
+   rows that device never had are then applied on top, each with its own
+   rating when it has one. A rated answer from the other device therefore
+   does not discard the anchor (Astra, PR #184 review, finding 2); the choice
+   is made per category, from the device's own rows, not from whether any
+   merged row happens to carry a rating. */
 function adoptRecordedAbility(replayed, server, local, log) {
   const ability = { ...(replayed ?? {}) };
   const cats = new Set([
@@ -501,10 +508,23 @@ function adoptRecordedAbility(replayed, server, local, log) {
     ...Object.keys(local?.ability ?? {}),
   ]);
   for (const cat of cats) {
-    const rows = (log ?? []).filter((row) => row?.cat === cat);
-    if (!rows.length || rows.some(savedItemRating)) continue;
-    const recorded = [server?.ability?.[cat], local?.ability?.[cat]].find((entry) => entry && Number(entry.n) === rows.length && Number.isFinite(Number(entry.theta)));
-    if (recorded) ability[cat] = { theta: Number(recorded.theta), n: Number(recorded.n) };
+    const merged = (log ?? []).filter((row) => row?.cat === cat);
+    if (!merged.length) continue;
+    let best = null;
+    for (const blob of [server, local]) {
+      const own = (blob?.log ?? []).filter((row) => row?.cat === cat);
+      const entry = blob?.ability?.[cat];
+      if (!own.length || !entry || Number(entry.n) !== own.length || !Number.isFinite(Number(entry.theta))) continue;
+      if (!own.some((row) => !savedItemRating(row))) continue;
+      if (!best || own.length > best.own.length) best = { own, entry };
+    }
+    if (!best) continue;
+    let next = { ...ability, [cat]: { theta: Number(best.entry.theta), n: Number(best.entry.n) } };
+    for (const row of rowsNotYetStored(best.own, merged)) {
+      const input = answerInput(row);
+      next = updateAbility(next, input.q, input.correct, input.calibration).ability;
+    }
+    ability[cat] = next[cat];
   }
   return ability;
 }
