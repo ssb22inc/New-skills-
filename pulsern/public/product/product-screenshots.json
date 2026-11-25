@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-11-25T03:44:19.933Z",
+  "capturedAt": "2026-11-25T03:47:25.900Z",
   "sourceCommitSha": "74619ed1b537ec484cb8d3bccd124c78dda131c0",
   "renderer": "PulseRN App.jsx deterministic built-in-content harness",
   "browser": "151.0.7922.34",
   "containsLearnerData": false,
-  "sourceSetSha256": "6600356a8913009ac685a28f0e3d862d1150030b04a29fdbcd0c6faa7159c6e7",
+  "sourceSetSha256": "ba0a5e6cac05e2aca4c80a1c25788f9e43bb77d719398b7c2be1769b8f16cfe2",
   "sourceFiles": {
     "src/App.jsx": "9a011f7e790c7ab347e06821c7036987281436e2cd450e0c3fd01c2bea48ead6",
     "src/ability-engine.js": "af8784ea68eaf9e977ecff47f2071b151d7e4def781b454ac9dec35459b7ef76",
@@ -57,7 +57,7 @@
     "src/lab-lookup.js": "9f3af3c68b45b4cf65ec660e353e18b26895cb7d39c455f7411d60e77bfbf2a4",
     "src/lab-panel.jsx": "93609554d6e8093a842fcf204f32cdd89cc793d5c0cbea22ecd60e585ebe9f5b",
     "src/labs.js": "8d7cab0c115b5b002e9833343c4cfb18454cca4e47ea242564219bb41a137604",
-    "src/landing.jsx": "20b6e4877a31d9573e94b65a461d199dbdbdac07f2b031bb7d63e194745cce0e",
+    "src/landing.jsx": "c5a0d88b7607ec2d61ca9b019c7089789c5364b2620eced399efeb26b2a1e129",
     "src/main.jsx": "efb8ec0a8a024cf8d27f7f1113f7840f097be89775fd081998d75cb98bff38eb",
     "src/ngn-samples.js": "3c2ef292fc49892dd677168452fb6299ba33f9d47ec93a03f2a61a83bb85ba5d",
     "src/ngn.js": "3ae09fe98c92cd1fa0ad45d55a87b2ec0380df48d060ff22a34bbc7ffb60b836",
@@ -101,8 +101,8 @@
     },
     {
       "file": "pulsern-today-dashboard.png",
-      "sha256": "8a2fc7907758b95a491a546c3b67945d89f00215f2ee62e8392ba5b0b5aa720a",
-      "bytes": 113896,
+      "sha256": "027928292191df2bd92615a350ddbb29e981d716649eee1254bf1a34af4f47a3",
+      "bytes": 112652,
       "width": 720,
       "height": 1280,
       "alt": "PulseRN Today dashboard showing the daily round, candidate monitor, study goal, and progress cards",
