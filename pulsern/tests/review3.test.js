@@ -80,6 +80,19 @@ describe("Codex P2 wiring", () => {
     const afterInsert = set.slice(set.lastIndexOf("if (!revision)"));
     expect(afterInsert).toContain("legacyHold = false");
   });
+  it("does not raise the legacy hold when a reset finds no progress row", () => {
+    const del = app.slice(app.indexOf("async delete(key"), app.indexOf("async delete(key") + 2800);
+    expect(del).toContain("const rowExists = revision != null");
+    expect(del).toContain("legacyHold = rowExists");
+    expect(del).not.toMatch(/legacyHold = true/);
+  });
+  it("puts the monitor-track green on a theme variable, not a hard-coded hex", () => {
+    expect(app).toContain("--mon-track:#24433C");
+    expect(app).toMatch(/data-theme="dim"[\s\S]{0,400}--mon-track:/);
+    const ui = fs.readFileSync("src/rewards-ui.jsx", "utf8");
+    expect(ui).toContain("var(--mon-track)");
+    expect(ui).not.toContain("#24433C");
+  });
 });
 
 describe("N1: unreadable saved progress", () => {

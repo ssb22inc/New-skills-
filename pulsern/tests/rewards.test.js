@@ -2,6 +2,7 @@
    badges and ranks need accuracy, not volume; the streak shield and shift
    covers protect missed days; milestones fire once. */
 import { describe, it, expect } from "vitest";
+import fs from "node:fs";
 import {
   answerXp, minThinkMs, answerCountsForRun, xpNote, comboFor, bumpDay, reverseCardDay, shiftStatus, shiftCompleteNote, todayQuestionCount, weekRounds, maybeGrantCover, advanceStreak, streakDayCounted, streakPillLabel,
   categoryMastery, badgeBoard, careerStatus, legacyRankIndex, detectMoments, markMomentsSeen, sessionRecap,
@@ -58,6 +59,14 @@ describe("answer XP", () => {
     let total = 0;
     for (let i = 0; i < 20; i++) { total += answerXp({ q, correct: true, ms: 400, log }).xp; log = [...log, { id: 7, cat: "Pharmacology", diff: 2, correct: true }]; }
     expect(total).toBe(0);
+  });
+  it("the build spec describes answerXp, not a flat 10 × diff on every full credit", () => {
+    const build = fs.readFileSync("PULSERN_BUILD.md", "utf8");
+    const section = build.slice(build.indexOf("5.4 NGN renderers"));
+    expect(section).toContain("answerXp");
+    expect(section).toContain("REVIEW_FIX_BONUS");
+    expect(section).toContain("minThinkMs");
+    expect(section).not.toMatch(/XP 10 \* diff as elsewhere, on full credit/);
   });
 });
 

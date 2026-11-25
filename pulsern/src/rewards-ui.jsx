@@ -434,7 +434,7 @@ export function RewardsStyle() {
       .rw-ins-ecg.on{stroke:var(--teal);opacity:1}
       .rw-ins-ecg.solid{stroke:var(--card);opacity:1}
       .rw-dial-bg{fill:var(--mon)}
-      .rw-dial-seg{stroke:#24433C}
+      .rw-dial-seg{stroke:var(--mon-track)}
       .rw-dial-seg.on{stroke:var(--ecg)}
       .rw-dial-txt{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:13px;fill:#CFEADF;letter-spacing:.04em}
       /* heartbeat line + ripple */
@@ -546,7 +546,7 @@ export function RewardsStyle() {
       .rw-recap-hero{position:relative;background:var(--mon);color:#CFEADF;padding:16px 18px 6px;margin-bottom:14px;overflow:hidden}
       .rw-recap-eyebrow{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#8FD7C4;margin:0 0 8px}
       .rw-recap-main{display:flex;align-items:center;gap:16px}
-      .rw-ring-track{fill:none;stroke:#24433C;stroke-width:7}
+      .rw-ring-track{fill:none;stroke:var(--mon-track);stroke-width:7}
       .rw-ring-fill{fill:none;stroke:var(--ecg);stroke-width:7;stroke-linecap:round}
       .rw-ring-txt{font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;fill:#EAF7F1}
       .rw-recap-stats{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;flex:1}

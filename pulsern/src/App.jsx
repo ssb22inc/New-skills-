@@ -568,7 +568,10 @@ const store = {
       if (leftError) throw new Error(leftError.message || "Could not erase saved progress");
       if (left) throw new Error("Could not erase saved progress");
     }
-    legacyHold = true;
+    /* Only a written tombstone needs the hold. A no-row reset must not
+       raise it, or the first insert would create the row with legacy_hold=true
+       and a later revision-less save would be dropped instead of parked. */
+    legacyHold = rowExists;
     accountEpoch += 1;
     progressGate.abandon();
     /* The screen starts fresh and its first save is the whole new blob, so
@@ -3723,7 +3726,7 @@ export function Style() {
         --paper:#F3F6F4; --ink:#0F2E29; --card:#FFFFFF; --muted:#3B554F;
         --surface:#F7FAF8; --line:#D8E2DD; --bar-bg:#E7EFEA;
         --teal:#0E7C6B; --btn-ink:#FFFFFF; --accent-ink:#0A5A4E;
-        --mon:#0C201D; --ecg:#3BE08F;
+        --mon:#0C201D; --ecg:#3BE08F; --mon-track:#24433C;
         --amber:#E9A23B; --coral:#D9503F; --danger-ink:#B23A2B;
         --pick-bg:#E8F4F0; --right-bg:#DDF2E7; --wrong-bg:#FBE7E3;
         --ok-bg:#E9F6EF; --ok-line:#BCE4CE; --no-bg:#FBEFEC; --no-line:#F0C8C0;
@@ -3734,6 +3737,7 @@ export function Style() {
       .app[data-theme="dim"]{
         /* DIM (night review) — charcoal, not #000, to avoid halation */
         --paper:#151A18; --ink:#EAF1ED; --card:#1D2523; --muted:#B4C7BF;
+        --mon-track:#24433C;
         --surface:#242D2A; --line:#33403B; --bar-bg:#2A3430;
         --teal:#2FA78F; --btn-ink:#06231D; --accent-ink:#8CDCC8;
         --amber:#D9A24E; --coral:#E0705E; --danger-ink:#F2A296;
