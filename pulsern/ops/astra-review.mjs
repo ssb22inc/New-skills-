@@ -48,7 +48,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { llmCall } from "./llm.mjs";
 import { isCanonicalPng } from "./png-canonical.mjs";
-import { REVIEW_MODEL, REVIEWER_NAME, reviewerFor, assertCrossFamily } from "./models.mjs";
+import { REVIEW_MODEL, VISION_REVIEW_MODEL, REVIEWER_NAME, assertCrossFamily } from "./models.mjs";
 
 /* The author of the code under review, so the cross-family check is real. */
 export const AUTHOR_MODEL_FAMILY_PROBE = "anthropic/claude";
@@ -390,6 +390,28 @@ export function buildMessages(prompt, images = []) {
   return [{ role: "user", content }];
 }
 
+/* The picture pass. A small, separate prompt: the rules, then every changed
+   image labelled with its path, side and hash. Text and code are judged in the
+   text pass; this one judges only what the pictures show. */
+export function buildVisionPrompt({ rules, images, meta }) {
+  return `You are the adversarial picture reviewer for PulseRN, an NCLEX-RN exam-preparation platform used by nursing students. The images below are part of a change written by a Claude model (range ${meta.base.slice(0, 12)}..${meta.head.slice(0, 12)}). A separate text reviewer reads all code and text. You read only the pictures.
+
+Each image is labelled with its path, whether it is the version BEFORE or AFTER the change, and its sha256. For every path, compare before and after where both are given, and judge the AFTER version as strictly as text: a wrong value, label, unit, clinical detail, a promise of a pass or an outcome, a named hospital or unit, a competitor's name or logo, personal data, or a broken or unreadable layout is a defect.
+- blocker: wrong or unsafe clinical or exam content; a guarantee of passing; personal data; a competitor or hospital named.
+- major: a real defect on a plausible path (misleading label, unreadable or cut-off key content).
+- minor: polish.
+Report only what you can actually see; do not guess about code. If every image is fine, return no findings. Set "file" to the image path.
+
+Return ONE JSON object with "assessment" (string) and "findings" (array); no other text.
+
+PROJECT RULES (for reference)
+${rules}
+
+Images changed: ${images.length}
+${images.map((i, n) => `${n + 1}. ${i.path} (${i.side})`).join("\n")}
+`;
+}
+
 /* Fits the change into the budget without ever dropping part of the change. */
 export function planContext(files, budget = MAX_PROMPT_CHARS, fixedOverhead = 0) {
   const diffs = files.reduce((n, f) => n + f.diff.length, 0);
@@ -429,6 +451,7 @@ export const FINDINGS_SCHEMA = {
         assessment: { type: "string" },
         findings: {
           type: "array",
+          maxItems: 20,
           items: {
             type: "object",
             additionalProperties: false,
@@ -461,6 +484,7 @@ WHAT COUNTS
 
 HOW TO REPORT
 - Every finding names a file and, where possible, a line in the post-change file. State the concrete failure: what input or state, and what goes wrong.
+- Report each distinct defect once. Do not repeat a finding or rephrase the same defect. Return at most 20 findings, highest severity first. Keep each field to a few sentences.
 - No style preferences, no restating what the code does, no generic advice. If the code is correct, say so and return no findings for it.
 - If you are unsure, say exactly what you could not verify and lower the confidence — do not inflate severity to be safe, and do not omit a real concern to be polite.
 - Check the tests as hard as the code: a test that cannot fail is worse than no test, because it reports safety that does not exist.
@@ -470,7 +494,7 @@ FORMS YOU WILL SEE
 - "page digest": a generated public page reduced to one line per visible text block, script, link, meta tag and event handler, diffed before/after. Judge what a reader sees and what a browser would run.
 - "dependency summary": the lockfile reduced to package@version, source host and integrity prefix, diffed before/after.
 - Invisible characters (controls, separators, zero-width and bidirectional formatting, byte-order marks) are written as ⟦U+XXXX⟧, and a literal ⟦ in the file is written ⟦U+27E6⟧, so every ⟦U+…⟧ you see is that exact character in the file — never text that merely looks like it.
-- "image": a changed raster image. Both versions are attached after this text, each labelled with its path and sha256. Review what they show as strictly as text: a wrong value, label or clinical detail in an image is wrong content.`);
+- "image": a changed raster image. You are a text-only reader: the pictures themselves go to a separate vision pass whose findings are merged into this review. Judge only what is written here (path, hash, size, and the code and tests that use the image); do not report an image as unseen.`);
 
   parts.push(`\n=== PROJECT RULES (the standard you review against) ===\n${rules}`);
 
@@ -638,43 +662,61 @@ export async function runReview({ base, head, pr = null, outDir, rulesPath, cwd 
       return { code: 1, report };
     }
 
-    /* Checkpoint BEFORE spending. The model is chosen first, so a run that
-       dies during the call still names the model that was about to be paid. */
+    /* Checkpoint BEFORE spending. Both models are chosen first, so a run that
+       dies during a call still names the models that were about to be paid. */
     const prompt = buildPrompt({ rules, files: plan.files, skipped, meta });
     const maxTokens = reviewMaxTokens();
-    const model = reviewerFor({ images: images.length > 0 });
-    assertCrossFamily(AUTHOR_MODEL_FAMILY_PROBE, model);
-    report.model = model;
-    report.error = `The review was started but did not finish: the run was stopped while waiting for ${model}. Recorded as a failure.`;
+    const passes = [{ label: "text", model: REVIEW_MODEL, prompt, messages: buildMessages(prompt, []) }];
+    if (images.length) {
+      const vprompt = buildVisionPrompt({ rules, images, meta });
+      passes.push({ label: "picture", model: VISION_REVIEW_MODEL, prompt: vprompt, messages: buildMessages(vprompt, images) });
+    }
+    for (const p of passes) assertCrossFamily(AUTHOR_MODEL_FAMILY_PROBE, p.model);
+    const names = passes.map((p) => p.model).join(" + ");
+    report.model = names;
+    report.error = `The review was started but did not finish: the run was stopped while waiting for ${names}. Recorded as a failure.`;
     report.verdict = "FAIL";
     save();
-    const res = await callModel({ model, prompt, messages: buildMessages(prompt, images), maxTokens, reasoningEffort: "high", responseFormat: FINDINGS_SCHEMA });
-    report.usage = res.usage;
-    report.model = res.model || REVIEW_MODEL;
-    /* A truncated answer can still look like JSON. It is not a finished
-       review, so it cannot pass. */
-    if (res.finishReason === "length") {
-      report.error = `The review output was truncated at the ${maxTokens}-token cap (finish_reason: length). Recorded as a failure, not a pass.`;
-      report.rawAnswer = res.text;
-      report.verdict = "FAIL";
-      save();
-      return { code: 2, report };
-    }
 
-    let parsed;
-    try { parsed = parseReviewText(res.text); }
-    catch (e) {
-      report.error = `Astra's answer could not be read as a review (${e.message}). The raw answer is kept in the .raw.json report.`;
-      report.rawAnswer = res.text;
-      report.verdict = "FAIL";
-      save();
-      return { code: 2, report };
+    /* Fail closed, per pass. A truncated answer can still look like JSON; an
+       API error, an unreadable answer or finish_reason "length" in ANY pass is
+       a failure of the whole review, never a pass on the other pass alone. */
+    const findings = [];
+    const assessments = [];
+    const used = [];
+    const ran = [];
+    let usage = null;
+    for (const p of passes) {
+      const res = await callModel({ model: p.model, prompt: p.prompt, messages: p.messages, maxTokens, reasoningEffort: "high", responseFormat: FINDINGS_SCHEMA });
+      usage = addUsage(usage, res.usage);
+      report.usage = usage;
+      ran.push(res.model || p.model);
+      report.model = ran.concat(passes.slice(ran.length).map((q) => q.model)).join(" + ");
+      if (res.finishReason === "length") {
+        report.error = `The ${p.label} review output was truncated at the ${maxTokens}-token cap (finish_reason: length). Recorded as a failure, not a pass.`;
+        report.rawAnswer = res.text;
+        report.verdict = "FAIL";
+        save();
+        return { code: 2, report };
+      }
+      let parsed;
+      try { parsed = parseReviewText(res.text); }
+      catch (e) {
+        report.error = `The ${p.label} review's answer could not be read as a review (${e.message}). The raw answer is kept in the .raw.json report.`;
+        report.rawAnswer = res.text;
+        report.verdict = "FAIL";
+        save();
+        return { code: 2, report };
+      }
+      used.push(p.label);
+      assessments.push(passes.length > 1 ? `${p.label[0].toUpperCase()}${p.label.slice(1)} pass: ${parsed.assessment}` : parsed.assessment);
+      findings.push(...parsed.findings);
     }
 
     report.error = null;
-    report.assessment = parsed.assessment;
-    report.findings = parsed.findings;
-    Object.assign(report, verdictFor(parsed.findings));
+    report.assessment = assessments.join("\n\n");
+    report.findings = findings;
+    Object.assign(report, verdictFor(findings));
     save();
     return { code: report.verdict === "PASS" ? 0 : 1, report };
   } catch (e) {
@@ -683,6 +725,19 @@ export async function runReview({ base, head, pr = null, outDir, rulesPath, cwd 
     try { save(); } catch (se) { console.error(`Could not save the report either: ${se.message}`); }
     return { code: 2, report };
   }
+}
+
+/* Sum of the passes' usage; a pass that reports no cost makes the total unknown. */
+export function addUsage(a, b) {
+  if (!a) return b ?? null;
+  if (!b) return a;
+  const sum = (x, y) => (x == null || y == null ? null : x + y);
+  return {
+    ...a,
+    promptTokens: sum(a.promptTokens, b.promptTokens),
+    completionTokens: sum(a.completionTokens, b.completionTokens),
+    costUsd: sum(a.costUsd, b.costUsd),
+  };
 }
 
 /* Empty keeps the standing 64000 cap. DeepSeek V4 Pro's listed completion

@@ -379,31 +379,38 @@ describe("digests", () => {
         const outDir = mkdtempSync(join(tmpdir(), "astra-out-"));
         const { report } = await runReview({ base: "b", head: "HEAD", outDir, rulesPath: "CLAUDE.md", cwd: dir });
         expect(report.error, report.error).toBeNull();
-        expect(report.model).toBe("openai/gpt-6.1-sol");
+        expect(report.model).toBe("deepseek/deepseek-v4-pro-0813 + deepseek/deepseek-v4-flash-vision-exp");
       } finally {
         globalThis.fetch = realFetch;
         if (realKey === undefined) delete process.env.OPENROUTER_API_KEY; else process.env.OPENROUTER_API_KEY = realKey;
         rmSync(dir, { recursive: true, force: true });
       }
-      expect(sent).toHaveLength(1);
-      expect(sent[0].model).toBe("openai/gpt-6.1-sol");
-      const content = sent[0].messages[0].content;
+      /* Two passes: text first, with no pictures; then the picture pass. */
+      expect(sent).toHaveLength(2);
+      expect(sent[0].model).toBe("deepseek/deepseek-v4-pro-0813");
+      expect(typeof sent[0].messages[0].content).toBe("string");
+      expect(sent[1].model).toBe("deepseek/deepseek-v4-flash-vision-exp");
+      const content = sent[1].messages[0].content;
       expect(Array.isArray(content)).toBe(true);
       const urls = content.filter((c) => c.type === "image_url").map((c) => c.image_url.url);
       expect(urls).toEqual([`data:image/png;base64,${PNG(10).toString("base64")}`, `data:image/png;base64,${PNG(200).toString("base64")}`]);
     });
 
-    it("names Sol in the checkpoint while an image review is still unpaid", async () => {
+    it("names both reviewers in the checkpoint while an image review is still unpaid", async () => {
       const path = "pulsern/public/diagram.png";
       const dir = repoWith([[path, PNG(10), PNG(200)]]);
       const outDir = mkdtempSync(join(tmpdir(), "astra-out-"));
-      let release;
-      const pending = runReview({ base: "b", head: "HEAD", outDir, rulesPath: "CLAUDE.md", cwd: dir, now: () => new Date("2026-10-08T21:00:00Z") }, { callModel: () => new Promise((r) => { release = r; }) });
+      const releases = [];
+      const pending = runReview({ base: "b", head: "HEAD", outDir, rulesPath: "CLAUDE.md", cwd: dir, now: () => new Date("2026-10-08T21:00:00Z") }, { callModel: () => new Promise((r) => { releases.push(r); }) });
       await new Promise((r) => setTimeout(r, 30));
       const md = readdirSync(outDir).filter((f) => f.endsWith(".md")).map((f) => readFileSync(join(outDir, f), "utf8")).join("\n");
-      expect(md).toContain("openai/gpt-6.1-sol");
+      expect(md).toContain("deepseek/deepseek-v4-pro-0813");
+      expect(md).toContain("deepseek/deepseek-v4-flash-vision-exp");
       expect(md).toContain("did not finish");
-      release({ text: JSON.stringify({ assessment: "ok", findings: [] }), finishReason: "stop", usage: {}, model: "openai/gpt-6.1-sol" });
+      const done = { text: JSON.stringify({ assessment: "ok", findings: [] }), finishReason: "stop", usage: {}, model: "m" };
+      releases[0](done);
+      await new Promise((r) => setTimeout(r, 30));
+      releases[1](done);
       await pending;
       rmSync(dir, { recursive: true, force: true });
     });
@@ -754,6 +761,10 @@ describe("the prompt", () => {
     expect(p).toMatch(/test that cannot fail/);
     expect(p).toMatch(/bypass this review/);
   });
+  it("caps the finding list and forbids repeating the same defect", () => {
+    expect(p).toMatch(/at most 20 findings/);
+    expect(p).toMatch(/Do not repeat a finding/);
+  });
 });
 
 describe("reading the answer", () => {
@@ -767,6 +778,7 @@ describe("reading the answer", () => {
   it("asks for a strict schema", () => {
     expect(FINDINGS_SCHEMA.json_schema.strict).toBe(true);
     expect(FINDINGS_SCHEMA.json_schema.schema.additionalProperties).toBe(false);
+    expect(FINDINGS_SCHEMA.json_schema.schema.properties.findings.maxItems).toBe(20);
   });
 });
 
@@ -896,12 +908,80 @@ describe("running a review end to end (Astra finding #5)", () => {
     run("add", "-A"); run("commit", "-qm", "b"); run("tag", "b");
     writeFileSync(join(dir, "pulsern/public/dot.png"), encodeCanonicalPng({ width: 1, height: 1, colour: 0, pixels: [0] }));
     run("add", "-A"); run("commit", "-qm", "h");
-    let called = null;
-    const { code, report } = await runReview({ base: "b", head: "HEAD", outDir: mkdtempSync(join(tmpdir(), "astra-out-")), rulesPath: "CLAUDE.md", cwd: dir }, { callModel: async (req) => { called = req.model; return { text: JSON.stringify({ assessment: "ok", findings: [] }), finishReason: "stop", usage: {}, model: req.model }; } });
-    expect(called).toBe("openai/gpt-6.1-sol");
+    const calls = [];
+    const { code, report } = await runReview({ base: "b", head: "HEAD", outDir: mkdtempSync(join(tmpdir(), "astra-out-")), rulesPath: "CLAUDE.md", cwd: dir }, { callModel: async (req) => { calls.push(req); return { text: JSON.stringify({ assessment: "ok", findings: [] }), finishReason: "stop", usage: { costUsd: 0.01, promptTokens: 10, completionTokens: 2 }, model: req.model }; } });
+    expect(calls.map((c) => c.model)).toEqual(["deepseek/deepseek-v4-pro-0813", "deepseek/deepseek-v4-flash-vision-exp"]);
+    expect(calls.some((c) => /gpt-6\.1-sol|openai\//.test(c.model))).toBe(false);
     expect(code).toBe(0);
-    expect(report.model).toBe("openai/gpt-6.1-sol");
+    expect(report.model).toBe("deepseek/deepseek-v4-pro-0813 + deepseek/deepseek-v4-flash-vision-exp");
+    expect(report.usage.costUsd).toBeCloseTo(0.02);
+    expect(report.usage.promptTokens).toBe(20);
     rmSync(dir, { recursive: true, force: true });
+  });
+
+  describe("two passes: text, then pictures", () => {
+    function imageRepo() {
+      const dir = mkdtempSync(join(tmpdir(), "astra-img-"));
+      const run = (...x) => execFileSync("git", x, { cwd: dir });
+      run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t");
+      mkdirSync(join(dir, "pulsern/public"), { recursive: true });
+      writeFileSync(join(dir, "pulsern/public/a.txt"), "old\n");
+      run("add", "-A"); run("commit", "-qm", "b"); run("tag", "b");
+      writeFileSync(join(dir, "pulsern/public/dot.png"), encodeCanonicalPng({ width: 1, height: 1, colour: 0, pixels: [0] }));
+      run("add", "-A"); run("commit", "-qm", "h");
+      return dir;
+    }
+    const reply = (findings = [], extra = {}) => ({ text: JSON.stringify({ assessment: "a", findings }), finishReason: "stop", usage: {}, ...extra });
+    const major = { severity: "major", file: "pulsern/public/dot.png", line: null, title: "t", problem: "p", failure_scenario: "f", fix: "x", confidence: "high" };
+    const go = (dir, cb) => runReview({ base: "b", head: "HEAD", outDir: mkdtempSync(join(tmpdir(), "astra-out-")), rulesPath: "CLAUDE.md", cwd: dir }, { callModel: cb });
+
+    it("a text-only change makes exactly one call, on the text model", async () => {
+      const dir = out();
+      const models = [];
+      await runReview(opts(dir), { callModel: async (r) => { models.push(r.model); return reply(); } });
+      expect(models).toEqual(["deepseek/deepseek-v4-pro-0813"]);
+    });
+
+    it("a major finding in the picture pass blocks, and is merged with the text findings", async () => {
+      const dir = imageRepo();
+      const { code, report } = await go(dir, async (r) => (r.model === "deepseek/deepseek-v4-flash-vision-exp" ? reply([major]) : reply([{ ...major, severity: "minor", file: "pulsern/src/x.js" }])));
+      expect(code).toBe(1);
+      expect(report.verdict).toBe("FAIL");
+      expect(report.counts).toEqual({ blocker: 0, major: 1, minor: 1 });
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    it("an API error in the picture pass fails the whole review", async () => {
+      const dir = imageRepo();
+      const { code, report } = await go(dir, async (r) => { if (r.model === "deepseek/deepseek-v4-flash-vision-exp") throw new Error("vision: 500 down"); return reply(); });
+      expect(code).toBe(2);
+      expect(report.verdict).toBe("FAIL");
+      expect(report.error).toMatch(/500/);
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    it("finish_reason length in the picture pass fails the whole review", async () => {
+      const dir = imageRepo();
+      const { code, report } = await go(dir, async (r) => (r.model === "deepseek/deepseek-v4-flash-vision-exp" ? reply([], { finishReason: "length" }) : reply()));
+      expect(code).toBe(2);
+      expect(report.verdict).toBe("FAIL");
+      expect(report.error).toMatch(/picture review output was truncated/);
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    it("an unreadable picture answer fails the whole review", async () => {
+      const dir = imageRepo();
+      const { code, report } = await go(dir, async (r) => (r.model === "deepseek/deepseek-v4-flash-vision-exp" ? { text: "nope", finishReason: "stop", usage: {} } : reply()));
+      expect(code).toBe(2);
+      expect(report.verdict).toBe("FAIL");
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    it("never reaches an OpenAI-direct key or the old fallback model", () => {
+      const src = readFileSync("ops/astra-review.mjs", "utf8") + readFileSync("ops/models.mjs", "utf8").split("export const reviewerFor")[0];
+      expect(src).not.toMatch(/OPENAI_API_KEY|api\.openai\.com/);
+      expect(readFileSync("../.github/workflows/pulsern-astra-review.yml", "utf8")).not.toMatch(/OPENAI_API_KEY|api\.openai\.com/);
+    });
   });
 
   it("records an API error as a failure", async () => {
