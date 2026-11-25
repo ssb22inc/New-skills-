@@ -97,10 +97,22 @@ describe("settling clear of every target", () => {
     expect(hitsAny(rect, blocks)).toBe(false);
     expect(rectsOverlap(rect, tabBar)).toBe(false);
     expect(rectsOverlap(rect, next)).toBe(false);
-    expect(rect.w).toBe(PARK_W);
     expect(rect.h).toBe(PARK_H);
     const onScreen = Math.max(0, Math.min(rect.x + rect.w, phone.vw) - Math.max(rect.x, 0));
+    const offScreen = rect.w - onScreen;
     expect(onScreen).toBeGreaterThan(0);
+    expect(offScreen).toBe(onScreen);
+  });
+  it("keeps a 44px target half off the nearest edge when that strip is free", () => {
+    const column = { x: 0, y: 0, w: phone.vw - 44, h: phone.vh };
+    const spot = findClearSpot(DEFAULT_ANCHOR, phone, [column]);
+    const rect = { x: spot.x, y: spot.y, w: spot.w, h: spot.h };
+    const onScreen = Math.max(0, Math.min(rect.x + rect.w, phone.vw) - Math.max(rect.x, 0));
+    expect(spot.parked).toBe(true);
+    expect(onScreen).toBeGreaterThanOrEqual(44);
+    expect(rect.w - onScreen).toBe(onScreen);
+    expect(hitsAny(rect, [column])).toBe(false);
+    expect(rect.x + onScreen).toBe(phone.vw);
   });
   it("does not sit on a control even when the whole screen is blocked", () => {
     const wall = { x: 0, y: 0, w: 390, h: 844 };

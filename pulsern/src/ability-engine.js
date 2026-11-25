@@ -33,12 +33,46 @@ const SEED = { 1: 1100, 2: 1300, 3: 1500 }; // item seeds by diff tier
 const PASS_ANCHOR = 1300;       // θ at which P(pass) ≈ 0.5 (borderline)
 const PASS_SCALE = 140;         // logistic width for the pass mapping
 
+export const ABILITY_CATS = [
+  "Management of Care",
+  "Safety & Infection Control",
+  "Health Promotion & Maintenance",
+  "Psychosocial Integrity",
+  "Basic Care & Comfort",
+  "Pharmacology",
+  "Reduction of Risk",
+  "Physiological Adaptation",
+];
+
 export const emptyAbility = (cats) =>
   Object.fromEntries(cats.map((c) => [c, { theta: BASE, n: 0 }]));
 
-/* Item rating: calibrated value if we have one, else the diff seed. */
-export const itemRating = (q, calibration = {}) =>
-  calibration[q.id]?.rating ?? SEED[q.diff] ?? 1300;
+/* The forward step is θ' = θ + K(n)·(actual − E(θ)). Search back for θ. */
+export function undoAbility(ability, q, correct, calibration = {}) {
+  const cat = ability?.[q?.cat];
+  if (!cat || !(cat.n > 0)) return ability ?? {};
+  const n = cat.n - 1;
+  const K = kFor(n);
+  const R = itemRating(q, calibration);
+  const actual = correct ? 1 : 0;
+  const target = cat.theta;
+  let lo = target - K * 2 - 80;
+  let hi = target + K * 2 + 80;
+  for (let i = 0; i < 80; i += 1) {
+    const mid = (lo + hi) / 2;
+    const fwd = mid + K * (actual - expected(mid, R));
+    if (fwd < target) lo = mid;
+    else hi = mid;
+  }
+  return { ...ability, [q.cat]: { theta: (lo + hi) / 2, n } };
+}
+
+/* Item rating: a calibrated bank row uses its own rating. A built-in
+   or a case step that happens to share the numeric id does not. */
+export const itemRating = (q, calibration = {}) => {
+  const bankRating = q && q.source !== "builtin" && q.source !== "case" ? calibration[q.id]?.rating : undefined;
+  return bankRating ?? SEED[q?.diff] ?? 1300;
+};
 
 const expected = (theta, rating) =>
   1 / (1 + Math.pow(10, (rating - theta) / 400));

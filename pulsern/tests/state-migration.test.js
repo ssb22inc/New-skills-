@@ -2,6 +2,7 @@
    legacy blob without ability/plan loads with defaults;
    full blob round-trips unchanged. The §4 contract is frozen. */
 import { describe, it, expect } from "vitest";
+import { emptyRewards } from "../src/rewards.js";
 import { migrateBlob } from "../src/state.js";
 import { emptyAbility } from "../src/ability-engine.js";
 
@@ -47,6 +48,11 @@ describe("state migration", () => {
       fcFlips: 7,
       missSchedule: { 2: { interval: 1, due: "2026-07-09", seen: "2026-07-08" } },
       fcNew: { day: "2026-07-08", count: 12 },
+      rewards: {
+        v: 1, days: { "2026-07-08": { q: 9, ok: 7, xp: 120, cards: 4, fixes: 1, ms: 0 } }, covers: 1, coverWeeks: ["2026-07-06"], coverDays: [],
+        best: { run: 6, sessionAcc: 88, sessionN: 8, dayQ: 9, streak: 7 }, milestones: [7], rankHigh: 2, badgesSeen: { [CATS[2]]: 1 },
+        prefs: { sound: false, haptics: true, reduceFx: false },
+      },
     };
     expect(migrateBlob(full, CATS)).toEqual(full);
   });
@@ -59,6 +65,7 @@ describe("state migration", () => {
       daily: null, srs: [], customQs: [], provider: "claude",
       ability: emptyAbility(CATS), plan: null, examDate: null, tourSeen: false, srsMap: {}, examResults: {}, profileCardDismissed: false, fcFlips: 0,
       missSchedule: {}, fcNew: { day: null, count: 0 },
+      rewards: { ...emptyRewards(), rankHigh: 0 },
     });
   });
 

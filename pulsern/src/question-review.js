@@ -10,20 +10,112 @@
    Deterministic plain code (CLAUDE.md rule 6); dates LOCAL (rule 4). */
 import { nextSchedule } from "./srs.js";
 import { todayStr } from "./dates.js";
+import { canonicalKey, questionIdentity } from "./question-identity.js";
+import { CASE_STUDIES } from "./case-studies.js";
+import { caseStepIds } from "./rewards.js";
 
-/* Next schedule after one answer. Returns a NEW map (React-state safe). */
-export function updateMissSchedule(schedule, id, correct) {
+/* Next schedule after one answer. Returns a NEW map (React-state safe).
+   `day` is the local day the answer was taken. Omit it and the review
+   is counted from the clock, which is what a live answer wants. */
+export function updateMissSchedule(schedule, id, correct, day = null) {
+  if (id == null) return schedule ?? {};
   const map = schedule ?? {};
   const entry = map[id];
   if (correct && !entry) return map; // never missed — nothing to schedule
-  return { ...map, [id]: nextSchedule(entry, correct ? "good" : "hard") };
+  return { ...map, [id]: nextSchedule(entry, correct ? "good" : "hard", day) };
 }
 
-/* Latest result per question id from the answer log. */
+/* Lookup key. The canonical key wins. A row that was never stamped
+   still groups by its raw id so older fixtures keep their pools. */
+export function answerIdentity(row) {
+  return questionIdentity(row) ?? (row && !row.unclassified && row.id != null ? String(row.id) : null);
+}
+
 export function latestResults(log) {
   const latest = {};
-  for (const l of log ?? []) if (l && l.id != null) latest[l.id] = !!l.correct;
+  for (const l of log ?? []) {
+    const id = answerIdentity(l);
+    if (id != null) latest[id] = !!l.correct;
+  }
   return latest;
+}
+
+/* A canonical row wins. An old save that only has the number counts
+   when this catalog has exactly one question with that number. When
+   several share it, the old row stays unresolved: it is not treated
+   as a new question, and it is not pinned on any of them. */
+export function historyIndex(log) {
+  const latest = Object.create(null);
+  const unscoped = new Map();
+  const unresolved = new Map();
+  for (const row of log ?? []) {
+    if (!row) continue;
+    if (row.unclassified && row.id != null) {
+      unresolved.set(String(row.id), !!row.correct);
+      continue;
+    }
+    const id = questionIdentity(row);
+    if (id != null) latest[id] = !!row.correct;
+    else if (row.id != null) unscoped.set(String(row.id), !!row.correct);
+  }
+  return { latest, unscoped, unresolved };
+}
+
+function peerCounts(questions) {
+  const counts = new Map();
+  for (const q of questions ?? []) {
+    if (q?.id == null) continue;
+    const id = String(q.id);
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return counts;
+}
+
+export function settledResult(question, log, questions = null, index = null, peers = null) {
+  const idx = index ?? historyIndex(log);
+  const counts = peers ?? peerCounts(questions ?? [question]);
+  const id = answerIdentity(question);
+  if (id != null && Object.prototype.hasOwnProperty.call(idx.latest, id)) return { state: "known", correct: !!idx.latest[id] };
+  const num = question?.id != null ? String(question.id) : null;
+  /* A catalog question already has a canonical key. An old row that
+     only has the number is not that question until classifyLog names it.
+     Serving it now would score a different identity than the XP rules. */
+  if (questionIdentity(question) && num && idx.unscoped.has(num)) return { state: "pending" };
+  /* An unkeyed fixture still groups by the raw number when this list
+     has exactly one question with it. */
+  if (!questionIdentity(question) && num && idx.unscoped.has(num) && (counts.get(num) ?? 0) === 1) return { state: "known", correct: idx.unscoped.get(num) };
+  /* A correct unclassified row does not hide the question: it is served
+     again, and its first new answer earns no XP or ability credit
+     (rewards.js legacyRepeatPending, applied in answer-apply.js). */
+  return { state: "none" };
+}
+
+/* Review date for this question. A date stored under the old number
+   is used only when the number identifies one question in the catalog. */
+export function scheduleEntry(question, schedule, questions = null, log = null, index = null, peers = null) {
+  if (!schedule || !question) return null;
+  const id = answerIdentity(question);
+  if (id != null && schedule[id]) return schedule[id];
+  const raw = schedule[question.id] ?? schedule[String(question.id)];
+  if (!raw) return null;
+  if (!questionIdentity(question)) return raw;
+  const counts = peers ?? peerCounts(questions ?? [question]);
+  if ((counts.get(String(question.id)) ?? 0) !== 1) return null;
+  const idx = index ?? historyIndex(log);
+  if (idx.unresolved.has(String(question.id))) return null;
+  /* A date left under the old number belongs to the latest classified
+     row with that number. An unnamed row is not a review yet. */
+  let owner = null;
+  let unnamed = false;
+  for (const row of log ?? []) {
+    if (!row || String(row.id) !== String(question.id)) continue;
+    const key = questionIdentity(row);
+    if (key) owner = key;
+    else unnamed = true;
+  }
+  if (owner && owner !== id) return null;
+  if (!owner && unnamed) return null;
+  return raw;
 }
 
 /* Legacy saves predate the schedule. Every question whose latest logged
@@ -33,8 +125,14 @@ export function latestResults(log) {
 export function deriveMissSchedule(log, existing) {
   const map = existing && typeof existing === "object" && !Array.isArray(existing) ? { ...existing } : {};
   const today = todayStr();
-  for (const [id, ok] of Object.entries(latestResults(log))) {
-    if (!ok && map[id] === undefined) map[id] = { interval: 1, due: today };
+  const latest = new Map();
+  for (const row of log ?? []) {
+    const id = answerIdentity(row);
+    if (id) latest.set(id, row);
+  }
+  for (const [id, row] of latest) {
+    if (row.correct || row.source === "case" || row.schedule === false || String(id).startsWith("case:")) continue;
+    if (map[id] === undefined) map[id] = { interval: 1, due: today };
   }
   return map;
 }
@@ -49,13 +147,257 @@ export const isDue = (schedule, id, today = todayStr()) => {
    misses   — every current miss (latest answer wrong), due or not, for
               on-demand Review Misses;
    review   — due ∪ misses, due ones first: what Review Misses serves. */
+export function questionByIdentity(questions, id) {
+  if (id == null) return null;
+  const want = String(id);
+  return (questions ?? []).find((q) => String(answerIdentity(q) ?? "") === want) ?? null;
+}
+
+/* Questions whose canonical key is not already in the log. A built-in
+   answer does not hide the bank question that shares its number.
+   A number that is a miss in more than one catalog is not offered as
+   new: the miss stays in the unresolved review until the student says
+   which question it was. A single unrelated question stays new. */
+/* The active bank list drops bundled questions. A legacy miss whose
+   number is also a built-in still needs that built-in as a candidate,
+   or the student can only assign the miss to the bank question. */
+function catsAgree(saved, catalog) {
+  if (!saved || !catalog) return true;
+  if (saved === catalog) return true;
+  return saved === "Psychosocial & Health Promotion" && catalog === "Psychosocial Integrity";
+}
+
+function unresolvedCat(log, num) {
+  let cat = null;
+  for (const row of log ?? []) {
+    if (!row || String(row.id) !== String(num)) continue;
+    if (!(row.unclassified || row.unresolved || !questionIdentity(row))) continue;
+    if (typeof row.cat === "string" && row.cat) cat = row.cat;
+  }
+  return cat;
+}
+
+/* A bundled or database case step whose old numeric id is this miss.
+   The step is offered only when its category is the one that was saved. */
+function legacyCaseSteps(cases, num, rowCat) {
+  const want = String(num);
+  const out = [];
+  (cases ?? CASE_STUDIES).forEach((c, index) => {
+    (c.steps ?? []).forEach((step, stepIndex) => {
+      const ids = c.dbId != null
+        ? caseStepIds({ dbId: c.dbId, step: stepIndex })
+        : caseStepIds({ key: c.key, index, step: stepIndex });
+      if (!ids.legacyAliases.map(String).includes(want)) return;
+      if (rowCat && c.cat && !catsAgree(rowCat, c.cat)) return;
+      const key = canonicalKey("case", ids.id);
+      if (!key) return;
+      out.push({
+        id: Number.isNaN(Number(want)) ? want : Number(want),
+        source: "case",
+        key,
+        cat: c.cat,
+        stem: step.stem,
+        type: step.type || "mc",
+        schedule: false,
+        candidateOnly: true,
+      });
+    });
+  });
+  return out;
+}
+
+export function legacyCandidates(questions, log, registry = [], cases = null) {
+  const index = historyIndex(log);
+  const wanted = new Set();
+  for (const [num, correct] of index.unresolved) if (correct === false) wanted.add(String(num));
+  const list = [...(questions ?? [])];
+  if (!wanted.size) return list;
+  const have = new Set(list.map((q) => String(answerIdentity(q) ?? q?.id ?? "")));
+  for (const item of registry ?? []) {
+    if (!item || !wanted.has(String(item.id))) continue;
+    const stamped = item.source && item.key ? item : { ...item, source: "builtin", key: `builtin:${item.id}` };
+    const ident = String(answerIdentity(stamped) ?? stamped.id);
+    if (have.has(ident)) continue;
+    have.add(ident);
+    list.push(stamped);
+  }
+  for (const num of wanted) {
+    for (const step of legacyCaseSteps(cases, num, unresolvedCat(log, num))) {
+      if (have.has(step.key)) continue;
+      have.add(step.key);
+      list.push(step);
+    }
+  }
+  return list;
+}
+
+export function unseenQuestions(questions, log) {
+  const index = historyIndex(log);
+  const peers = peerCounts(questions);
+  const blocked = new Set();
+  for (const [num, correct] of index.unresolved) {
+    if (correct === false && (peers.get(num) ?? 0) > 1) blocked.add(num);
+  }
+  return (questions ?? []).filter((q) => {
+    if (!q || q.candidateOnly || blocked.has(String(q.id))) return false;
+    const settled = settledResult(q, log, questions, index, peers);
+    return settled.state === "none";
+  });
+}
+
+/* A merged trial answer keeps the built-in stem. Its navigation id is
+   the canonical key, so a bank row with the same number is a different
+   question. Legacy guest- prefixed rows still resolve to the built-in. */
+export function expandTrialQuestions(questions, log, registry = null, schedule = null) {
+  const list = questions ?? [];
+  const have = new Set(list.map((q) => answerIdentity(q) ?? String(q.id)));
+  const bySource = new Map((registry ?? list).map((q) => [String(q.id), q]));
+  const extra = [];
+  for (const row of log ?? []) {
+    const ident = answerIdentity(row) ?? String(row?.id ?? "");
+    if (!ident || have.has(ident)) continue;
+    const fromKey = ident.startsWith("builtin:") ? ident.slice("builtin:".length) : (ident.startsWith("guest-") ? ident.slice("guest-".length) : null);
+    const src = fromKey != null ? bySource.get(fromKey) : null;
+    if (!src) continue;
+    have.add(ident);
+    extra.push({ ...src, id: row.id, ...(row.key ? { key: row.key, source: row.source ?? "builtin" } : {}) });
+  }
+  for (const key of Object.keys(schedule ?? {})) {
+    if (!key.startsWith("builtin:") || have.has(key)) continue;
+    const src = bySource.get(key.slice("builtin:".length));
+    if (!src) continue;
+    have.add(key);
+    extra.push({ ...src, id: src.id, key, source: "builtin" });
+  }
+  return extra.length ? [...list, ...extra] : list;
+}
+
+/* A legacy number that still belongs to more than one question. The miss
+   stays reviewable here, and neither catalog question inherits it. */
+function rawReview(schedule, num) {
+  const raw = schedule?.[num] ?? schedule?.[Number(num)];
+  return raw && typeof raw.due === "string" ? raw : null;
+}
+
+function unresolvedCards(log, questions, index, schedule) {
+  const cards = [];
+  const seen = new Set();
+  const add = (num) => {
+    if (seen.has(num)) return;
+    seen.add(num);
+    let logIndex = -1;
+    (log ?? []).forEach((item, i) => {
+      if (item && String(item.id) === num && (item.unclassified || !questionIdentity(item)) && item.correct === false) logIndex = i;
+    });
+    const row = logIndex >= 0 ? log[logIndex] : null;
+    const rowCat = typeof row?.cat === "string" ? row.cat : "";
+    const candidates = (questions ?? []).filter((q) => {
+      if (!q || q.unresolved || q.catalogMiss || String(q.id) !== num) return false;
+      if (rowCat && q.cat && !catsAgree(rowCat, q.cat)) return false;
+      return true;
+    });
+    cards.push({
+      unresolved: true,
+      id: `unresolved:${num}`,
+      legacyId: num,
+      logIndex,
+      cat: typeof row?.cat === "string" && row.cat ? row.cat : (candidates[0]?.cat ?? "Management of Care"),
+      diff: 1,
+      type: "mc",
+      stem: candidates.length > 1
+        ? `An older save recorded a miss on question ${num}. That number matches more than one question, so it is not counted as any of them until you say which one it was.`
+        : `An older save recorded a miss on question ${num}. It could not be matched to one question, so it stays here until you identify it.`,
+      candidates,
+    });
+  };
+  for (const [num, correct] of index.unresolved) if (correct === false || rawReview(schedule, num)) add(num);
+  for (const [num, correct] of index.unscoped) {
+    if (correct !== false && !rawReview(schedule, num)) continue;
+    const keyed = (questions ?? []).some((q) => questionIdentity(q) && String(q.id) === num);
+    if (keyed) add(num);
+  }
+  return cards;
+}
+
+/* A saved bank miss whose question is not in the loaded catalog.
+   Case steps are not QBank questions, so they are not cards here.
+   The miss stays visible. It is not treated as corrected or dropped. */
+function catalogMissCards(log, questions, schedule, today) {
+  const keyedCatalog = (questions ?? []).some((q) => questionIdentity(q));
+  if (!keyedCatalog) return [];
+  const have = new Set();
+  for (const q of questions ?? []) {
+    const id = answerIdentity(q);
+    if (id) have.add(id);
+  }
+  const latest = new Map();
+  (log ?? []).forEach((row, i) => {
+    const id = questionIdentity(row);
+    if (!id || !id.startsWith("bank:") || row.source === "case" || row.schedule === false) return;
+    latest.set(id, { correct: row.correct === true, row, i });
+  });
+  const cards = [];
+  for (const [id, info] of latest) {
+    if (have.has(id)) continue;
+    const entry = schedule?.[id];
+    const dueNow = !!entry && typeof entry.due === "string" && entry.due <= today;
+    if (info.correct && !dueNow) continue;
+    cards.push({
+      catalogMiss: true,
+      id: `unavailable:${id}`,
+      key: id,
+      source: "bank",
+      cat: typeof info.row.cat === "string" && info.row.cat ? info.row.cat : "Management of Care",
+      population: info.row.pop,
+      type: info.row.type,
+      diff: info.row.diff ?? 1,
+      stem: "This saved miss is still here. Retry to open the question.",
+    });
+  }
+  return cards;
+}
+
+/* The card on screen was built before the catalog arrived. When the
+   same miss now has more candidates, the open card takes that list. */
+export function refreshedUnresolved(open, pool) {
+  if (!open?.unresolved) return open ?? null;
+  const next = (pool ?? []).find((item) => item?.unresolved && String(item.legacyId) === String(open.legacyId));
+  if (!next) return open;
+  const sig = (list) => (list ?? []).map((item) => String(item?.key ?? item?.id ?? "")).join("|");
+  if (sig(open.candidates) === sig(next.candidates)) return open;
+  return next;
+}
+
 export function reviewPools(questions, log, schedule, today = todayStr()) {
-  const latest = latestResults(log);
-  const due = questions.filter((q) => isDue(schedule, q.id, today))
-    .sort((a, b) => (schedule[a.id].due < schedule[b.id].due ? -1 : schedule[a.id].due > schedule[b.id].due ? 1 : 0));
-  const dueIds = new Set(due.map((q) => q.id));
-  const misses = questions.filter((q) => latest[q.id] === false);
-  const review = [...due, ...misses.filter((q) => !dueIds.has(q.id))];
+  const index = historyIndex(log);
+  const peers = peerCounts(questions);
+  const idOf = (q) => answerIdentity(q) ?? String(q.id);
+  const dueOf = (q) => {
+    if (q?.catalogMiss) {
+      const entry = schedule?.[q.key];
+      return entry && typeof entry.due === "string" ? entry : null;
+    }
+    if (q?.unresolved) {
+      const raw = schedule?.[q.legacyId] ?? schedule?.[Number(q.legacyId)];
+      return raw && typeof raw.due === "string" ? raw : null;
+    }
+    return scheduleEntry(q, schedule, questions, log, index, peers);
+  };
+  const cards = [...unresolvedCards(log, questions, index, schedule), ...catalogMissCards(log, questions, schedule, today)];
+  const pool = [...(questions ?? []).filter((q) => q && !q.unresolved && !q.catalogMiss && !q.candidateOnly), ...cards];
+  const due = pool.filter((q) => {
+    const entry = dueOf(q);
+    return !!entry && typeof entry.due === "string" && entry.due <= today;
+  }).sort((a, b) => (dueOf(a).due < dueOf(b).due ? -1 : dueOf(a).due > dueOf(b).due ? 1 : 0));
+  const dueIds = new Set(due.map(idOf));
+  const misses = pool.filter((q) => {
+    if (q.catalogMiss || q.unresolved) return true;
+    const settled = settledResult(q, log, questions, index, peers);
+    if (settled.state === "known") return settled.correct === false;
+    const entry = dueOf(q);
+    return !!entry && typeof entry.due === "string";
+  });
+  const review = [...due, ...misses.filter((q) => !dueIds.has(idOf(q)))];
   return { due, misses, review };
 }
 
@@ -63,27 +405,56 @@ export function reviewPools(questions, log, schedule, today = todayStr()) {
    new questions plus any current miss that has no future date yet. Misses
    scheduled for a later day wait for that day (they stay available on demand
    in Review Misses). */
-export function todayPool(questions, log, schedule, freshPool, today = todayStr()) {
+function asSkip(skip) {
+  if (skip instanceof Set) return skip;
+  return heldKeys(skip);
+}
+
+function reviewWaiting(q, schedule, questions, log, index, peers, today) {
+  const entry = q?.catalogMiss
+    ? (schedule?.[q.key] ?? null)
+    : q?.unresolved
+    ? (schedule?.[q.legacyId] ?? schedule?.[Number(q.legacyId)] ?? null)
+    : scheduleEntry(q, schedule, questions, log, index, peers);
+  return !!entry && !(typeof entry.due === "string" && entry.due <= today);
+}
+
+export function todayPool(questions, log, schedule, freshPool, today = todayStr(), skip = null, allow = null) {
+  const held = asSkip(skip);
+  const index = historyIndex(log);
+  const peers = peerCounts(questions);
   const { due, misses } = reviewPools(questions, log, schedule, today);
-  if (due.length) return due;
-  const waiting = (q) => !!schedule?.[q.id] && !isDue(schedule, q.id, today);
-  return [...misses.filter((q) => !waiting(q)), ...freshPool];
+  const visible = (q) => stillOpen(q, held) && (!allow || allow(q));
+  /* Held, deferred, and out-of-focus cards are removed before a due-only
+     list can hide everything else. */
+  const openDue = due.filter(visible);
+  if (openDue.length) return openDue;
+  const waiting = (q) => reviewWaiting(q, schedule, questions, log, index, peers, today);
+  const fresh = (freshPool ?? []).filter(visible);
+  return [...misses.filter((q) => visible(q) && !waiting(q)), ...fresh];
 }
 
 /* The questions a sitting may draw next. Ids already opened this sitting
    (including a skip) are removed BEFORE the due-only shortcut. Skipping the
    only due review must fall through to other misses and new questions,
    and Review misses must still reach a miss that is not due yet. */
-export function sessionPool(questions, { log, schedule, fresh, mode, held = [], today = todayStr() } = {}) {
-  const skip = new Set(held);
-  const visible = (questions ?? []).filter((q) => q && !skip.has(q.id));
+function heldKeys(held) {
+  return new Set((held ?? []).map((id) => String(id)));
+}
+
+function stillOpen(q, skip) {
+  return q && !skip.has(String(answerIdentity(q) ?? q.id));
+}
+
+export function sessionPool(questions, { log, schedule, fresh, mode, held = [], deferred = [], today = todayStr(), allow = null } = {}) {
+  const skip = heldKeys([...(held ?? []), ...(deferred ?? [])]);
+  const visible = (q) => stillOpen(q, skip) && (!allow || allow(q));
   if (mode === "review") {
-    const { due, review } = reviewPools(visible, log, schedule, today);
-    return due.length ? due : review;
+    const { due, review } = reviewPools(questions, log, schedule, today);
+    const openDue = due.filter(visible);
+    if (openDue.length) return openDue;
+    return review.filter(visible);
   }
-  if (mode === "today") {
-    const visibleFresh = (fresh ?? []).filter((q) => q && !skip.has(q.id));
-    return todayPool(visible, log, schedule, visibleFresh, today);
-  }
-  return (fresh ?? []).filter((q) => q && !skip.has(q.id));
+  if (mode === "today") return todayPool(questions, log, schedule, fresh, today, skip, allow);
+  return (fresh ?? []).filter(visible);
 }

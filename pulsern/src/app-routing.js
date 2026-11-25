@@ -4,6 +4,7 @@ export const APP_ROOT = "/app/";
 export const APP_SIGN_IN = "/app/sign-in";
 export const APP_SIGN_UP = "/app/sign-up";
 export const APP_RESET = "/app/reset";
+export const APP_TRY = "/app/try";
 export const APP_SESSION_MIGRATION_KEY = "pulsern.app-path-session.v1";
 
 export function cohortFromUrl(href = typeof window !== "undefined" ? window.location.href : "") {
@@ -21,8 +22,16 @@ export function appUrl(pathname = APP_ROOT, origin = window.location.origin) {
 
 export function authModeFromUrl(href = window.location.href) {
   const url = new URL(href);
-  if (url.pathname === APP_SIGN_UP || url.searchParams.get("start") === "1") return "signup";
+  /* /app/try wins over the legacy ?start=1 signup flag. Try questions
+     keeps the current query, so a reload of /app/try?start=1 must stay
+     on the trial. */
+  if (url.pathname === APP_TRY) return "try";
+  /* An explicit sign-in or reset path wins over the legacy ?start=1 flag.
+     Try questions keeps that query, then "I have an account" goes to
+     /app/sign-in?start=1. A reload must stay on sign-in. */
+  if (url.pathname === APP_SIGN_IN) return "signin";
   if (url.pathname === APP_RESET) return "reset";
+  if (url.pathname === APP_SIGN_UP || url.searchParams.get("start") === "1") return "signup";
   return "signin";
 }
 
@@ -52,7 +61,10 @@ export function authRedirectUrl(kind = "signin", origin = window.location.origin
   return url.toString();
 }
 
-export async function enforceOneTimeAppRelogin({ auth, storage, href }) {
+export const GUEST_TRIAL_KEY = "pulsern-guest-v1";
+
+export async function enforceOneTimeAppRelogin({ auth, storage, holdStorage, href }) {
+  if (!storage) return { action: "no-storage" };
   if (storage.getItem(APP_SESSION_MIGRATION_KEY) === "complete") return { action: "already-complete" };
   if (isAuthCallbackUrl(href)) {
     storage.setItem(APP_SESSION_MIGRATION_KEY, "complete");
@@ -64,6 +76,11 @@ export async function enforceOneTimeAppRelogin({ auth, storage, href }) {
   if (data?.session) {
     const { error: signOutError } = await auth.signOut({ scope: "local" });
     if (signOutError) throw signOutError;
+    /* A forced sign-out forgets trial answers on this device too (same rule
+       as src/sign-out.js; the key is GUEST_KEY in src/guest.js). */
+    try { storage.removeItem(GUEST_TRIAL_KEY); } catch { /* storage blocked */ }
+    try { holdStorage?.removeItem("pulsern-guest-hold-v1"); } catch { /* storage blocked */ }
+    try { storage.removeItem("pulsern-progress-backup-v1"); } catch { /* storage blocked */ } // old device backup (REVIEW-4 R4-2)
   }
   storage.setItem(APP_SESSION_MIGRATION_KEY, "complete");
   return { action: data?.session ? "signed-out-existing-session" : "no-existing-session" };

@@ -22,7 +22,7 @@ const supabaseStub = {
 let server, browser, base;
 beforeAll(async () => {
   server = await createServer({
-    configFile: false,
+    configFile: false, cacheDir: "node_modules/.vite-question-nav-browser",
     root: process.cwd(),
     plugins: [supabaseStub, react()],
     logLevel: "silent",
@@ -235,4 +235,20 @@ describe("case-study steps", () => {
     await page.evaluate(() => window.T.mountTourCards());
     await settled("cards", "Hold digoxin");
   });
+});
+
+describe("a catalog swap keeps an open skip", () => {
+  it("Back still shows the skipped question after the bank replaces the fallback list", async () => {
+    await page.evaluate(() => window.T.mountSwap());
+    await page.getByRole("button", { name: "New questions" }).click();
+    await visible(page.locator(".stem"));
+    const first = await stem();
+    await skip().click();
+    await visible(page.locator(".stem"));
+    expect(await stem()).not.toBe(first);
+    await page.evaluate(() => window.T.replaceWithBank());
+    await back().click();
+    expect(await stem()).toBe(first);
+    expect(await page.getByRole("heading", { name: "No new questions left" }).count()).toBe(0);
+  }, 60_000);
 });

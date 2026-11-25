@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 
 /* The eight client-needs categories of the official NCSBN NCLEX-RN test
    plan ("Pharmacology" = Pharmacological & Parenteral Therapies). */
-const CATS = [
+export const CATS = [
   "Management of Care",
   "Safety & Infection Control",
   "Health Promotion & Maintenance",
@@ -15,7 +15,7 @@ const CATS = [
   "Physiological Adaptation",
 ];
 
-const QUESTIONS = [
+export const QUESTIONS = [
   {
     id: 1, cat: "Pharmacology", diff: 1, type: "mc",
     stem: "The nurse is preparing to administer digoxin to an adult client with heart failure. Which assessment is the priority before giving the dose?",
@@ -33,9 +33,9 @@ const QUESTIONS = [
   {
     id: 3, cat: "Pharmacology", diff: 2, type: "mc",
     stem: "A client on warfarin has an INR of 4.8 and no active bleeding. Which prescription should the nurse anticipate?",
-    options: ["Protamine sulfate IV", "An increased warfarin dose", "Vitamin K and holding the next warfarin dose", "A unit of packed red blood cells"],
+    options: ["Protamine sulfate IV", "An increased warfarin dose", "Hold the next warfarin dose and recheck the INR", "A unit of packed red blood cells"],
     answer: 2,
-    rationale: "The usual therapeutic INR on warfarin is 2–3. At 4.8 the client is over-anticoagulated, so the antidote vitamin K is anticipated along with holding warfarin. Protamine sulfate reverses heparin, not warfarin. Increasing the dose would worsen bleeding risk, and PRBCs are not indicated without hemorrhage or anemia.",
+    rationale: "The usual therapeutic INR on warfarin is 2–3. An INR of 4.8 without bleeding is managed by holding warfarin and rechecking the INR; routine vitamin K is not indicated at this level. Protamine sulfate reverses heparin, not warfarin. Increasing the dose would worsen bleeding risk, and packed red blood cells are not indicated without hemorrhage or anemia.",
   },
   {
     id: 4, cat: "Pharmacology", diff: 1, type: "mc",
@@ -251,12 +251,14 @@ function levelFor(xp) {
 
 /* ---- date helpers for real multi-day spacing ----
    Extracted to src/dates.js so tests can exercise them (PULSERN_BUILD.md §10.4). */
-import { fmtLocal, todayStr, yesterdayStr, twoDaysAgoStr, addDays, weekStart } from "./dates.js";
+import { fmtLocal, todayStr, addDays, weekStart } from "./dates.js";
 import { supabase } from "./supabase.js";
 import { emptyAbility, updateAbility, itemRating, readinessFrom, pickTargetRating } from "./ability-engine.js";
 import { migrateBlob } from "./state.js";
 import { ngnExt, fourFn, validQ, scoreItem, scoreCaseStep, isFullCredit, sumScores } from "./ngn.js";
 import { NGN_SAMPLES, CALC_SAMPLES, COVERAGE_SAMPLES } from "./ngn-samples.js";
+
+const BUNDLED_QUESTIONS = [...QUESTIONS, ...NGN_SAMPLES, ...CALC_SAMPLES, ...COVERAGE_SAMPLES];
 import { CASE_STUDIES } from "./case-studies.js";
 import { dueQueue, nextSchedule, migrateLegacySrs, NEW_PER_DAY, newCardAllowance, noteNewCard, refundNewCard } from "./srs.js";
 import {
@@ -267,7 +269,7 @@ import {
   sessionProgress as cardProgress, canUndoGrade, undoGrade,
 } from "./card-nav.js";
 import { pickCategory, seededRandom, seedFrom, STARVE_WINDOW } from "./weak-spots.js";
-import { updateMissSchedule, reviewPools, sessionPool } from "./question-review.js";
+import { updateMissSchedule, reviewPools, sessionPool, expandTrialQuestions, unseenQuestions, questionByIdentity, answerIdentity, legacyCandidates, refreshedUnresolved } from "./question-review.js";
 import {
   emptyNav, appendQuestion, saveDraft, markAnswered, canGoBack, goBack, present,
   forward, fallbackSkip, jumpToSkipped, skippedCount, currentEntry, nextUnvisited,
@@ -306,9 +308,26 @@ import { hasDraftAnswer, planLeaveRequest } from "./home-nav.js";
 import { useSessionReport } from "./session-report.js";
 import { tourMark, tourStepAt, tourStepsFor } from "./tour.js";
 import { LeaveDialog, Tour, useTourDismissScroll, useTourPlacement } from "./tour.jsx";
+import {
+  emptyRewards, answerXp, answerCountsForRun, sameAnswer, xpNote, comboFor, cardXp, questionsOn, todayQuestionCount, shiftCompleteNote, caseStepIds, bumpDay, reverseCardDay, recordCardGrade, undoCardGrade, advanceStreak, streakDayCounted, gradeSnapshot, undoGradeEffects, shiftStatus, weekRounds, maybeGrantCover,
+  careerStatus, badgeBoard, detectMoments, markMomentsSeen, sessionRecap, MAX_COVERS,
+} from "./rewards.js";
+import { motionAllowed, rewardBeat } from "./effects.js";
+import {
+  RewardsStyle, StreakGlyph, EcgBeat, ComboChip, MomentSheet, streakMoment, ShiftCard, CareerCard,
+  BadgeGrid, RoundsCard, BestsCard, SessionRecap, EffectsCard, comboSpeech, useAnnouncer,
+} from "./rewards-ui.jsx";
+import { mergeGuestIntoBlob, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, readGuestForHandoff, releaseHeldGuest, waitForFlush, accountHasAnswers, reconcileProgress, blobForSave, createProgressEpoch, storageOrNull, noteAccountRead, bindCommittedProgress, foldPendingProgress } from "./guest.js";
+import { applyAnswer, commitLiveAnswer, stampedQuestion, newAttemptId } from "./answer-apply.js";
+import { claimLegacyAt, claimLegacySchedule } from "./question-key.js";
+import { stampCatalogQuestion, stampLoadedCatalog } from "./question-identity.js";
+import { signOutAndForgetTrial as signOut } from "./sign-out.js";
+import { readProgress, parseProgress, clearLegacyProgressBackup, guestHandoff, sessionReadDecision, sweepPendingProgress } from "./progress-load.js";
 
 const STORE_KEY = "pulsern-v1";
 
+/* Signing out also forgets any try-before-sign-up answers on this device
+   (src/sign-out.js). Every sign-out button uses this. */
 /* ---- STORAGE ADAPTER ---------------------------------------------------
    The app touches persistence ONLY through `store`. To migrate platforms,
    replace this one object — nothing else in the app changes:
@@ -319,27 +338,249 @@ const STORE_KEY = "pulsern-v1";
    • Cloud sync:       Supabase/Firebase row keyed by user id
    Each method returns/accepts a JSON string and is async-safe.
 ------------------------------------------------------------------------ */
+const progressGate = createProgressEpoch();
+let acceptedBlob = null;
+let loadedBaseline = null;
+let accountEpoch = 0;
+let accountRead = { user: null, blob: null, revision: 0, epoch: 0 };
+let legacyHold = false;
 const store = {
   async get(key) {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return null;
+    const seenEpoch = accountEpoch;
+    const result = await supabase.auth.getSession();
+    if (seenEpoch !== accountEpoch) { const err = new Error("cancelled"); err.code = "cancelled"; throw err; }
+    const decision = sessionReadDecision(result);
+    if (decision !== "read") {
+      const err = new Error(result?.error?.message || "Could not confirm the signed-in account");
+      err.code = decision;
+      throw err;
+    }
+    const session = result.data.session;
     const { data, error } = await supabase.from("progress")
-      .select("blob").eq("user_id", session.user.id).eq("key", key).maybeSingle();
-    if (error || !data) return null;
+      .select("blob, revision").eq("user_id", session.user.id).eq("key", key).maybeSingle();
+    if (seenEpoch !== accountEpoch) { const err = new Error("cancelled"); err.code = "cancelled"; throw err; }
+    /* A read error must never look like "no saved progress": the caller
+       would treat the account as new and autosave defaults over it. */
+    if (error) throw new Error(error.message || "Could not read saved progress");
+    const epoch = accountEpoch;
+    const next = noteAccountRead(accountRead, { user: session.user.id, blob: data?.blob ?? null, revision: data?.revision ?? 0, epoch });
+    if (next === accountRead && accountRead.user && accountRead.user !== session.user.id) {
+      return data ? JSON.stringify(data.blob) : null;
+    }
+    accountRead = next;
+    acceptedBlob = next.blob;
+    loadedBaseline = next.blob ?? {};
+    if (!data) { progressGate.note(0, progressGate.epoch()); return null; }
+    progressGate.note(next.revision, progressGate.epoch());
     return JSON.stringify(data.blob);
   },
-  async set(key, value) {
+  async set(key, value, expectedUserId, ctx = {}) {
+    const signal = ctx?.signal;
+    const epoch = progressGate.epoch();
+    const current = () => !signal?.aborted && epoch === progressGate.epoch() && (ctx?.isCurrent ? ctx.isCurrent() : true);
+    const aborted = () => {
+      const err = new Error("aborted");
+      err.code = "aborted";
+      return err;
+    };
+    if (epoch !== progressGate.epoch()) throw aborted();
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-    await supabase.from("progress").upsert({
-      user_id: session.user.id, key, blob: JSON.parse(value),
-      updated_at: new Date().toISOString(),
-    });
+    if (epoch !== progressGate.epoch()) throw aborted();
+    const decision = persistDecision(session, expectedUserId);
+    if (decision !== "write") {
+      const err = new Error(decision);
+      err.code = decision;
+      throw err;
+    }
+    const raw = JSON.parse(value);
+    const blob = blobForSave(acceptedBlob, raw, loadedBaseline);
+    const writeAt = (expected, payload) => {
+      const patch = { blob: payload, revision: expected + 1, updated_at: new Date().toISOString(), legacy_hold: false };
+      return supabase.from("progress").update(patch)
+        .eq("user_id", session.user.id).eq("key", key).eq("revision", expected)
+        .select("revision");
+    };
+    const finish = async (request) => {
+      if (signal && request && typeof request.abortSignal === "function") request = request.abortSignal(signal);
+      const { data, error } = await request ?? {};
+      const revision = Array.isArray(data) ? Number(data[0]?.revision) || null : null;
+      if (error) throw new Error(error.message || "Could not save progress");
+      if (epoch !== progressGate.epoch()) throw aborted();
+      return revision;
+    };
+    const insertAt = (payload) => supabase.from("progress").insert({
+      user_id: session.user.id, key, blob: payload, revision: 1, updated_at: new Date().toISOString(), legacy_hold: legacyHold,
+    }).select("revision");
+    let revision = await finish(writeAt(progressGate.revision(), blob));
+    if (revision) legacyHold = false;
+    if (!revision && progressGate.revision() === 0 && epoch === progressGate.epoch()) {
+      try { revision = await finish(insertAt(blob)); } catch { revision = null; }
+    }
+    if (!revision && epoch === progressGate.epoch()) {
+      const { data: fresh, error: readError } = await supabase.from("progress")
+        .select("blob, revision").eq("user_id", session.user.id).eq("key", key).maybeSingle();
+      if (readError) throw new Error(readError.message || "Could not read saved progress");
+      if (epoch !== progressGate.epoch()) throw aborted();
+      if (!fresh) {
+        try { revision = await finish(insertAt(blob)); } catch { revision = null; }
+      } else {
+        const merged = reconcileProgress(fresh.blob, raw, loadedBaseline);
+        const unchanged = JSON.stringify(merged) === JSON.stringify(fresh.blob);
+        if (unchanged) {
+          const bound = bindCommittedProgress(
+            { accepted: acceptedBlob, baseline: loadedBaseline, revision: progressGate.revision() },
+            { blob: fresh.blob, revision: Number(fresh.revision) || 0, current: current(), epoch, seenEpoch: epoch },
+          );
+          if (bound !== loadedBaseline && bound.baseline === fresh.blob) {
+            acceptedBlob = bound.accepted;
+            loadedBaseline = bound.baseline;
+            progressGate.note(bound.revision, epoch);
+          }
+          return JSON.stringify(merged) === JSON.stringify(raw) ? undefined : { reconciled: true, blob: merged };
+        }
+        revision = await finish(writeAt(Number(fresh.revision) || 0, merged));
+        if (revision) legacyHold = false;
+        if (revision) {
+          const bound = bindCommittedProgress(
+            { accepted: acceptedBlob, baseline: loadedBaseline, revision: progressGate.revision() },
+            { blob: merged, revision, current: current(), epoch, seenEpoch: epoch },
+          );
+          if (bound.baseline === merged) {
+            acceptedBlob = bound.accepted;
+            loadedBaseline = bound.baseline;
+            progressGate.note(bound.revision, epoch);
+          }
+          return { reconciled: true, blob: merged };
+        }
+      }
+    }
+    if (!revision) {
+      const err = new Error("conflict");
+      err.code = "conflict";
+      throw err;
+    }
+    /* A successful write (update or the first insert) is this account's row.
+       Drop the module flag so it cannot leak into a later account. */
+    legacyHold = false;
+    const bound = bindCommittedProgress(
+      { accepted: acceptedBlob, baseline: loadedBaseline, revision: progressGate.revision() },
+      { blob, revision, current: current(), epoch, seenEpoch: epoch },
+    );
+    if (bound.baseline === blob) {
+      acceptedBlob = bound.accepted;
+      loadedBaseline = bound.baseline;
+      progressGate.note(bound.revision, epoch);
+    }
+    return JSON.stringify(blob) === JSON.stringify(raw) ? undefined : { reconciled: true, blob };
   },
-  async delete(key) {
+  /* An older open app parked a snapshot. Fold it with the same conflict
+     merge as two devices, save that result, then drop the parked rows.
+     A failed save leaves them in place so the next load can try again. */
+  async absorbPending(key) {
+    const seenEpoch = accountEpoch;
     const { data: { session } } = await supabase.auth.getSession();
+    if (seenEpoch !== accountEpoch || !session?.user?.id) return null;
+    if (!acceptedBlob || typeof acceptedBlob !== "object") return null;
+    const { data, error } = await supabase.from("progress_pending_merge")
+      .select("id, snapshot")
+      .eq("user_id", session.user.id)
+      .eq("key", key)
+      .order("received_at", { ascending: true })
+      .order("id", { ascending: true });
+    if (seenEpoch !== accountEpoch) return null;
+    if (error) throw new Error(error.message || "Could not read saved progress");
+    if (!data?.length) return null;
+    const merged = foldPendingProgress(acceptedBlob, data.map((row) => row.snapshot));
+    const ids = data.map((row) => row.id);
+    if (JSON.stringify(merged) !== JSON.stringify(acceptedBlob)) {
+      const expected = progressGate.revision();
+      const { data: written, error: writeError } = await supabase.from("progress").update({
+        blob: merged,
+        revision: expected + 1,
+        updated_at: new Date().toISOString(),
+        legacy_hold: false,
+      }).eq("user_id", session.user.id).eq("key", key).eq("revision", expected).select("revision");
+      if (seenEpoch !== accountEpoch) return null;
+      if (writeError) throw new Error(writeError.message || "Could not save progress");
+      const revision = Array.isArray(written) ? Number(written[0]?.revision) || null : null;
+      if (!revision) return null;
+      acceptedBlob = merged;
+      loadedBaseline = merged;
+      progressGate.note(revision, progressGate.epoch());
+      legacyHold = false;
+    }
+    const { error: deleteError } = await supabase.from("progress_pending_merge").delete()
+      .in("id", ids).eq("user_id", session.user.id).eq("key", key);
+    if (deleteError) throw new Error(deleteError.message || "Could not read saved progress");
+    return merged;
+  },
+  releaseAccount() {
+    accountEpoch += 1;
+    progressGate.abandon();
+    acceptedBlob = null;
+    loadedBaseline = null;
+    accountRead = { user: null, blob: null, revision: 0, epoch: accountEpoch };
+    /* A reset may have raised this flag for the account that just left.
+       It must not travel with the module into the next account's first insert. */
+    legacyHold = false;
+  },
+  /* A reset keeps the row and advances its revision; it never deletes it.
+     A deleted row would be re-created at revision 1, the same number another
+     device may still hold, so that device's next save would match and put the
+     erased history back (Astra, PR #184 review, finding 1). The stored row
+     becomes a tombstone that carries the new reset generation, so every
+     older snapshot is also dropped by the merge, and legacy_hold stops an
+     older open app from parking its history beside it. */
+  async delete(key, nextGeneration = 0) {
+    const seenEpoch = accountEpoch;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (seenEpoch !== accountEpoch) return;
     if (!session) return;
-    await supabase.from("progress").delete().eq("user_id", session.user.id).eq("key", key);
+    const { error: pendingError } = await supabase.from("progress_pending_merge").delete().eq("user_id", session.user.id).eq("key", key);
+    if (seenEpoch !== accountEpoch) return;
+    if (pendingError) throw new Error(pendingError.message || "Could not erase saved progress");
+    const tombstone = { resetGeneration: Math.max(1, Number(nextGeneration) || 0) };
+    let expected = progressGate.revision();
+    let revision = null;
+    for (let attempt = 0; attempt < 3 && !revision; attempt++) {
+      const { data, error } = await supabase.from("progress")
+        .update({ blob: tombstone, revision: expected + 1, updated_at: new Date().toISOString(), legacy_hold: true })
+        .eq("user_id", session.user.id).eq("key", key).eq("revision", expected)
+        .select("revision");
+      if (seenEpoch !== accountEpoch) return;
+      if (error) throw new Error(error.message || "Could not erase saved progress");
+      revision = Array.isArray(data) ? Number(data[0]?.revision) || null : null;
+      if (revision) break;
+      /* Another device wrote since this one loaded. The reset is the
+         student's decision, so it lands on top of whatever is stored now. */
+      const { data: current, error: readError } = await supabase.from("progress")
+        .select("revision").eq("user_id", session.user.id).eq("key", key).maybeSingle();
+      if (seenEpoch !== accountEpoch) return;
+      if (readError) throw new Error(readError.message || "Could not erase saved progress");
+      if (!current) break;
+      expected = Number(current.revision) || 0;
+    }
+    const rowExists = revision != null;
+    if (!rowExists) {
+      const { data: left, error: leftError } = await supabase.from("progress")
+        .select("revision").eq("user_id", session.user.id).eq("key", key).maybeSingle();
+      if (seenEpoch !== accountEpoch) return;
+      if (leftError) throw new Error(leftError.message || "Could not erase saved progress");
+      if (left) throw new Error("Could not erase saved progress");
+    }
+    /* Only a written tombstone needs the hold. A no-row reset must not
+       raise it, or the first insert would create the row with legacy_hold=true
+       and a later revision-less save would be dropped instead of parked. */
+    legacyHold = rowExists;
+    accountEpoch += 1;
+    progressGate.abandon();
+    /* The screen starts fresh and its first save is the whole new blob, so
+       nothing is carried as accepted or baseline. But the row's new revision
+       is kept, so that save lands on the row this reset advanced. */
+    acceptedBlob = null;
+    loadedBaseline = null;
+    if (rowExists) progressGate.note(revision, progressGate.epoch());
+    accountRead = { user: null, blob: null, revision: 0, epoch: accountEpoch };
   },
 };
 
@@ -417,6 +658,9 @@ export default function App() {
   const [tab, setTab] = useState("today");
   const [xp, setXp] = useState(0);
   const [run, setRun] = useState(0);        // consecutive correct answers (session)
+  const runRef = useRef(run);
+  useEffect(() => { runRef.current = run; }, [run]);
+  const progressRef = useRef(null);
   const [bestRun, setBestRun] = useState(0);
   const [log, setLog] = useState([]);        // {id, cat, diff, correct}
   /* Flagging was removed from the UI in favour of Report a problem. These two
@@ -471,57 +715,223 @@ export default function App() {
   const [scrolling, setScrolling] = useState(false); // floating UI hides while scrolling
   const [isOwner, setIsOwner] = useState(false);    // reviewers-table member = owner tools
   const [shield, setShield] = useState(false);      // blur content when app loses focus
-
-  /* ---- load saved progress once ---- */
+  const [rewards, setRewards] = useState(() => ({ ...emptyRewards(), rankHigh: 0 })); // new accounts start on the ladder, not the legacy XP map
+  const rewardsRef = useRef(rewards);
+  rewardsRef.current = rewards;
+  const [moments, setMoments] = useState([]);       // celebrations waiting for a natural break
+  const [liveRegion, announce] = useAnnouncer();    // persistent screen-reader live region (combos)
+  const [guestNote, setGuestNote] = useState(null); // shown only after the merged save succeeds, or when a returning account skips a trial
+  const [guestSaveError, setGuestSaveError] = useState(false);
+  const [saveStall, setSaveStall] = useState(false);
+  const [saveAttempt, setSaveAttempt] = useState(0);
+  const pendingGuestClear = useRef(false);
+  const resetGeneration = useRef(0);
+  const pendingHandoff = useRef(null);
+  const saveQueue = useRef(null);
+  const accountId = useRef(null);
+  if (!saveQueue.current) saveQueue.current = createSaveQueue();
+  useEffect(() => () => { saveQueue.current?.invalidate(); store.releaseAccount(); }, []);
+  const openAbout = async () => {
+    setMenuOpen(false);
+    if (saveQueue.current.pending()) {
+      const saved = await waitForFlush(() => saveQueue.current.flush());
+      if (!saved.ok) { setSaveFailed(true); return; }
+    }
+    window.location.assign("/about/");
+  };
   useEffect(() => {
-    (async () => {
-      try {
-        const raw = await store.get(STORE_KEY);
-        if (raw) {
-          const s = migrateBlob(JSON.parse(raw), CATS); // legacy saves get defaults (§4)
-          setTheme(s.theme);
-          setXp(s.xp);
-          setBestRun(s.bestRun);
-          setLog(s.log);
-          setFlagged(s.flagged);
-          setFlaggedCases(s.flaggedCases);
-          setStreak(s.streak);
-          const d = s.daily ?? { day: todayStr(), answered: 0 };
-          setDaily(d.day === todayStr() ? d : { day: todayStr(), answered: 0 });
-          // Kept verbatim. Re-stamping gaps with today's date on every load is
-          // what made ungraded cards look permanently due.
-          setSrs(s.srs);
-          setSrsMap(migrateLegacySrs(s.srs, s.srsMap));
-          setExamResults(s.examResults);
-          setCustomQs(s.customQs);
-          setProvider(s.provider);
-          setAbility(s.ability);
-          setPlan(s.plan);
-          setExamDate(s.examDate);
-          setTourSeen(s.tourSeen);
-          setProfileCardDismissed(s.profileCardDismissed);
-          setFcFlips(s.fcFlips);
-          setMissSchedule(s.missSchedule);
-          setFcNew(s.fcNew);
-        }
-      } catch (e) {
-        /* first visit — nothing saved yet */
-      }
-      setLoaded(true);
-    })();
+    const warn = (event) => {
+      if (!saveQueue.current?.pending()) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
   }, []);
+  const finishSignOut = async () => {
+    saveQueue.current.invalidate();
+    setMenuOpen(false);
+    let result;
+    try {
+      result = await signOut({ auth: supabase.auth, storage: storageOrNull(() => window.localStorage), holdStorage: storageOrNull(() => window.sessionStorage) });
+    } catch {
+      setSaveFailed(true);
+      return;
+    }
+    if (result?.error) { setSaveFailed(true); return; }
+    store.releaseAccount();
+    accountId.current = null;
+    setSaveStall(false);
+  };
+  const signOutAndForgetTrial = async () => {
+    const saved = await waitForFlush(() => saveQueue.current.flush());
+    if (saved.timedOut) {
+      setMenuOpen(false);
+      setSaveStall(true);
+      return;
+    }
+    if (!saved.ok || pendingHandoff.current) {
+      const message = !saved.ok
+        ? "The latest answers have not saved. Sign out anyway? They will be lost."
+        : "Your trial answers are not in this account yet. Sign out anyway? They will be removed from this device.";
+      if (typeof window.confirm === "function" && !window.confirm(message)) return;
+    }
+    await finishSignOut();
+  };
+  const retrySignOut = async () => {
+    const saved = await waitForFlush(() => saveQueue.current.flush());
+    if (saved.timedOut) return;
+    if (!saved.ok && typeof window.confirm === "function" && !window.confirm("The latest answers have not saved. Sign out anyway? They will be lost.")) return;
+    await finishSignOut();
+  };
+
+  /* ---- load saved progress (retryable; never treats a failed read as new) ---- */
+  const [loadState, setLoadState] = useState("loading"); // loading | ok | error | corrupt
+  const [saveBlocked, setSaveBlocked] = useState(false); // saved row could not be opened: study, but never write over it
+  const [saveFailed, setSaveFailed] = useState(false);
+  const unreadableRaw = useRef(null);
+  const loadGeneration = useRef(0);
+  const applyBlob = (s) => {
+    setTheme(s.theme);
+    setXp(s.xp);
+    setBestRun(s.bestRun);
+    setLog(s.log);
+    setFlagged(s.flagged);
+    setFlaggedCases(s.flaggedCases);
+    setStreak(s.streak);
+    const d = s.daily ?? { day: todayStr(), answered: 0 };
+    setDaily(d.day === todayStr() ? d : { day: todayStr(), answered: 0 });
+    // Kept verbatim. Re-stamping gaps with today's date on every load is
+    // what made ungraded cards look permanently due.
+    setSrs(s.srs);
+    setSrsMap(migrateLegacySrs(s.srs, s.srsMap));
+    setExamResults(s.examResults);
+    setCustomQs(s.customQs);
+    setProvider(s.provider);
+    setAbility(s.ability);
+    setPlan(s.plan);
+    setExamDate(s.examDate);
+    setTourSeen(s.tourSeen);
+    setProfileCardDismissed(s.profileCardDismissed);
+    setFcFlips(s.fcFlips);
+    setMissSchedule(s.missSchedule);
+    setFcNew(s.fcNew);
+    setRewards(s.rewards);
+    resetGeneration.current = Number(s.resetGeneration) || 0;
+  };
+  const loadProgress = useCallback(async () => {
+    const generation = ++loadGeneration.current;
+    const stillCurrent = () => generation === loadGeneration.current;
+    setLoadState("loading");
+    try {
+      const storage = storageOrNull(() => window.localStorage);
+      clearLegacyProgressBackup(storage);
+      sweepPendingProgress(storage);
+    } catch { /* storage blocked */ }
+    const read = await readProgress(() => store.get(STORE_KEY));
+    if (!stillCurrent() || read.status === "cancelled") return;
+    /* Failed read: stay unloaded. Autosave and the trial merge both wait
+       for `loaded`, so nothing is written over the real row. */
+    if (read.status === "error") { setLoaded(false); setSaveBlocked(true); setLoadState("error"); return; }
+    const parsed = parseProgress(read.raw, (b) => migrateBlob(b, CATS)); // legacy saves get defaults (§4)
+    if (parsed.status === "corrupt") {
+      /* A row exists but cannot be opened. Keep the server copy untouched
+         and never autosave, merge or delete over it. The raw row stays in
+         memory only, for "Download a copy". */
+      unreadableRaw.current = read.raw;
+      setSaveBlocked(true);
+      setLoadState("corrupt");
+      return;
+    }
+    setSaveBlocked(false);
+    let s = parsed.blob;
+    if (s && read.status === "ok") {
+      try {
+        const absorbed = await store.absorbPending(STORE_KEY);
+        if (!stillCurrent()) return;
+        if (absorbed) s = migrateBlob(absorbed, CATS);
+      } catch {
+        setLoaded(false);
+        setSaveBlocked(true);
+        setLoadState("error");
+        return;
+      }
+    }
+    /* Try-before-sign-up handoff (src/progress-load.js guestHandoff). */
+    let guest = null;
+    guest = readGuestForHandoff(storageOrNull(() => window.localStorage), storageOrNull(() => window.sessionStorage));
+    try { const { data } = await supabase.auth.getSession(); if (!stillCurrent()) return; accountId.current = data?.session?.user?.id ?? null; } catch { /* unknown account */ }
+    if (!stillCurrent()) return;
+    const handoff = guestHandoff({ guest, hasAnswers: accountHasAnswers(s?.log) });
+    if (handoff === "merge") {
+      const merged = mergeGuestIntoBlob(s ?? migrateBlob({}, CATS), guest, { today: todayStr(), calibration, catalog: QUESTIONS });
+      if (merged.summary) { s = merged.blob; pendingHandoff.current = merged.summary; }
+      pendingGuestClear.current = true;
+    } else if (handoff === "keep") {
+      setGuestNote({ skipped: true });
+    } else if (handoff === "expired") {
+      try {
+        clearGuest(storageOrNull(() => window.localStorage));
+        releaseHeldGuest(storageOrNull(() => window.sessionStorage));
+      } catch { /* storage blocked */ }
+    }
+    if (s) applyBlob(s);
+    setLoadState("ok");
+    setLoaded(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    loadProgress();
+    return () => { loadGeneration.current += 1; };
+  }, [loadProgress]);
 
   /* ---- autosave on change ---- */
   useEffect(() => {
-    if (!loaded) return;
-    (async () => {
-      try {
-        await store.set(STORE_KEY, JSON.stringify({ theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips, missSchedule, fcNew }));
-      } catch (e) {
-        console.error("Save failed", e);
+    if (!loaded || saveBlocked) return;
+    const seq = saveQueue.current.next();
+    const payload = JSON.stringify({ theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips, missSchedule, fcNew, rewards, ...(resetGeneration.current > 0 ? { resetGeneration: resetGeneration.current } : {}) });
+    const pendingAtStart = pendingGuestClear.current === true;
+    const note = pendingHandoff.current;
+    const userId = accountId.current;
+    saveQueue.current.enqueue(seq, (ctx) => store.set(STORE_KEY, payload, userId, ctx)).then((res) => {
+      if (!res || res.stale || res.error?.code === "account-changed" || res.error?.code === "aborted") return;
+      if (res.reconciled && res.blob) applyBlob(res.blob);
+      if (res.error?.code === "signed-out") {
+        setSaveFailed(true);
+        if (pendingAtStart) setGuestSaveError(true);
+        return;
       }
-    })();
-  }, [loaded, theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips, missSchedule, fcNew]);
+      const outcome = handoffAfterSave({ ok: res.ok, pending: pendingAtStart });
+      if (!res.ok) {
+        console.error("Save failed", res.error);
+        setSaveFailed(true);
+        if (outcome === "error") setGuestSaveError(true);
+        return;
+      }
+      setSaveFailed(false);
+      if (guestClearOnSave(pendingAtStart)) {
+        pendingGuestClear.current = false;
+        clearGuest(storageOrNull(() => window.localStorage));
+        releaseHeldGuest(storageOrNull(() => window.sessionStorage));
+      }
+      if (outcome === "saved" && note) {
+        setGuestNote(note);
+        setGuestSaveError(false);
+        pendingHandoff.current = null;
+      }
+    });
+  }, [loaded, saveBlocked, saveAttempt, theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips, missSchedule, fcNew, rewards]);
+
+  const downloadUnreadable = () => {
+    const raw = unreadableRaw.current;
+    if (raw == null) return;
+    const url = URL.createObjectURL(new Blob([raw], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = "pulsern-saved-progress-backup.json";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const studyWithoutSaving = () => { setLoadState("ok"); setLoaded(true); };
 
   /* One screen, and only once study is actually reachable. Waiting for
      entitlement is what keeps the tour off the expired paywall. */
@@ -532,8 +942,8 @@ export default function App() {
        back to step 0 is what made Next look like a dead control for anyone
        who had not dismissed it yet. */
     if (locked && tourStep != null) setTourStep(null);
-    else if (tourStep == null && shouldAutoOpenTour({ loaded, tourSeen, ent, locked, sessionLive, firstAnswerOwed: activating })) { setTourMode("quick"); setTourStep(0); }
-  }, [loaded, tourSeen, ent, locked, tourStep, sessionLive, activating]);
+    else if (tourStep == null && !saveBlocked && shouldAutoOpenTour({ loaded, tourSeen, ent, locked, sessionLive, firstAnswerOwed: activating })) { setTourMode("quick"); setTourStep(0); }
+  }, [loaded, saveBlocked, tourSeen, ent, locked, tourStep, sessionLive, activating]);
 
   /* The tour shows the real screen for the step. Positioning runs again
      when that screen replaces a placeholder, such as the flashcard queue. */
@@ -705,21 +1115,32 @@ export default function App() {
      and re-runs when access opens. On any failure the built-in local array
      stays in place as the offline fallback. */
   const bankOpen = (isOwner || !!ent) && !locked;
+  const [catalogAttempt, setCatalogAttempt] = useState(0);
+  const [bankFailed, setBankFailed] = useState(false);
+  const [casesFailed, setCasesFailed] = useState(false);
+  /* The alert is for the question bank. A case-library failure alone gets
+     a quieter note: questions still work. */
+  const catalogError = bankFailed;
+  const casesOnlyError = casesFailed && !bankFailed;
   useEffect(() => {
     if (!bankOpen) return;
     (async () => {
       // paginate: the practice bank is way past Supabase's 1,000-row cap
       const data = [];
+      let failed = false;
+      let complete = false;
       for (let from = 0; ; from += 1000) {
         const { data: page, error } = await supabase.from("questions")
           .select("id, cat, diff, type, stem, options, extra, answer, rationale, ai, elo_rating, population")
           .eq("approved", true).is("exam_form", null) // exam items stay quarantined
           .order("id").range(from, from + 999);
-        if (error || !Array.isArray(page)) break;
+        if (error || !Array.isArray(page)) { failed = true; break; }
         data.push(...page);
-        if (page.length < 1000) break;
+        if (page.length < 1000) { complete = true; break; }
       }
-      if (!data.length) return;
+      const ready = complete && !failed;
+      setBankFailed(!ready);
+      if (!ready || !data.length) return;
       setCalibration(Object.fromEntries(data.map((r) => [r.id, { rating: r.elo_rating }])));
       const items = data
         .map(({ elo_rating, ...q }) => q)
@@ -746,13 +1167,13 @@ export default function App() {
       const { data, error } = await supabase.from("case_studies")
         .select("id, cat, title, blurb, intro, vitals, labs, note, steps, population")
         .eq("approved", true).is("exam_form", null); // exam cases stay quarantined
+      setCasesFailed(!!error);
       if (!error && data?.length) {
         setBankCases(data.map((r) => ({ ...r, dbId: r.id, ai: true })));
       }
     })();
-  }, [bankOpen]);
+  }, [bankOpen, catalogAttempt]);
 
-  const answeredIds = log.map((l) => l.id);
   const acc = log.length ? log.filter((l) => l.correct).length / log.length : 0;
 
   // Elo/Rasch readiness: {pct, low, high, theta, weakest} or null under 12 answers
@@ -764,49 +1185,116 @@ export default function App() {
     : readiness.pct >= 55 ? "Borderline (estimate): keep drilling weak areas"
     : "Below the passing standard (estimate): focus your review";
 
+  /* Streak: the existing {count, lastDay, shield} rule, plus banked shift
+     covers and once-only milestone moments (src/rewards.js advanceStreak). */
+  const touchedDay = useRef(null);
+  /* Returns a snapshot taken before the touch, so an Undo grade can put
+     the streak, covers, milestones and rank back (undoGradeEffects). */
   const touchDay = () => {
-    setDaily((d) => d.day === todayStr() ? { ...d, answered: d.answered + 1 } : { day: todayStr(), answered: 1 });
-    setStreak((s) => {
-
-      if (s.lastDay === todayStr()) return s;
-      if (s.lastDay === yesterdayStr()) {
-        const n = s.count + 1;
-        return { count: n, lastDay: todayStr(), shield: s.shield || n % 7 === 0 };
-      }
-      if (s.lastDay === twoDaysAgoStr() && s.shield) {
-        // missed exactly one day — the shield absorbs it
-        return { count: s.count + 1, lastDay: todayStr(), shield: false };
-      }
-      return { count: 1, lastDay: todayStr(), shield: s.shield ?? true };
-    });
+    const today = todayStr();
+    const snap = gradeSnapshot({ streak, rewards: rewardsRef.current, touched: touchedDay.current, today, id: `touch:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}` });
+    setDaily((d) => d.day === today ? { ...d, answered: d.answered + 1 } : { day: today, answered: 1 });
+    if (streakDayCounted(streak, touchedDay.current, today)) return snap;
+    touchedDay.current = today;
+    const adv = advanceStreak(streak, rewardsRef.current, today);
+    setStreak(adv.streak);
+    setRewards((r) => ({
+      ...r, covers: adv.rewards.covers, coverDays: adv.rewards.coverDays, milestones: adv.rewards.milestones,
+      best: { ...r.best, streak: Math.max(r.best.streak, adv.streak.count) },
+    }));
+    if (adv.milestone) setMoments((m) => [...m, { ...streakMoment(adv.milestone), source: snap.id }]);
+    if (adv.event === "cover") setMoments((m) => [...m, { kind: "cover-used", title: "Your streak is protected", line: `A shift cover covered the day you missed. Day ${adv.streak.count} today.`, next: `${adv.rewards.covers} cover${adv.rewards.covers === 1 ? "" : "s"} left`, source: snap.id }]);
+    return snap;
   };
 
   /* `correct` is the FULL-CREDIT outcome (every NCSBN partial-credit point
      earned). The ability engine, readiness, XP and the review schedule all
      receive this same binary outcome, so Elo calibration is unchanged by
      partial-credit scoring. Case-study steps pass { schedule: false }: their
-     pseudo-ids are not QBank questions and cannot be re-served. */
+     pseudo-ids are not QBank questions and cannot be re-served.
+     XP follows src/rewards.js answerXp: considered, correct, first-time
+     retrievals earn it; repeats, skips, and too-fast taps earn none.
+     Returns the XP result so the feedback line shows exactly what was earned. */
+  progressRef.current = {
+    log, xp, ability, streak, rewards: rewardsRef.current, daily, missSchedule, run: runRef.current, bestRun,
+  };
   const record = (q, correct, opts = {}) => {
-    // population is additive on the log entry — old entries simply lack it
-    setLog((l) => [...l, { id: q.id, cat: q.cat, diff: q.diff, correct, ...(q.population ? { pop: q.population } : {}) }]);
-    if (opts.schedule !== false) setMissSchedule((m) => updateMissSchedule(m, q.id, correct));
-    touchDay();
-    const { ability: nextAbility, itemDelta } = updateAbility(ability, q, correct, calibration);
-    setAbility(nextAbility);
-    // Fire-and-forget item telemetry — bank items only (case-study pseudo-ids
-    // and locally-generated questions aren't in the shared bank).
-    if (calibration[q.id] !== undefined) {
+    const source = q.source === "case" || q.source === "bank" || q.source === "builtin"
+      ? q.source
+      : (String(q.id).startsWith("case-") ? "case" : (BUNDLED_QUESTIONS.some((item) => item.id === q.id && item.stem === q.stem) ? "builtin" : "bank"));
+    const item = stampedQuestion({ ...q, source });
+    const beforeAbility = progressRef.current.ability;
+    const words = String(item.stem ?? "").trim().split(/\s+/).filter(Boolean).length;
+    const applied = commitLiveAnswer(progressRef, {
+      q: item, correct, ms: opts.ms ?? Infinity, today: todayStr(), schedule: opts.schedule !== false, calibration,
+      attempt: opts.attempt ?? newAttemptId(),
+      words, rating: itemRating(item, calibration),
+    });
+    const next = applied.state;
+    const res = applied.result ?? { xp: 0, reason: "duplicate", base: 0, bonus: 0, fix: false, run: next.run };
+    setLog(next.log);
+    setMissSchedule(next.missSchedule);
+    setDaily(next.daily);
+    setStreak(next.streak);
+    setRewards(next.rewards);
+    rewardsRef.current = next.rewards;
+    setAbility(next.ability);
+    setXp(next.xp);
+    runRef.current = next.run;
+    setRun(next.run);
+    setBestRun(next.bestRun);
+    const note = applied.streakNote;
+    if (note?.milestone) setMoments((m) => [...m, streakMoment(note.milestone)]);
+    if (note?.event === "cover") setMoments((m) => [...m, { kind: "cover-used", title: "Your streak is protected", line: `A shift cover covered the day you missed. Day ${note.streak.count} today.`, next: `${note.rewards.covers} cover${note.rewards.covers === 1 ? "" : "s"} left` }]);
+    const { itemDelta } = updateAbility(beforeAbility, item, correct, calibration);
+    const legacyRepeat = res.reason === "legacy-repeat";
+    if (!legacyRepeat && source === "bank" && calibration[q.id] !== undefined) {
       fetch("/api/telemetry", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ itemId: q.id, correct, itemDelta }),
       }).catch(() => {});
     }
-    if (correct) {
-      setXp((x) => x + 10 * q.diff);
-      setRun((r) => { const n = r + 1; setBestRun((b) => Math.max(b, n)); return n; });
-    } else setRun(0);
+    const counts = !legacyRepeat && answerCountsForRun({ correct, q: item, ms: opts.ms ?? Infinity });
+    const newBest = next.run >= 3 && next.run > bestRun;
+    const combo = counts ? comboFor(next.run) : null;
+    announce(comboSpeech(combo, newBest));
+    if (res.xp > 0) rewardBeat(combo || newBest ? "combo" : "correct", next.rewards.prefs);
+    return { ...res, run: next.run, combo, newBest };
   };
+  /* A graded card counts toward today's cards and its XP toward the day's
+     XP (so the weekly view matches the header). Undo reverses all of it,
+     including the day count touchDay added, so grade → undo → grade counts once. */
+  const noteCard = (cardXpGain = 0, op) => setRewards((r) => (op?.id
+    ? recordCardGrade(r, { id: op.id, day: op.day || todayStr(), xp: cardXpGain || 0 })
+    : bumpDay(r, todayStr(), { cards: 1, xp: cardXpGain || 0 })));
+  const unnoteCard = (cardXpGain = 0, day, op, snap = null) => {
+    const credited = day || todayStr();
+    const p = progressRef.current;
+    setRewards((r) => (op?.id
+      ? undoCardGrade(r, { id: op.id, day: credited, xp: cardXpGain })
+      : reverseCardDay(r, credited, cardXpGain)));
+    setDaily((d) => (d.day === credited && d.answered > 0 ? { ...d, answered: d.answered - 1 } : d));
+    if (!snap) return;
+    /* The grade that opened the day, and any rank its XP lifted, is
+       undone with it: state is exactly what it was before the grade. */
+    const earnedNow = careerStatus({ xp: Math.max(0, (p.xp ?? 0) - (cardXpGain || 0)), log: p.log, cats: CATS }).earnedNow;
+    const base = { streak: p.streak, daily: p.daily, earnedNow };
+    const probe = undoGradeEffects({ ...base, rewards: rewardsRef.current }, snap);
+    if (probe.reverted) {
+      setStreak(probe.streak);
+      touchedDay.current = probe.touched ?? null;
+    }
+    setRewards((r) => undoGradeEffects({ ...base, rewards: r }, snap).rewards);
+    setMoments((m) => undoGradeEffects({ ...base, rewards: rewardsRef.current, moments: m }, snap).moments);
+  };
+  const resolveLegacy = (legacyId, chosen, logIndex = -1) => {
+    if (!chosen?.key || !chosen?.source || !Number.isInteger(logIndex) || logIndex < 0) return;
+    setLog((rows) => claimLegacyAt(rows, logIndex, chosen));
+    setMissSchedule((schedule) => claimLegacySchedule(schedule, legacyId, chosen));
+  };
+  const setPref = (k, v) => setRewards((r) => ({ ...r, prefs: { ...r.prefs, [k]: v } }));
+  const motion = motionAllowed(rewards.prefs);
 
   const catStats = CATS.map((c) => {
     const rows = log.filter((l) => l.cat === c);
@@ -834,16 +1322,87 @@ export default function App() {
   const onNewCard = (id) => setFcNew((f) => noteNewCard(f, todayStr(), id));
   const onRefundNewCard = (id) => setFcNew((f) => refundNewCard(f, todayStr(), id));
   const allQuestions = useMemo(
-    () => [...(bankQs ?? [...QUESTIONS, ...NGN_SAMPLES, ...CALC_SAMPLES, ...COVERAGE_SAMPLES]), ...customQs],
+    () => [
+      ...stampLoadedCatalog(bankQs ?? BUNDLED_QUESTIONS, bankQs ? "bank" : "builtin"),
+      ...stampLoadedCatalog(customQs, "bank"),
+    ],
     [bankQs, customQs]
   );
   const addQuestions = (qs) => setCustomQs((c) => [...c, ...qs]);
 
+  /* ---- rewards: all derived from the log + reward history ---- */
+  const today = todayStr();
+  const board = useMemo(() => badgeBoard(log, CATS, rewards.badgesSeen), [log, rewards.badgesSeen]);
+  const career = useMemo(() => careerStatus({ xp, log, cats: CATS, rankHigh: rewards.rankHigh }), [xp, log, rewards.rankHigh]);
+  const missesOpen = useMemo(() => reviewPools(expandTrialQuestions(legacyCandidates(allQuestions, log, BUNDLED_QUESTIONS, allCases), log, BUNDLED_QUESTIONS, missSchedule), log, missSchedule, today).review.length, [allQuestions, allCases, log, missSchedule, today]);
+  const qToday = todayQuestionCount({ rewards, daily, today });
+  const shift = shiftStatus({ day: rewards.days[today], answeredToday: qToday.known ? qToday.count : 0, questionsKnown: qToday.known, dueCount, missesOpen });
+  const week = weekRounds(rewards, today);
+  const nextDue = useMemo(() => {
+    let m = null;
+    for (const v of Object.values(srsMap)) if (v?.due && v.due > today && (!m || v.due < m)) m = v.due;
+    return m;
+  }, [srsMap, today]);
+
+  /* Promotions and new badge levels are celebrated once. Whatever is
+     already true when the app loads (an existing student's first visit
+     after this update, or a guest handoff) is marked seen silently. */
+  const momentsPrimed = useRef(false);
+  useEffect(() => {
+    if (!loaded) return;
+    const after = { career: careerStatus({ xp, log, cats: CATS, rankHigh: null }), board: badgeBoard(log, CATS, {}) };
+    const found = detectMoments({ before: after, after, rewards: rewardsRef.current });
+    if (found.length) {
+      setRewards((r) => markMomentsSeen(r, found));
+      if (momentsPrimed.current) setMoments((m) => [...m, ...found]);
+    }
+    momentsPrimed.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, log.length, xp]);
+  /* Five shifts in a week bank one shift cover (max MAX_COVERS).
+     covers is a dependency so a cover spent later the same week can still
+     bank the cover that was earned while the bank was full. */
+  useEffect(() => {
+    if (!loaded) return;
+    const g = maybeGrantCover(rewardsRef.current, today);
+    if (g.rewards === rewardsRef.current) return;
+    setRewards((r) => maybeGrantCover(r, today).rewards);
+    if (g.granted) setMoments((m) => [...m, { kind: "cover", title: "Shift cover earned", line: "Five shifts this week. A cover protects your streak on a day you can't study, like a clinical day.", next: `${g.rewards.covers} of ${MAX_COVERS} banked` }]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, rewards.days, rewards.covers, today]);
+
+  /* ---- session recap: snapshot at the start, summary at the end ---- */
+  const sessionStart = useRef(null);
+  const beginSession = () => {
+    sessionStart.current = { logLen: log.length, xp, at: Date.now(), bestRun, cards: rewards.days[today]?.cards ?? 0 };
+  };
+  const makeRecap = () => {
+    if (!sessionStart.current) beginSession();
+    const start = sessionStart.current ?? { logLen: log.length, xp, at: Date.now(), bestRun, cards: 0 };
+    return sessionRecap({ start, log, xp, rewards, cardsToday: rewards.days[today]?.cards ?? 0, dueCount, nextDue, bestRun });
+  };
+  const commitRecap = (recap) => {
+    if (!recap) return;
+    setRewards((r) => ({ ...r, best: { ...r.best, run: Math.max(r.best.run, recap.nextBest.run), sessionAcc: Math.max(r.best.sessionAcc, recap.nextBest.sessionAcc), sessionN: recap.nextBest.sessionAcc > r.best.sessionAcc ? recap.nextBest.sessionN : r.best.sessionN } }));
+    rewardBeat("recap", rewardsRef.current.prefs);
+  };
+  const recapProps = { makeRecap, commitRecap, shift, today, motion };
+  const momentKey = moments[0] ? `${moments[0].kind}:${moments[0].title}` : null;
+  useEffect(() => {
+    if (momentKey && !sessionLive) rewardBeat("milestone", rewardsRef.current.prefs);
+  }, [momentKey, sessionLive]);
+
   const resetAll = async () => {
-    try { await store.delete(STORE_KEY); } catch (e) { /* nothing saved */ }
+    /* Never while not saving: the only server copy is the row we couldn't open (REVIEW-4 R4-1). */
+    if (saveBlocked) return;
+    saveQueue.current?.invalidate();
+    try { await store.delete(STORE_KEY, resetGeneration.current + 1); } catch (e) { setSaveFailed(true); return; }
+    resetGeneration.current += 1;
     setXp(0); setRun(0); setBestRun(0); setLog([]); setFlagged([]); setCustomQs([]);
+    touchedDay.current = null;
     setStreak({ count: 0, lastDay: null, shield: true }); setDaily({ day: todayStr(), answered: 0 });
     setSrs(freshCards()); setSrsMap({}); setFcNew({ day: null, count: 0 }); setMissSchedule({}); setExamResults({}); setAbility(emptyAbility(CATS)); setPlan(null); setExamDate(null); setTab("today");
+    setRewards((r) => ({ ...emptyRewards(), rankHigh: 0, prefs: r.prefs })); setMoments([]);
   };
 
   /* ---- weekly planner (§5.7): one LLM call per ISO week, cached in the blob ---- */
@@ -855,11 +1414,17 @@ export default function App() {
       try {
         // honest inventory: the plan may never schedule questions that
         // don't exist (RN pack prompt 2)
-        const answeredIds = new Set(log.map((l) => l.id));
+        const answeredIds = new Set(log.map((l) => answerIdentity(l)).filter((id) => id != null));
         const lastById = {};
-        for (const l of log) lastById[l.id] = l.correct;
+        for (const l of log) {
+          const id = answerIdentity(l);
+          if (id != null) lastById[id] = l.correct;
+        }
         const perCat = Object.fromEntries(CATS.map((c) => [c, 0]));
-        for (const q of allQuestions) if (!answeredIds.has(q.id) && perCat[q.cat] !== undefined) perCat[q.cat]++;
+        for (const q of allQuestions) {
+          const id = answerIdentity(q);
+          if (id != null && !answeredIds.has(id) && perCat[q.cat] !== undefined) perCat[q.cat]++;
+        }
         const misses = Object.values(lastById).filter((ok) => !ok).length;
         const token = await currentAccessToken();
         const r = await fetch("/api/plan", {
@@ -878,6 +1443,44 @@ export default function App() {
     // the ISO week rolls over or the exam date changes, not on every answer.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, examDate, plan]);
+
+  if (loadState === "error") return (
+    <div className="app" data-theme={theme}>
+      <Style />
+      <RewardsStyle />
+      <main className="body">
+        <section className="card rw-load-error" role="alert" aria-labelledby="load-error-title">
+          <p className="eyebrow">Saved progress</p>
+          <h2 id="load-error-title" className="h2">We couldn't load your progress</h2>
+          <p className="small">We couldn't reach the server, so your saved XP, streak and answers stay as they are. Nothing will be saved until your progress loads. Check your connection and try again.</p>
+          <div className="row">
+            <button type="button" className="btn" onClick={loadProgress}>Try again</button>
+            <button type="button" className="btn ghost" onClick={signOutAndForgetTrial}>Sign out</button>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+
+  if (loadState === "corrupt") return (
+    <div className="app" data-theme={theme}>
+      <Style />
+      <RewardsStyle />
+      <main className="body">
+        <section className="card rw-load-error rw-load-corrupt" role="alert" aria-labelledby="load-corrupt-title">
+          <p className="eyebrow">Saved progress</p>
+          <h2 id="load-corrupt-title" className="h2">Your saved progress couldn't be opened</h2>
+          <p className="small">This isn't a connection problem. Your account has saved progress, but it's in a form the app can't read. We haven't changed it.</p>
+          <p className="small">You can keep studying now, but nothing will be saved until this is fixed. Email <a href="mailto:sheldon@pulsern.app?subject=PulseRN%20saved%20progress%20won%27t%20open">sheldon@pulsern.app</a> and we'll restore it.</p>
+          <div className="row">
+            <button type="button" className="btn" onClick={studyWithoutSaving}>Study without saving</button>
+            <button type="button" className="btn ghost" onClick={downloadUnreadable}>Download a copy</button>
+            <button type="button" className="btn ghost" onClick={signOutAndForgetTrial}>Sign out</button>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
 
   if (!loaded) return (
     <div className="app" data-theme={theme}>
@@ -965,8 +1568,10 @@ export default function App() {
   };
 
   return (
-    <div className={"app" + (shield ? " shield" : "") + (isOwner ? " owner" : "") + (scrolling ? " scrolling" : "") + (sessionLive ? " in-session" : "") + " tab-" + tab} data-theme={theme}>
+    <div className={"app" + (shield ? " shield" : "") + (isOwner ? " owner" : "") + (scrolling ? " scrolling" : "") + (sessionLive ? " in-session" : "") + (motion ? "" : " fx-reduced") + " tab-" + tab} data-theme={theme}>
       <Style />
+      <RewardsStyle />
+      {liveRegion}
       <header className={"top" + (menuOpen ? " menu-open" : "")}>
         {/* Exam lockdown: while a readiness exam runs, all navigation and
             references disappear — only the exam (and its calculator) exists,
@@ -984,7 +1589,7 @@ export default function App() {
             <span className="exam-lock-chip" title="References stay closed until you submit or end the exam">🔒 EXAM</span>
           ) : (
             <span key={xpPulse} className={"stat-chip" + (xpPulse ? " pulse" : "")} role="img" aria-label={`${streak.count} day streak, ${xp} XP`}>
-              <span aria-hidden="true">🔥 {streak.count}</span><span className="stat-sep" aria-hidden="true" /><span aria-hidden="true">◆ {xp} XP</span>
+              <span aria-hidden="true"><StreakGlyph />{streak.count}</span><span className="stat-sep" aria-hidden="true" /><span aria-hidden="true">◆ {xp} XP</span>
             </span>
           )}
           {(examLock || locked) && (
@@ -1011,7 +1616,7 @@ export default function App() {
                   title="Light mode reads best for long study sessions; night mode cuts glare for late review">
                   {theme === "light" ? "🌙 Night mode" : "☀ Light mode"}
                 </button>
-                <button type="button" className="menu-item" onClick={() => { window.location.assign("/about/"); }}>🩺 Meet the RN behind PulseRN</button>
+                <button type="button" className="menu-item" onClick={openAbout}>🩺 Meet the RN behind PulseRN</button>
                 <button type="button" className="menu-item" onClick={openTour}>🎓 Tour</button>
                 <button type="button" className="menu-item" onClick={() => goSection("stats")}>⚙ Settings & Stats</button>
               </>}
@@ -1020,7 +1625,7 @@ export default function App() {
               {isOwner && (
                 <button className="menu-item" onClick={() => { window.location.assign("/owner/"); }}>🛠 Owner tools: system &amp; accounts</button>
               )}
-              <button className="menu-item" onClick={() => supabase.auth.signOut()}>↪ Sign out</button>
+              <button className="menu-item" onClick={signOutAndForgetTrial}>↪ Sign out</button>
             </nav>
           </>
         )}
@@ -1045,6 +1650,73 @@ export default function App() {
             <InstallCard />
           </section>
         )}
+        {saveBlocked && loaded && (
+          <section className="card rw-saved rw-not-saving" role="status" aria-labelledby="not-saving-title">
+            <p className="eyebrow">Not saving</p>
+            <h2 id="not-saving-title" className="h2">This session isn't being saved</h2>
+            <p className="small">Your saved progress couldn't be opened, so we're leaving it untouched. Email <a href="mailto:sheldon@pulsern.app?subject=PulseRN%20saved%20progress%20won%27t%20open">sheldon@pulsern.app</a> to restore it.</p>
+            <button type="button" className="btn ghost" onClick={downloadUnreadable}>Download a copy</button>
+          </section>
+        )}
+        {catalogError && loaded && !saveBlocked && (
+          <section className="card rw-saved" role="alert">
+            <h2 className="h2">The question catalog didn't load</h2>
+            <p className="small">Saved misses stay in Review misses. Retry to open the rest of the bank.</p>
+            <button type="button" className="btn" onClick={() => setCatalogAttempt((n) => n + 1)}>Retry</button>
+          </section>
+        )}
+        {casesOnlyError && loaded && !saveBlocked && (
+          <p className="small" role="status">
+            Some case studies didn't load. Practice questions still work.{" "}
+            <button type="button" className="btn ghost" onClick={() => setCatalogAttempt((n) => n + 1)}>Retry</button>
+          </p>
+        )}
+        {saveFailed && loaded && !saveBlocked && !guestSaveError && (
+          <section className="card rw-saved" role="alert">
+            <p className="eyebrow">Not saved yet</p>
+            <h2 className="h2">Your latest answers aren't saved yet</h2>
+            <p className="small">The last save didn't finish. Try again before you leave this page.</p>
+            <button type="button" className="btn" onClick={() => setSaveAttempt((n) => n + 1)}>Try again</button>
+          </section>
+        )}
+        {saveStall && (
+          <section className="card rw-saved" role="dialog" aria-labelledby="save-stall-title">
+            <h2 id="save-stall-title" className="h2">Still saving your progress.</h2>
+            <p className="small">Unsaved changes from the last few seconds may be lost.</p>
+            <div className="row">
+              <button type="button" className="btn" onClick={retrySignOut}>Retry</button>
+              <button type="button" className="btn ghost" onClick={finishSignOut}>Sign out anyway</button>
+            </div>
+          </section>
+        )}
+        {guestSaveError && !locked && (
+          <section className="card rw-saved" role="alert">
+            <p className="eyebrow">Not saved yet</p>
+            <h2 className="h2">Your trial answers are still on this device</h2>
+            <p className="small">The account copy didn't save. Nothing was discarded. Try again, and stay signed in until it does.</p>
+            <button type="button" className="btn" onClick={() => setSaveAttempt((n) => n + 1)}>Try again</button>
+          </section>
+        )}
+        {guestNote?.skipped && !guestSaveError && !locked && (
+          <section className="card rw-saved" role="status">
+            <p className="small">This account already has progress, so your practice answers weren't added.</p>
+            <button type="button" className="btn ghost" onClick={() => {
+              try {
+                clearGuest(storageOrNull(() => window.localStorage));
+                releaseHeldGuest(storageOrNull(() => window.sessionStorage));
+              } catch { /* storage blocked */ }
+              setGuestNote(null);
+            }}>Discard practice answers</button>
+          </section>
+        )}
+        {guestNote && !guestNote.skipped && !guestSaveError && !locked && (
+          <section className="card rw-saved" role="status">
+            <p className="eyebrow">Progress saved</p>
+            <h2 className="h2">Your trial answers are in your account</h2>
+            <p className="small">{guestNote.answers} answer{guestNote.answers === 1 ? "" : "s"}, {guestNote.correct} correct, +{guestNote.xp} XP{guestNote.streakStarted ? `, and day ${guestNote.streak} of your streak` : ""}. They count toward your stats, badges, and readiness estimate.</p>
+            <button type="button" className="btn ghost" onClick={() => setGuestNote(null)}>Got it</button>
+          </section>
+        )}
         {locked && !confirming && <Paywall ent={ent} onRefresh={refreshEnt} />}
         {!locked && !isOwner && ent?.status === "trial" && tab !== "plans" && (
           <section className="card trial-banner">
@@ -1053,20 +1725,22 @@ export default function App() {
         )}
         {!locked && <>
           {tab === "today" && <Today xp={xp} streak={streak} bestRun={bestRun} log={log} readiness={readiness} readyLabel={readyLabel} catStats={catStats} daily={daily} dueCount={dueCount} go={goSection}
-            record={record} questions={allQuestions} provider={provider}
+            record={record} questions={allQuestions} provider={provider} onResolveLegacy={resolveLegacy}
             ability={ability} calibration={calibration} plan={plan} missSchedule={missSchedule}
             newAllowance={newAllowance} onNewCard={onNewCard} onRefundNewCard={onRefundNewCard}
             profile={profile} setProfile={setProfile} showProfile={profilePrompt} dismissProfileCard={() => setProfileCardDismissed(true)}
             fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)}
             cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} addXp={(n) => setXp((x) => x + n)}
             needsFirstAnswer={activating} quizKick={quizKick} appliedQuizKick={appliedQuizKick} accessPending={accessPending}
-            homeEpoch={homeEpoch} tourHold={tourStep != null} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} onSession={onSession} />}
-          {tab === "qbank" && <QBank key={sectionEpoch} record={record} log={log} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} missSchedule={missSchedule} isOwner={isOwner} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
+            homeEpoch={homeEpoch} tourHold={tourStep != null} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} onSession={onSession}
+            rewards={rewards} shift={shift} career={career} missesOpen={missesOpen} beginSession={beginSession} recapProps={recapProps} onGrade={noteCard} onUngrade={unnoteCard} cases={allCases} onRetryCatalog={() => setCatalogAttempt((n) => n + 1)} />}
+          {tab === "qbank" && <QBank key={sectionEpoch} record={record} log={log} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} missSchedule={missSchedule} isOwner={isOwner} onSession={onSession} onResolveLegacy={resolveLegacy} cases={allCases} onRetryCatalog={() => setCatalogAttempt((n) => n + 1)} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus}
+            onBegin={beginSession} renderBreak={({ onMore, onEnd }) => <RecapPanel {...recapProps} doneLabel="End session" onDone={onEnd} onMore={onMore} moreLabel="One more block →" />} />}
           {tab === "case" && <CaseStudy key={sectionEpoch} record={record} provider={provider} cases={allCases} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
-          {tab === "cards" && <Flashcards key={sectionEpoch} addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)} newAllowance={newAllowance} onNewCard={onNewCard} onRefundNewCard={onRefundNewCard} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
+          {tab === "cards" && <Flashcards key={sectionEpoch} onGrade={noteCard} onUngrade={unnoteCard} addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)} newAllowance={newAllowance} onNewCard={onNewCard} onRefundNewCard={onRefundNewCard} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
           {tab === "exams" && <ExamCenter record={record} examResults={examResults} setExamResults={setExamResults} cats={CATS} ent={ent} isOwner={isOwner} onRunning={setExamLock} onAttempt={(f) => setEnt((e) => (e ? { ...e, examsLeft: Math.max(0, e.examsLeft - 1), attempted: [...e.attempted, f] } : e))} onUpgrade={() => goSection("plans")} onSession={onSession} bindExit={examLeave.bindExit} onScored={examLeave.onScored} onLeaveSubmit={examLeave.onLeaveSubmit} />}
           {tab === "plans" && <Paywall ent={ent} onRefresh={refreshEnt} trialBanner={ent?.status === "trial"} />}
-          {tab === "stats" && <Stats xp={xp} streak={streak} bestRun={bestRun} readiness={readiness} readyLabel={readyLabel} log={log} catStats={catStats} popStats={popStats} acc={acc} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => goSection("plans")} profile={profile} setProfile={setProfile} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
+          {tab === "stats" && <Stats setPref={setPref} rewards={rewards} career={career} board={board} week={week} xp={xp} streak={streak} bestRun={bestRun} readiness={readiness} readyLabel={readyLabel} log={log} catStats={catStats} popStats={popStats} acc={acc} resetAll={resetAll} saveBlocked={saveBlocked} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => goSection("plans")} profile={profile} setProfile={setProfile} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} signOutAndForgetTrial={signOutAndForgetTrial} />}
           {tourStep != null && <div className="tour-scroll-room" aria-hidden="true" />}
         </>}
       </main>
@@ -1091,6 +1765,9 @@ export default function App() {
       <Toolkit open={!examLock && (labOpen || helpOpen)} section={helpOpen ? "help" : "labs"}
         onSection={(k) => { setLabOpen(k === "labs"); setHelpOpen(k === "help"); }}
         onClose={() => { setLabOpen(false); setHelpOpen(false); }} provider={provider} />
+      {moments.length > 0 && !sessionLive && tourStep == null && !leaveGuard && !examLock && !locked && (
+        <MomentSheet key={moments.length + ":" + moments[0].kind + ":" + (moments[0].title ?? "")} moment={moments[0]} motion={motion} onClose={() => setMoments((m) => m.slice(1))} />
+      )}
       {tourStep != null && !locked && (
         <Tour
           step={tourStep}
@@ -1134,7 +1811,7 @@ Profile & texts: Stats has a Profile card where students add their name and mobi
 Plans: every new account gets a free 7-day pass with full study access (no exams). Access passes are one-time payments that do not auto-renew: 30-day $99 (1 self-assessment), 60-day $159 (2), 90-day $219 (3), 180-day $319 (4), 360-day $379 (5), 730-day $439 (6). Add-ons, also one-time: 7-day renewal pass $45 (content only, never charged automatically) or an extra self-assessment $45. Refunds: if paid access has not been used, a full refund can be requested within 7 days of purchase; after 7 days, or once paid access has been used, payments are non-refundable, except where the law requires otherwise (see the Terms). Partner discount codes can be entered on the Plans page. All content is the property of the app's owner and may not be used outside PulseRN. Under any answered question: an AI tutor button and a ⚠ button for reporting a problem with the question.
 Rules: help with app navigation and NCLEX study strategy; you may explain nursing concepts in an educational exam-prep register but NEVER give real-world medical or dosing advice. For account, billing, data-deletion, or anything you can't resolve, direct the user to email sheldon@pulsern.app or call 786-408-4357. Keep answers under 120 words, warm and plain. Plain text only — no markdown, no asterisks, no headers.`;
 
-function HelpPanel({ provider, inputRef }) {
+function HelpPanel({ provider, inputRef, guest = false, onGuestSignIn }) {
   const [msgs, setMsgs] = useState([]); // {role: "you"|"ai", text}
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1162,6 +1839,18 @@ function HelpPanel({ provider, inputRef }) {
     if (!answered) setMsgs((m) => [...m, { role: "ai", text: "I couldn't reach the helper service just now. Try sending that again in a few seconds. For anything urgent, email sheldon@pulsern.app or call 786-408-4357." }]);
     setBusy(false);
   };
+
+  if (guest) return (
+    <div className="hp">
+      <div className="help-contact">
+        <p className="small"><strong>Reach a human:</strong> <a href="mailto:sheldon@pulsern.app">sheldon@pulsern.app</a> · <a href="tel:+17864084357">786-408-4357</a></p>
+      </div>
+      <div className="guest-ai">
+        <p className="small"><strong>The study helper chat is part of your free account.</strong> It answers questions about the app and NCLEX concepts.</p>
+        {onGuestSignIn && <button type="button" className="btn ghost" onClick={onGuestSignIn}>Create a free account</button>}
+      </div>
+    </div>
+  );
 
   return (
     <div className="hp">
@@ -1193,7 +1882,7 @@ function HelpPanel({ provider, inputRef }) {
    A bottom sheet on phones, a side panel on wider screens. Escape or ✕
    closes and hands focus back to whatever opened it. */
 
-export function Toolkit({ open, section = "labs", onSection, onClose, provider, ask = askModel }) {
+export function Toolkit({ open, section = "labs", onSection, onClose, provider, ask = askModel, guest = false, onGuestSignIn }) {
   const asideRef = useRef(null);
   const titleRef = useRef(null);
   const returnTo = useRef(null);
@@ -1263,10 +1952,10 @@ export function Toolkit({ open, section = "labs", onSection, onClose, provider, 
         </div>
         <div className="tk-body">
           <div id="tk-panel-labs" role="tabpanel" aria-labelledby={tabIds.labs} hidden={section !== "labs"} aria-label="Normal lab and vital-sign reference ranges">
-            <LabPanel ask={ask} />
+            <LabPanel ask={ask} guest={guest} onGuestSignIn={onGuestSignIn} />
           </div>
           <div id="tk-panel-help" role="tabpanel" aria-labelledby={tabIds.help} hidden={section !== "help"} className="tk-help">
-            <HelpPanel provider={provider} />
+            <HelpPanel provider={provider} guest={guest} onGuestSignIn={onGuestSignIn} />
           </div>
         </div>
         <div className="tk-foot">
@@ -1333,32 +2022,36 @@ function Today(props) {
     <div className="stack">
       <p className="eyebrow stage-label">Answer this to unlock Today</p>
       <p className="small">One question opens your daily plan. No need to look for a Start button.</p>
-      <QBank record={props.record} log={props.log} questions={props.questions} provider={props.provider} ability={props.ability} calibration={props.calibration} missSchedule={props.missSchedule} auto autoLimit={1} preferMc onDone={finishFirst} onSession={props.onSession} />
+      <QBank record={props.record} log={props.log} questions={props.questions} provider={props.provider} ability={props.ability} calibration={props.calibration} missSchedule={props.missSchedule} auto autoLimit={1} preferMc onDone={finishFirst} onSession={props.onSession} onResolveLegacy={props.onResolveLegacy} cases={props.cases} onRetryCatalog={props.onRetryCatalog} />
     </div>
   );
 
   if (stage === "cards") return (
     <div className="stack">
       <p className="eyebrow stage-label">TODAY'S ROUND · STEP 1 OF 2 · CARDS</p>
-      <Flashcards addXp={props.addXp} cards={props.cards} srsMap={props.srsMap} setSrsMap={props.setSrsMap} touchDay={props.touchDay} ready={props.ready} fcFlips={props.fcFlips} onFlip={props.onFlip} newAllowance={props.newAllowance} onNewCard={props.onNewCard} onRefundNewCard={props.onRefundNewCard} embedded onDone={() => setStage("quiz")} onSession={props.onSession} />
+      <Flashcards addXp={props.addXp} onGrade={props.onGrade} onUngrade={props.onUngrade} cards={props.cards} srsMap={props.srsMap} setSrsMap={props.setSrsMap} touchDay={props.touchDay} ready={props.ready} fcFlips={props.fcFlips} onFlip={props.onFlip} newAllowance={props.newAllowance} onNewCard={props.onNewCard} onRefundNewCard={props.onRefundNewCard} embedded onDone={() => setStage("quiz")} onSession={props.onSession} />
     </div>
   );
 
   if (stage === "quiz") return (
     <div className="stack">
       <p className="eyebrow stage-label">TODAY'S ROUND · STEP 2 OF 2 · QUESTIONS</p>
-      <QBank record={props.record} log={props.log} questions={props.questions} provider={props.provider} ability={props.ability} calibration={props.calibration} missSchedule={props.missSchedule} auto onDone={() => setStage("done")} onSession={props.onSession} />
+      <QBank record={props.record} log={props.log} questions={props.questions} provider={props.provider} ability={props.ability} calibration={props.calibration} missSchedule={props.missSchedule} auto onDone={() => setStage("done")} onSession={props.onSession} onResolveLegacy={props.onResolveLegacy} cases={props.cases} onRetryCatalog={props.onRetryCatalog} />
     </div>
   );
 
   if (stage === "done") return (
     <div className="stack">
-      <section className="card">
-        <p className="eyebrow">Round complete</p>
-        <h2 className="h2">That's the whole job for today 🎉</h2>
-        <p className="small">Day {streak.count} locked in. The science says stop here: spacing does its work between sessions, not during them. Tomorrow, tap the same button.</p>
-        <button className="btn ghost" onClick={() => setStage("home")}>Back to Today</button>
-      </section>
+      {props.recapProps ? (
+        <RecapPanel {...props.recapProps} doneLabel="Back to Today" onDone={() => setStage("home")} />
+      ) : (
+        <section className="card">
+          <p className="eyebrow">Round complete</p>
+          <h2 className="h2">That's the whole job for today</h2>
+          <button className="btn ghost" onClick={() => setStage("home")}>Back to Today</button>
+        </section>
+      )}
+      <Why label="why stop here">Day {streak.count} locked in. The science says stop here: spacing does its work between sessions, not during them. Tomorrow, tap the same button.</Why>
       {props.showProfile && (
         <ProfileCard profile={null} setProfile={props.setProfile} prompt onDismiss={props.dismissProfileCard} />
       )}
@@ -1370,7 +2063,7 @@ function Today(props) {
       <section className={"card center" + tourMark(props.tourFocus, "today-round")} data-tour="today-round">
         <p className="eyebrow">One tap. The app picks what you study.</p>
 
-        <button className="bigbtn" onClick={() => setStage(dueCount ? "cards" : "quiz")}>▶ Start today's round</button>
+        <button className="bigbtn" onClick={() => { props.beginSession?.(); setStage(dueCount ? "cards" : "quiz"); }}>▶ Start today's round</button>
         <p className="small">{dueCount ? `${dueCount} flashcard${dueCount === 1 ? "" : "s"} due` : "No cards due"} + 8 smart questions · about 10 minutes</p>
       </section>
       {props.showProfile && (
@@ -1396,11 +2089,31 @@ function Today(props) {
   );
 }
 
+/* The recap is frozen when it opens, then its personal bests are saved once. */
+function RecapPanel({ makeRecap, commitRecap, ...rest }) {
+  const [recap] = useState(() => makeRecap());
+  useEffect(() => { commitRecap(recap); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!recap) return null;
+  return <SessionRecap recap={recap} {...rest} />;
+}
+
+/* Guests get the full rationale; the AI tutor needs an account (/api/ai
+   requires a signed-in user), so it shows a gentle invitation instead. */
+function GuestAiNote({ onSignIn }) {
+  return (
+    <div className="guest-ai">
+      <p className="small"><strong>Want this explained another way?</strong> The AI tutor is part of your free account.</p>
+      {onSignIn && <button type="button" className="btn ghost" onClick={onSignIn}>Create a free account to ask</button>}
+    </div>
+  );
+}
+
 /* ================= MONITOR (dashboard) ================= */
 
-function Monitor({ xp, streak, bestRun, log, readiness, readyLabel, catStats, daily, dueCount, go, tourFocus }) {
+function Monitor({ xp, streak, bestRun, log, readiness, readyLabel, catStats, daily, dueCount, go, tourFocus, rewards, shift, career, missesOpen = 0 }) {
   const lvl = levelFor(xp);
   const weakest = catStats.filter((c) => c.pct != null).sort((a, b) => a.pct - b.pct)[0];
+  const qToday = todayQuestionCount({ rewards, daily, today: todayStr() });
   const goalPct = Math.min(100, Math.round((daily.answered / DAILY_GOAL) * 100));
   return (
     <div className="stack">
@@ -1421,7 +2134,8 @@ function Monitor({ xp, streak, bestRun, log, readiness, readyLabel, catStats, da
             <span className="vital-lab">DAY STREAK</span>
           </div>
           <div className="vital">
-            <span className="vital-num">{daily.answered}</span>
+            {/* Questions only, the same count as the shift's Assessments (REVIEW-3 N8). */}
+            <span className="vital-num">{qToday.known ? qToday.count : "—"}</span>
             <span className="vital-lab">Q TODAY</span>
           </div>
           <div className="vital">
@@ -1432,28 +2146,33 @@ function Monitor({ xp, streak, bestRun, log, readiness, readyLabel, catStats, da
         <p className="monitor-note mono">{readyLabel.toUpperCase()}</p>
       </section>
 
-      <section className="card">
-        <p className="eyebrow">Today's goal · little and often</p>
-        <h2 className="h2">{daily.answered >= DAILY_GOAL ? "Goal met: spacing secured" : `${daily.answered} / ${DAILY_GOAL} questions today`}</h2>
-        <div className="bar"><div className="bar-fill" style={{ width: `${goalPct}%` }} /></div>
-        <Why>{daily.answered >= DAILY_GOAL
-          ? "One block a day beats a weekend marathon. Clear your flashcard queue, then rest. The forgetting curve is doing the work now."
-          : "Distributed practice: a short block today is worth more than a long one someday. Your streak counts days, not hours."}</Why>
-        {dueCount > 0 && <p className="small tip"><strong>{dueCount} flashcard{dueCount === 1 ? "" : "s"} due today.</strong> Spaced reviews only count if they happen on schedule.</p>}
-        <p className="small tip">{streak.shield ? "🛡 Streak shield ready: one missed day won't break your streak." : "🛡 Shield used. A 7-day run restores it."}</p>
-      </section>
+      {shift && rewards ? (
+        <ShiftCard shift={shift} streak={streak} rewards={rewards}>
+          <Why>{shift.complete
+            ? shiftCompleteNote({ missesOpen })
+            : "Each task is a learning behavior: questions are retrieval practice, due cards are spacing, and fixing a miss is error correction. A streak counts days, not hours. A shield covers one missed day and refills every 7 days; a shift cover, earned by 5 shifts in a week, covers another."}</Why>
+        </ShiftCard>
+      ) : (
+        <section className="card">
+          <p className="eyebrow">Today's goal · little and often</p>
+          <h2 className="h2">{daily.answered >= DAILY_GOAL ? "Goal met: spacing secured" : `${daily.answered} / ${DAILY_GOAL} questions today`}</h2>
+          <div className="bar"><div className="bar-fill" style={{ width: `${goalPct}%` }} /></div>
+          <p className="small tip">{streak.shield ? "Streak shield ready: one missed day won't break your streak." : "Shield used. A 7-day run restores it."}</p>
+        </section>
+      )}
 
-      <section className="card">
-        <p className="eyebrow">Rank</p>
-        <h2 className="h2">{lvl.name}</h2>
-        {lvl.next && (
-          <>
-            <div className="bar"><div className="bar-fill" style={{ width: `${Math.min(100, (xp / lvl.next[0]) * 100)}%` }} /></div>
-
-            <p className="small">{lvl.next[0] - xp} XP to {lvl.next[1]} · best answer run {bestRun}</p>
-          </>
-        )}
-      </section>
+      {career ? <CareerCard career={career} /> : (
+        <section className="card">
+          <p className="eyebrow">Rank</p>
+          <h2 className="h2">{lvl.name}</h2>
+          {lvl.next && (
+            <>
+              <div className="bar"><div className="bar-fill" style={{ width: `${Math.min(100, (xp / lvl.next[0]) * 100)}%` }} /></div>
+              <p className="small">{lvl.next[0] - xp} XP to {lvl.next[1]} · best answer run {bestRun}</p>
+            </>
+          )}
+        </section>
+      )}
 
       <section className="card">
         <p className="eyebrow">Today's plan</p>
@@ -1487,7 +2206,7 @@ function blankAnswer(q) {
   return { sel: [], order: [] };
 }
 
-export function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, onDone, questions = QUESTIONS, provider = "claude", addQuestions, ability = {}, calibration = {}, missSchedule = {}, isOwner = false, onSession, tourFocus = null }) {
+export function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, onDone, questions = QUESTIONS, provider = "claude", addQuestions, ability = {}, calibration = {}, missSchedule = {}, isOwner = false, onSession, tourFocus = null, guest = false, onGuestSignIn, onBegin, renderBreak, onResolveLegacy = null, cases = null, onRetryCatalog = null }) {
   const [diffTarget, setDiffTarget] = useState(1);
   const [calcOpen, setCalcOpen] = useState(false); // on-screen calculator
   const [q, setQ] = useState(null);
@@ -1500,6 +2219,10 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
   const [credit, setCredit] = useState({ points: 0, max: 1 }); // NCSBN partial credit for the last answer
   const [nextReview, setNextReview] = useState(null); // review date the last answer scheduled, if any
   const [lastCat, setLastCat] = useState(null);
+  const [lastRes, setLastRes] = useState(null); // XP result of the answer on screen (src/rewards.js)
+  const resById = useRef({});
+  const opened = useRef(new Map());
+  const shownAt = useRef(0);
   const [sessionN, setSessionN] = useState(0);
   const [mode, setMode] = useState("new"); // new | review
   const [focusOpen, setFocusOpen] = useState(false); // Focus bottom sheet
@@ -1507,7 +2230,10 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
   qKeys.current = {}; // filled in below only while a question is on screen
   useStudyKeys(qKeys);
 
-  const answeredIds = [...new Set(log.map((l) => l.id))];
+  const catalog = useMemo(
+    () => (questions ?? []).map((item) => stampCatalogQuestion(item, BUNDLED_QUESTIONS)),
+    [questions],
+  );
 
   // focused practice: empty filter = everything (the adaptive default)
   const [catFilter, setCatFilter] = useState([]);
@@ -1519,22 +2245,60 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
     (!popFilter.length || popFilter.includes(x.population));
   const toggleIn = (arr, set) => (v) => set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
 
-  const freshPool = questions.filter((x) => !answeredIds.includes(x.id) && inFocus(x));
+  const withLegacy = legacyCandidates(catalog, log, BUNDLED_QUESTIONS, cases);
+  const freshPool = unseenQuestions(withLegacy, log).filter(inFocus);
+  const reviewQuestions = expandTrialQuestions(withLegacy, log, BUNDLED_QUESTIONS, missSchedule);
+  const resolvedLegacy = useRef(new Set());
   /* Missed questions run on a spaced-review schedule (question-review.js):
      duePool = scheduled reviews whose LOCAL date has arrived; reviewPool =
      those plus every current miss, so Review Misses still serves all misses
      on demand, due ones first. */
-  const focused = questions.filter(inFocus);
-  const { due: duePool, review: reviewPool } = reviewPools(focused, log, missSchedule, todayStr());
+  const { due: dueAll, review: reviewAll } = reviewPools(reviewQuestions, log, missSchedule, todayStr());
+  const duePool = dueAll.filter(inFocus);
+  const reviewPool = reviewAll.filter(inFocus);
+  const loadedKey = q?.catalogMiss && questionByIdentity(reviewQuestions, q.key)?.catalogMiss !== true
+    && questionByIdentity(reviewQuestions, q.key)
+    ? q.key
+    : null;
+  const unresolvedNext = q?.unresolved ? refreshedUnresolved(q, reviewAll) : null;
+  const unresolvedSig = unresolvedNext && unresolvedNext !== q
+    ? (unresolvedNext.candidates ?? []).map((item) => item.key ?? item.id).join("|")
+    : "";
+  useEffect(() => {
+    if (!loadedKey) return;
+    const real = questionByIdentity(reviewQuestions, loadedKey);
+    if (!real || real.catalogMiss) return;
+    shownAt.current = Date.now();
+    setSel([]);
+    setOrder([]);
+    setPhase("answering");
+    setQ(real);
+    // The key appearing in the catalog is the change. The question object is read once then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadedKey]);
+  useEffect(() => {
+    if (!unresolvedSig || !q?.unresolved) return;
+    const next = refreshedUnresolved(q, reviewAll);
+    if (next && next !== q) setQ(next);
+    // The candidate list is the change. The pool is read once then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unresolvedSig]);
 
+  const remember = (item) => {
+    const id = item ? answerIdentity(item) : null;
+    if (id != null) opened.current.set(String(id), item);
+  };
   const reveal = (navState, knownQ) => {
     const view = present(navState);
-    const question = knownQ ?? (view ? questions.find((x) => x.id === view.id) : null);
+    const question = knownQ
+      ?? (view ? (questionByIdentity(reviewQuestions, view.id) ?? opened.current.get(String(view.id)) ?? null) : null);
+    if (question) remember(question);
     justScored.current = false;
     if (!view || !question) { setNav(navState); setQ(null); setPhase("done"); return; }
     setNav(navState);
     setQ(question);
     if (view.mode === "review") {
+      setLastRes(resById.current[answerIdentity(question)] ?? null);
       setSel(view.sel);
       setOrder(view.order ?? []);
       setWasCorrect(!!view.wasCorrect);
@@ -1549,6 +2313,8 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
     setWasCorrect(false);
     setCredit({ points: 0, max: 1 });
     setNextReview(null);
+    setLastRes(null);
+    shownAt.current = Date.now();
     setPhase("answering");
   };
 
@@ -1557,12 +2323,17 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
     const which = poolMode ?? (auto ? "today" : (mode === "review" ? "review" : "new"));
     /* Held questions are dropped inside sessionPool, before a due-only
        pool can hide everything else. */
-    let pool = sessionPool(focused, {
-      log, schedule: missSchedule, fresh: freshPool, mode: which, held: heldIds(trail),
+    const deferred = [...resolvedLegacy.current].flatMap((id) => (
+      String(id).includes(":") ? [String(id)] : [`unresolved:${id}`]
+    ));
+    let pool = sessionPool(reviewQuestions, {
+      log, schedule: missSchedule, fresh: freshPool, mode: which, held: heldIds(trail), deferred, allow: inFocus,
     });
     if (!pool.length) {
       const fb = fallbackSkip(trail);
-      if (fb) { reveal(fb); return; }
+      const skippedId = fb ? String(currentEntry(fb)?.id ?? "") : "";
+      if (fb && !deferred.includes(skippedId)) { reveal(fb); return; }
+      if (auto) { onDone?.(); return; }
       setNav(trail);
       setPhase("done");
       return;
@@ -1591,7 +2362,7 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
       Math.abs(itemRating(b, calibration) - pickTargetRating(ability, b.cat)));
     const pick = pool[Math.floor(rand() * Math.min(3, pool.length))];
     setLastCat(pick.cat);
-    reveal(appendQuestion(trail, pick.id), pick);
+    reveal(appendQuestion(trail, answerIdentity(pick)), pick);
   };
 
   /* Next on an unanswered question skips it: no log line, no schedule,
@@ -1618,7 +2389,8 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
     // NCSBN-style partial credit (ngn.js); the engine gets full credit as "correct".
     const c = scoreItem(q, q.type === "order" ? order : sel);
     const ok = isFullCredit(c);
-    const review = updateMissSchedule(missSchedule, q.id, ok)[q.id]?.due ?? null;
+    const ident = answerIdentity(q);
+    const review = updateMissSchedule(missSchedule, ident, ok)[ident]?.due ?? null;
     const marked = markAnswered(nav, { sel, order, wasCorrect: ok, credit: c, nextReview: review });
     setCredit(c);
     setWasCorrect(ok);
@@ -1626,7 +2398,9 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
     /* recorded is the only door into stats. A skip never reaches it, and
        neither does a second look at an answer already saved. */
     if (marked.recorded) {
-      record(q, ok);
+      const res = record(q, ok, { ms: Date.now() - shownAt.current }) ?? null;
+      resById.current[ident] = res;
+      setLastRes(res);
       setSessionN((n) => n + 1);
       setDiffTarget((d) => Math.max(1, Math.min(3, d + (ok ? 1 : -1))));
     }
@@ -1635,12 +2409,25 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
     setPhase("feedback");
   };
 
-  const endSession = () => { setPhase("pick"); setNav(emptyNav()); setQ(null); setSel([]); setOrder([]); };
+  const endSession = () => {
+    resolvedLegacy.current = new Set();
+    setPhase("pick");
+    setNav(emptyNav());
+    setQ(null);
+    setSel([]);
+    setOrder([]);
+  };
+  const beginSitting = (poolMode) => {
+    resolvedLegacy.current = new Set();
+    onBegin?.();
+    setMode(poolMode);
+    pickFrom(emptyNav(), poolMode);
+  };
 
   // autopilot: start immediately: due reviews first, then new questions
   useEffect(() => {
     if (auto && phase === "pick") {
-      const pool = sessionPool(focused, { log, schedule: missSchedule, fresh: freshPool, mode: "today", held: [] });
+      const pool = sessionPool(reviewQuestions, { log, schedule: missSchedule, fresh: freshPool, mode: "today", held: [] });
       if (pool.length) pickFrom(emptyNav(), "today"); else onDone?.();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1658,11 +2445,12 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
   const fbSegs = useMemo(() => (q && phase === "feedback" ? questionFeedbackSegments(q, result) : []), [q, phase, wasCorrect, credit]); // eslint-disable-line react-hooks/exhaustive-deps
   /* Bank items (they carry a calibration) can use the AI voice; built-in
      ones use the device voice. */
-  const inBank = q && calibration[q.id] !== undefined;
+  const inBank = !!(q && q.source === "bank" && calibration[q.id] !== undefined);
+  const shownKey = q ? (answerIdentity(q) ?? q.id) : null;
   /* The key changes when the student moves, which stops whatever is
      playing and, with "Read each new one" on, reads the question now shown. */
-  const qReader = useReadAloud(qSegs, phase === "answering" && q ? `q:${q.id}:${nav.index}` : "off", inBank ? { kind: "question", id: q.id, part: "question" } : null);
-  const fbReader = useReadAloud(fbSegs, phase === "feedback" && q ? `fb:${q.id}:${nav.index}` : "off", inBank ? { kind: "question", id: q.id, part: "feedback", result } : null);
+  const qReader = useReadAloud(qSegs, phase === "answering" && q ? `q:${shownKey}:${nav.index}` : "off", inBank ? { kind: "question", id: q.id, part: "question" } : null);
+  const fbReader = useReadAloud(fbSegs, phase === "feedback" && q ? `fb:${shownKey}:${nav.index}` : "off", inBank ? { kind: "question", id: q.id, part: "feedback", result } : null);
   useSessionReport(onSession, {
     inSession: phase === "answering" || phase === "feedback" || phase === "break",
     hasDraft: phase === "answering" && hasDraftAnswer(q, sel, order),
@@ -1671,8 +2459,8 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
      start at the stem, below the sticky header, on a short phone. */
   useEffect(() => {
     if (phase === "answering" && q) window.scrollTo(0, 0);
-  }, [q?.id, phase]);
-  useLabSettleKey(q ? `${q.id}:${phase}` : phase);
+  }, [shownKey, phase]);
+  useLabSettleKey(q ? `${shownKey}:${phase}` : phase);
 
   const TYPE_CHIPS =[["mc", "Multiple choice"], ["sata", "Select all"], ["order", "Ordering"], ["matrix", "Matrix"], ["bowtie", "Bow-tie"], ["cloze", "Cloze"], ["calc", "Dosage calc"], ["highlight", "Highlight"]];
 
@@ -1703,13 +2491,20 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
         />
         <p className="small mono">{freshPool.length} new · {reviewPool.length} to review ({duePool.length} due today) · difficulty target {diffTarget}/3</p>
         <div className={"row" + tourMark(tourFocus, "qbank-review")} data-tour="qbank-review">
-          <button className="btn" onClick={() => { setMode("new"); pickFrom(emptyNav(), "new"); }} disabled={!freshPool.length}>{freshPool.length ? "New questions" : "All questions seen"}</button>
-          <button className="btn ghost" onClick={() => { setMode("review"); pickFrom(emptyNav(), "review"); }} disabled={!reviewPool.length}>Review misses ({reviewPool.length})</button>
+          <button className="btn" onClick={() => beginSitting("new")} disabled={!freshPool.length}>{freshPool.length ? "New questions" : "All questions seen"}</button>
+          <button className="btn ghost" onClick={() => beginSitting("review")} disabled={!reviewPool.length}>Review misses ({reviewPool.length})</button>
         </div>
-        {addQuestions && isOwner && <Generator provider={provider} addQuestions={addQuestions} log={log} questions={questions} lowOnNew={freshPool.length < 5} />}
+        {addQuestions && isOwner && <Generator provider={provider} addQuestions={addQuestions} log={log} questions={catalog} lowOnNew={freshPool.length < 5} />}
 
         {!freshPool.length && !reviewPool.length && <p className="small tip">Bank cleared with every miss corrected. That's mastery. Check Stats, then keep the flashcard schedule alive.</p>}
       </section>
+    </div>
+  );
+
+  if (phase === "break" && renderBreak) return (
+    <div className="stack">
+      {renderBreak({ onMore: () => continueFrom(nav, { fromBreak: true }), onEnd: endSession })}
+      <Why label="why a checkpoint after 8">Distributed practice beats marathons: the same study minutes spread across days retain dramatically more than one long push. If you stop here, review again within 24 hours, then at 3 and 7 days. Your flashcard queue, your missed-question reviews, and your day streak track that schedule for real.</Why>
     </div>
   );
 
@@ -1729,6 +2524,51 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
     <section className="card"><h2 className="h2">{mode === "review" ? "Review pool cleared" : "No new questions left"}</h2><p className="small">{mode === "review" ? "Every missed question has been re-answered correctly, and nothing else is due. Each one returns on its next review date. Corrected errors are some of the strongest memories you'll form." : "You've seen the whole bank. Switch to Review misses to close remaining gaps."}</p>
       <button className="btn" onClick={endSession}>Back to session menu</button></section>
   );
+
+  const continuePastHeld = () => {
+    if (!auto) { endSession(); return; }
+    const moved = forward(nav, { skipIfOpen: true });
+    if (moved.effect.type !== "need-question") { reveal(moved.nav); return; }
+    pickFrom(moved.nav);
+  };
+
+  if (q.catalogMiss) {
+    return (
+      <section className="card">
+        <p className="eyebrow">Saved miss</p>
+        <h2 className="h2">This question didn't load</h2>
+        <p className="small">{q.stem}</p>
+        <div className="row">
+          <button type="button" className="btn" onClick={() => onRetryCatalog?.()}>Retry</button>
+          <button type="button" className="btn ghost" onClick={() => { resolvedLegacy.current.add(String(q.key)); continuePastHeld(); }}>Leave for now</button>
+        </div>
+      </section>
+    );
+  }
+
+  if (q.unresolved) {
+    const resume = continuePastHeld;
+    const choose = (candidate) => {
+      resolvedLegacy.current.add(String(q.legacyId));
+      onResolveLegacy?.(q.legacyId, candidate, q.logIndex);
+      resume();
+    };
+    return (
+      <section className="card">
+        <p className="eyebrow">Unresolved review</p>
+        <h2 className="h2">Which question was this?</h2>
+        <p className="small">{q.stem}</p>
+        <div className="stack">
+          {(q.candidates ?? []).map((candidate) => (
+            <button type="button" className="btn" key={answerIdentity(candidate) ?? candidate.id} onClick={() => choose(candidate)}>
+              {candidate.source === "bank" ? "Bank question" : candidate.source === "builtin" ? "Built-in question" : candidate.source === "case" ? "Case step" : "Question"}: {candidate.stem}
+            </button>
+          ))}
+          <button type="button" className="btn ghost" onClick={() => { resolvedLegacy.current.add(String(q.legacyId)); resume(); }}>Leave unresolved</button>
+        </div>
+      </section>
+    );
+  }
 
   const ext = ngnExt(q); // NGN payloads: rows/columns/actions/conditions/parameters/dropdowns
   const toggleSel = (i) => {
@@ -1962,10 +2802,12 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
           <div className={wasCorrect ? "feedback ok" : "feedback no"}>
             <p className={ra(fbReader, "verdict", "fb-head mono")}>
               <span className="fb-badge" aria-hidden="true">{wasCorrect ? "✓" : credit.points > 0 ? "½" : "✗"}</span>
-              {wasCorrect ? `CORRECT${credit.max > 1 ? ` · ${credit.points}/${credit.max} POINTS` : ""} · +${10 * q.diff} XP`
+              {wasCorrect ? `CORRECT${credit.max > 1 ? ` · ${credit.points}/${credit.max} POINTS` : ""}${lastRes ? (xpNote(lastRes) ? ` · ${xpNote(lastRes).toUpperCase()}` : "") : ` · +${10 * q.diff} XP`}`
                 : credit.points > 0 ? `PARTIAL CREDIT · ${credit.points}/${credit.max} POINTS · IT RETURNS IN REVIEW MISSES`
                 : `INCORRECT${credit.max > 1 ? ` · 0/${credit.max} POINTS` : ""} · IT RETURNS IN REVIEW MISSES`}
             </p>
+            {wasCorrect && justScored.current && <EcgBeat className="fb" />}
+            {justScored.current && lastRes && <ComboChip combo={lastRes.combo} newBest={lastRes.newBest} />}
             {nextReview && (
               <p className="small mono">Next review: {nextReview === addDays(1) ? "tomorrow" : nextReview}</p>
             )}
@@ -1989,11 +2831,13 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
             )}
             <ReadAloudBar reader={fbReader} label="Listen to the explanation" />
             <p className={ra(fbReader, "rationale", "rationale")}><strong>Rationale.</strong> {q.rationale}</p>
-            {q.ai && <p className="small">{calibration[q.id] !== undefined ? "✨ AI-assisted practice item that passed automated quality checks." : "✨ AI-assisted practice item."}</p>}
+            {q.ai && q.source === "bank" && <p className="small">{calibration[q.id] !== undefined ? "✨ AI-assisted practice item that passed automated quality checks." : "✨ AI-assisted practice item."}</p>}
             {/* Astra-confirmed concept diagrams for this exact question (if any) */}
-            <ConceptExplainers key={`dx${q.id}`} q={q} />
-            <TutorExplain key={q.id} q={q} wasCorrect={wasCorrect} provider={provider} isBank={calibration[q.id] !== undefined} />
-            <ReportIssue key={`r${q.id}`} itemId={calibration[q.id] !== undefined ? q.id : null} label="question" />
+            <ConceptExplainers key={`dx${shownKey}`} q={q} />
+            {guest
+              ? <GuestAiNote onSignIn={onGuestSignIn} />
+              : <TutorExplain key={shownKey} q={q} wasCorrect={wasCorrect} provider={provider} isBank={inBank} />}
+            <ReportIssue key={`r${shownKey}`} itemId={inBank ? q.id : null} label="question" />
             {nav.index < nav.entries.length - 1 && !justScored.current && (
               <p className="small tip">Answered earlier. This result is not scored again.</p>
             )}
@@ -2024,6 +2868,9 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
   const [sel, setSel] = useState([]);
   const [phase, setPhase] = useState("read");
   const [stepScores, setStepScores] = useState({}); // step index -> { points, max }; skips are absent
+  const [stepRes, setStepRes] = useState(null); // XP result of the step just answered
+  const stepXp = useRef({}); // remembered per step so walking back shows the XP that was actually awarded
+  const stepShownAt = useRef(Date.now()); // when the open step appeared (XP reading-time floor)
   const [credit, setCredit] = useState({ points: 0, max: 1 });
   const [ok, setOk] = useState(false);
   const [nav, setNav] = useState(() => emptyNav());
@@ -2053,6 +2900,7 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
       return;
     }
     setSel(view.sel ?? []);
+    stepShownAt.current = Date.now();
     setPhase("answering");
   };
 
@@ -2061,8 +2909,10 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
   };
   const start = () => showCase(appendQuestion(emptyNav(), 0));
   const s = cs?.steps[step];
-  // pseudo-ids stay outside the shared question-bank id space
-  const stepId = cs ? (cs.dbId ? 50000 + cs.dbId * 10 + step : 100 + caseIdx * 10 + step) : 0;
+  /* Case-step log ids are strings, so they can never collide with a
+     numeric shared-bank question id (repeat detection and XP stay exact). */
+  const stepIds = cs ? caseStepIds({ dbId: cs.dbId ?? null, key: cs.key ?? null, title: cs.title, index: caseIdx, step }) : { id: "case-none", aliases: [] };
+  const stepId = stepIds.id;
 
   const submit = () => {
     if (currentEntry(nav)?.status === "answered") return;
@@ -2074,7 +2924,9 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
     setCredit(c);
     if (marked.recorded) {
       setStepScores((m) => ({ ...m, [step]: c }));
-      record({ id: stepId, cat: cs.cat, diff: 3 }, correct, { schedule: false });
+      const scored = record({ id: stepId, aliases: stepIds.aliases, legacyAliases: stepIds.legacyAliases, source: "case", cat: cs.cat, diff: 3, stem: s?.stem }, correct, { schedule: false, ms: Date.now() - stepShownAt.current }) ?? null;
+      stepXp.current[stepId] = scored;
+      setStepRes(scored);
     }
     justScored.current = true;
     setNav(marked.nav);
@@ -2266,7 +3118,7 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
             <div className={ok ? "feedback ok" : "feedback no"}>
               <p className={ra(caseFbReader, "verdict", "fb-head mono")}>
                 <span className="fb-badge" aria-hidden="true">{ok ? "✓" : credit.points > 0 ? "½" : "✗"}</span>
-                {ok ? "CORRECT" : credit.points > 0 ? "PARTIAL CREDIT" : "INCORRECT"} · {credit.points}/{credit.max} POINT{credit.max === 1 ? "" : "S"}{ok ? " · +30 XP" : ""}
+                {ok ? "CORRECT" : credit.points > 0 ? "PARTIAL CREDIT" : "INCORRECT"} · {credit.points}/{credit.max} POINT{credit.max === 1 ? "" : "S"}{ok && stepXp.current[stepId] && xpNote(stepXp.current[stepId]) ? ` · ${xpNote(stepXp.current[stepId]).toUpperCase()}` : ""}
               </p>
               <p className="small mono">Case score so far: {total.points}/{total.max} points</p>
               <ReadAloudBar reader={caseFbReader} label="Listen to the explanation" />
@@ -2344,7 +3196,7 @@ const isCalcCard = (c) => /dosage|calculation|conversion|drip rate|drop factor/i
 
 const GRADE_WORD = { again: "Again", hard: "Hard", good: "Good", easy: "Easy" };
 
-export function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, embedded = false, onDone, fcFlips = 99, onFlip, newAllowance = NEW_PER_DAY, onNewCard, onRefundNewCard, onSession, tourFocus = null }) {
+export function Flashcards({ addXp, onGrade, onUngrade, cards, srsMap, setSrsMap, touchDay, ready = true, embedded = false, onDone, fcFlips = 99, onFlip, newAllowance = NEW_PER_DAY, onNewCard, onRefundNewCard, onSession, tourFocus = null }) {
   const [catFilter, setCatFilter] = useState([]); // empty = all categories
   const [calcOpen, setCalcOpen] = useState(false); // on-screen calculator for dosage cards
   const [focusOpen, setFocusOpen] = useState(false); // Focus bottom sheet
@@ -2380,6 +3232,8 @@ export function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = 
   const curId = entry?.id ?? null;
   const cur = curId != null ? cards.find((c) => c.id === curId) ?? null : null;
   const show = !!entry?.show;
+  const flipAt = useRef(0); // when this card's answer appeared (card XP time floor)
+  useEffect(() => { if (show) flipAt.current = Date.now(); }, [show, curId]);
   const typed = entry?.typed ?? "";
   const place = `${session.index}:${curId ?? ""}`;
   const placeRef = useRef(place);
@@ -2409,14 +3263,16 @@ export function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = 
     const result = gradeCard(session, g);
     if (!result.recorded) return;
     const id = currentCard(session).id;
-    touchDay();
+    const daySnap = touchDay?.() ?? null;
     // first grade of a never-seen card counts against today's new-card cap.
     // Undo refunds that charge; grading the card again counts it once.
     if (!srsMap[id] && !countedNew.current.has(id)) { countedNew.current.add(id); onNewCard?.(id); }
-    const xpGain = g === "good" ? 5 : g === "easy" ? 8 : 0;
-    undoLog.current[id] = { prev: srsMap[id], xp: xpGain };
+    const xpGain = cardXp(g, Date.now() - flipAt.current);
+    const opId = `card:${id}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`;
+    undoLog.current[id] = { prev: srsMap[id], xp: xpGain, day: todayStr(), opId, daySnap };
     setSrsMap((m) => ({ ...m, [id]: nextSchedule(m[id], g) }));
     if (xpGain) addXp(xpGain);
+    onGrade?.(xpGain, { id: opId, day: todayStr() });
     setSession(result.nav);
   };
   /* Undo: back on a card graded this sitting, put its previous schedule
@@ -2436,8 +3292,10 @@ export function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = 
         return n;
       });
       if (rec.xp) addXp(-rec.xp);
+      onUngrade?.(rec.xp, rec.day, rec.opId ? { id: rec.opId } : null, rec.daySnap ?? null);
       delete undoLog.current[id];
     }
+    flipAt.current = Date.now(); // the answer is shown again: the 1.5 s floor restarts (REVIEW-3 N10)
     setSession((s) => undoGrade(s));
   };
 
@@ -2614,7 +3472,7 @@ export function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = 
 
 /* ================= STATS ================= */
 
-function Stats({ xp = 0, streak = null, bestRun = 0, readiness = null, readyLabel = "", log, catStats, popStats = [], acc, resetAll, provider, setProvider, customCount, examDate, setExamDate, isOwner = false, ent = null, onManagePlan, profile, setProfile, tourFocus = null }) {
+function Stats({ setPref = null, rewards = null, career = null, board = null, week = null, xp = 0, streak = null, bestRun = 0, readiness = null, readyLabel = "", log, catStats, popStats = [], acc, resetAll, saveBlocked = false, provider, setProvider, customCount, examDate, setExamDate, isOwner = false, ent = null, onManagePlan, profile, setProfile, tourFocus = null, signOutAndForgetTrial = () => {} }) {
 
   const [confirm, setConfirm] = useState(false);
   const p = AI_PROVIDERS.find((x) => x.id === provider) || AI_PROVIDERS[0];
@@ -2626,11 +3484,15 @@ function Stats({ xp = 0, streak = null, bestRun = 0, readiness = null, readyLabe
         <div className="stat-hero">
           <div><span className="stat-big mono">{readiness == null ? "--" : `${Math.round((readiness.low + readiness.high) / 2)}`}</span><span className="stat-cap">Readiness (estimate){readiness == null ? " · 12+ answers needed" : ` · range ${readiness.low}–${readiness.high}%`}</span></div>
           <div><span className="stat-big mono">{log.length ? `${Math.round(acc * 100)}%` : "--"}</span><span className="stat-cap">Accuracy · {log.length} answered</span></div>
-          <div><span className="stat-big mono">🔥 {streak?.count ?? 0}</span><span className="stat-cap">Day streak</span></div>
-          <div><span className="stat-big mono">{xp}</span><span className="stat-cap">XP · {lvl.name}</span></div>
+          <div><span className="stat-big mono"><StreakGlyph size={20} /> {streak?.count ?? 0}</span><span className="stat-cap">Day streak</span></div>
+          <div><span className="stat-big mono">{xp}</span><span className="stat-cap">XP · {career ? career.rank.name : lvl.name}</span></div>
         </div>
         {readyLabel && <p className="small tip">{readyLabel}. Readiness is an estimate from your work in PulseRN.</p>}
       </section>
+      {career && <CareerCard career={career} full />}
+      {board && <BadgeGrid board={board} />}
+      {week && rewards && <RoundsCard week={week} rewards={rewards} />}
+      {rewards && <BestsCard best={rewards.best} bestRun={bestRun} />}
       <section className={"card wide" + tourMark(tourFocus, "stats")} data-tour="stats">
         <p className="eyebrow">Performance</p>
         <h2 className="h2">{log.length ? `${Math.round(acc * 100)}% overall accuracy` : "No questions answered yet"}</h2>
@@ -2677,10 +3539,13 @@ function Stats({ xp = 0, streak = null, bestRun = 0, readiness = null, readyLabe
           <p className="small tip">{p.note}{customCount ? ` · ${customCount} AI-generated question${customCount === 1 ? "" : "s"} in your bank.` : ""}</p>
         </section>
       )}
+      {rewards && setPref && <EffectsCard prefs={rewards.prefs} setPref={setPref} />}
       <section className="card">
         <p className="eyebrow">Saved progress</p>
         <p className="small">Your XP, streak, answer history, and flashcard schedule sync to your account and reload on any device.</p>
-        {!confirm
+        {saveBlocked
+          ? <p className="small rw-reset-off">Reset is off while this session isn't being saved, so the saved progress we couldn't open stays untouched.</p>
+          : !confirm
           ? <button className="btn ghost" onClick={() => setConfirm(true)}>Reset all progress…</button>
           : <div className="row">
               <button className="btn danger" onClick={() => { setConfirm(false); resetAll(); }}>Yes, erase everything</button>
@@ -2690,7 +3555,7 @@ function Stats({ xp = 0, streak = null, bestRun = 0, readiness = null, readyLabe
       <section className="card">
         <p className="eyebrow">Account</p>
         <p className="small">Signing out keeps your synced progress safe. Sign back in anywhere to continue.</p>
-        <button className="btn ghost" onClick={() => supabase.auth.signOut()}>Sign out</button>
+        <button className="btn ghost" onClick={signOutAndForgetTrial}>Sign out</button>
         <p className="small tip">All questions, case studies, flashcards, exams, and materials are the property of the owner of PulseRN and may not be copied, captured, or used outside this app without the owner's explicit consent.</p>
         <p className="small tip">NCLEX® is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse this product. Educational exam preparation only.</p>
         <p className="small tip"><a href="/legal/" style={{ color: "inherit" }}>Terms, Privacy, and Disclaimer</a></p>
@@ -2888,7 +3753,10 @@ export function Style() {
         --paper:#F3F6F4; --ink:#0F2E29; --card:#FFFFFF; --muted:#3B554F;
         --surface:#F7FAF8; --line:#D8E2DD; --bar-bg:#E7EFEA;
         --teal:#0E7C6B; --btn-ink:#FFFFFF; --accent-ink:#0A5A4E;
-        --mon:#0C201D; --ecg:#3BE08F;
+        --mon:#0C201D; --ecg:#3BE08F; --mon-track:#24433C;
+        /* Approved streak accent: orange flame, ink ECG. Not --amber (caution). */
+        --streak-flame:#E2701A; --streak-flame-fill:#F8D2A8; --streak-ecg:var(--ink);
+        --streak-flame-fill-on-mon:#5A3514; --streak-ecg-on-mon:#EAF1ED;
         --amber:#E9A23B; --coral:#D9503F; --danger-ink:#B23A2B;
         --pick-bg:#E8F4F0; --right-bg:#DDF2E7; --wrong-bg:#FBE7E3;
         --ok-bg:#E9F6EF; --ok-line:#BCE4CE; --no-bg:#FBEFEC; --no-line:#F0C8C0;
@@ -2899,6 +3767,9 @@ export function Style() {
       .app[data-theme="dim"]{
         /* DIM (night review) — charcoal, not #000, to avoid halation */
         --paper:#151A18; --ink:#EAF1ED; --card:#1D2523; --muted:#B4C7BF;
+        --mon-track:#24433C;
+        --streak-flame:#F08A24; --streak-flame-fill:#5A3514; --streak-ecg:var(--ink);
+        --streak-flame-fill-on-mon:#5A3514; --streak-ecg-on-mon:#EAF1ED;
         --surface:#242D2A; --line:#33403B; --bar-bg:#2A3430;
         --teal:#2FA78F; --btn-ink:#06231D; --accent-ink:#8CDCC8;
         --amber:#D9A24E; --coral:#E0705E; --danger-ink:#F2A296;
@@ -2955,7 +3826,7 @@ export function Style() {
       .vital-lab{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;color:#6FA394}
       .monitor-note{margin-top:10px;font-size:12px;letter-spacing:.1em;color:#8FBCAD}
       /* buttons & bars */
-      .btn{background:var(--teal);color:var(--btn-ink);border:none;border-radius:10px;padding:12px 16px;font-family:'Archivo',sans-serif;font-weight:700;font-size:14px;cursor:pointer;margin-top:6px}
+      .btn{background:var(--teal);color:var(--btn-ink);border:none;border-radius:10px;padding:12px 16px;font-family:'Archivo',sans-serif;font-weight:700;font-size:14px;cursor:pointer;margin-top:6px;min-height:44px}
       .btn:disabled{opacity:.4;cursor:default}
       .btn.ghost{background:transparent;color:var(--accent-ink);border:1.5px solid var(--teal)}
       .btn:focus-visible{outline:3px solid var(--amber);outline-offset:2px}

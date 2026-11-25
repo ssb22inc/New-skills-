@@ -5,6 +5,7 @@
    (readiness, weak areas) are recomputed elsewhere, never stored. */
 import { emptyAbility } from "./ability-engine.js";
 import { deriveMissSchedule } from "./question-review.js";
+import { migrateRewards, legacyRankIndex } from "./rewards.js";
 
 /* Category renames from the test-plan alignment: ability history recorded
    under an old name moves to its closest official category. */
@@ -12,6 +13,8 @@ const CAT_RENAMES = { "Psychosocial & Health Promotion": "Psychosocial Integrity
 
 export function migrateBlob(s, cats) {
   const ability = {};
+  /* Legacy rows are not named here. The one-time server relabel names
+     the ones it can. A row it cannot match stays unresolved. */
   const log = Array.isArray(s.log) ? s.log : [];
   for (const [k, v] of Object.entries(s.ability ?? {})) ability[CAT_RENAMES[k] ?? k] = v;
   return {
@@ -49,5 +52,15 @@ export function migrateBlob(s, cats) {
           ...(Array.isArray(s.fcNew.ids) ? { ids: s.fcNew.ids.filter((id) => id != null) } : {}),
         }
       : { day: null, count: 0 },
+    // Optional, additive: reward history (day stats, shift covers, personal
+    // bests, celebrated milestones, effect preferences). Ranks and badges are
+    // recomputed from the log; only "already celebrated" markers are kept.
+    // A save from before the career ladder keeps the title it had earned.
+    rewards: withLegacyRank(migrateRewards(s.rewards), s.xp ?? 0),
+    ...(Number.isInteger(s.resetGeneration) && s.resetGeneration > 0 ? { resetGeneration: s.resetGeneration } : {}),
   };
+}
+
+function withLegacyRank(r, xp) {
+  return Number.isInteger(r.rankHigh) ? r : { ...r, rankHigh: legacyRankIndex(xp) };
 }

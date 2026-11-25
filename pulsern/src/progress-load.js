@@ -1,0 +1,94 @@
+/* Loading a student's saved progress, and deciding what happens to a
+   try-before-sign-up trial on this device. Plain code, unit tested.
+
+   Data-safety rules:
+     - A saved row the app cannot open (null, not an object, bad JSON, or a
+       migration that throws) is NOT a connection problem and NOT a new
+       account. It is kept untouched on the server (the student can download
+       a copy), and the app runs without saving until it can be read.
+     - A failed read is NOT a new account. The app shows a retry, and
+       autosave and the trial merge stay blocked until a read succeeds, so
+       defaults can never be written over a real progress row.
+     - Trial answers import through the live answer function only when the
+       account has no saved answers. Creation date is not part of the
+       decision. An account that already has answers keeps the trial on
+       this device until the student taps Discard practice answers. */
+import { guestFresh } from "./guest.js";
+
+/* A session lookup that errors, or returns no user, is not "no saved row".
+   Only a confirmed signed-in user with an empty SELECT is a new account. */
+export function sessionReadDecision(result) {
+  if (!result || typeof result !== "object" || result.error) return "auth-error";
+  const session = result.data?.session ?? result.session ?? null;
+  if (!session?.user?.id) return "signed-out";
+  return "read";
+}
+
+/* getRaw resolves to the saved JSON string, or null when the account has
+   no saved row yet, and throws on any read error. */
+export async function readProgress(getRaw) {
+  try {
+    const raw = await getRaw();
+    return raw == null ? { status: "new", raw: null } : { status: "ok", raw };
+  } catch (error) {
+    if (error?.code === "cancelled") return { status: "cancelled", raw: null, error };
+    return { status: "error", raw: null, error };
+  }
+}
+
+/* "new" (no row), "ok" (blob), or "corrupt" (a row the app cannot open). */
+export function parseProgress(raw, migrate) {
+  if (raw == null) return { status: "new", blob: null };
+  let parsed;
+  try { parsed = JSON.parse(raw); } catch { return { status: "corrupt", reason: "unreadable" }; }
+  if (parsed == null || typeof parsed !== "object" || Array.isArray(parsed)) return { status: "corrupt", reason: parsed == null ? "empty" : "wrong-shape" };
+  try {
+    const blob = migrate(parsed);
+    if (!blob || typeof blob !== "object") return { status: "corrupt", reason: "wrong-shape" };
+    return { status: "ok", blob };
+  } catch {
+    return { status: "corrupt", reason: "migrate-failed" };
+  }
+}
+
+/* Earlier builds of this branch copied an unreadable row to localStorage.
+   That copy held study history on a possibly shared device and was never
+   cleared (REVIEW-4 R4-2). It is no longer written: the server row stays
+   untouched and "Download a copy" uses the in-memory copy. Any old copy is
+   removed on load and on sign-out. */
+export const LEGACY_PROGRESS_BACKUP_KEY = "pulsern-progress-backup-v1";
+/* Older builds of this branch kept a recovery journal under this prefix.
+   Nothing writes it now. Load and sign-out delete every leftover copy so
+   study history does not stay on the device. */
+export const PENDING_PROGRESS_KEY = "pulsern-pending-progress-v1";
+
+export function sweepPendingProgress(storage) {
+  if (!storage) return;
+  const keys = [];
+  const take = (key) => {
+    if (key === PENDING_PROGRESS_KEY || (typeof key === "string" && key.startsWith(`${PENDING_PROGRESS_KEY}:`))) keys.push(key);
+  };
+  if (typeof storage.length === "number" && typeof storage.key === "function") {
+    for (let i = 0; i < storage.length; i += 1) take(storage.key(i));
+  } else if (storage.m && typeof storage.m.keys === "function") {
+    for (const key of storage.m.keys()) take(key);
+  }
+  for (const key of keys) {
+    try { storage.removeItem(key); } catch { /* storage blocked */ }
+  }
+}
+
+export function clearLegacyProgressBackup(storage) {
+  try { storage?.removeItem(LEGACY_PROGRESS_BACKUP_KEY); } catch { /* storage blocked */ }
+}
+
+/* "none" | "expired" | "merge" | "keep"
+   The decision is the account's saved answer history. Creation date is
+   not used. No saved answers: import through the live answer function.
+   Any saved answer: leave the trial on the device and let the student
+   discard it. Nothing is deleted just because the account is old. */
+export function guestHandoff({ guest, hasAnswers = false, now = Date.now() } = {}) {
+  if (!guest || !Array.isArray(guest.log) || guest.log.length === 0) return "none";
+  if (!guestFresh(guest, now)) return "expired";
+  return hasAnswers ? "keep" : "merge";
+}

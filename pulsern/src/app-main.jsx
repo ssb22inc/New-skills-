@@ -7,6 +7,7 @@ import "@fontsource/ibm-plex-mono/latin-400.css";
 import "@fontsource/ibm-plex-mono/latin-600.css";
 import AuthGate, { ErrorBoundary } from "./auth.jsx";
 import { enforceOneTimeAppRelogin } from "./app-routing.js";
+import { storageOrNull } from "./guest.js";
 import { supabase } from "./supabase.js";
 
 function AppEntry() {
@@ -14,7 +15,7 @@ function AppEntry() {
 
   useEffect(() => {
     let active = true;
-    enforceOneTimeAppRelogin({ auth: supabase.auth, storage: window.localStorage, href: window.location.href })
+    enforceOneTimeAppRelogin({ auth: supabase.auth, storage: storageOrNull(() => window.localStorage), holdStorage: storageOrNull(() => window.sessionStorage), href: window.location.href })
       .then(() => { if (active) setState("ready"); })
       .catch(() => { if (active) setState("error"); });
     return () => { active = false; };

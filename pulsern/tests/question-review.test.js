@@ -1,6 +1,6 @@
 /* Missed questions come back on a real LOCAL calendar date. */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { updateMissSchedule, deriveMissSchedule, reviewPools, todayPool, sessionPool } from "../src/question-review.js";
+import { updateMissSchedule, deriveMissSchedule, reviewPools, todayPool, sessionPool, expandTrialQuestions, legacyCandidates, unseenQuestions } from "../src/question-review.js";
 import { migrateBlob } from "../src/state.js";
 
 const CATS = [
@@ -14,6 +14,18 @@ beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 9, 16, 21
 afterEach(() => vi.useRealTimers());
 
 describe("schedule progression", () => {
+  it("keeps a corrected unresolved miss on the due queue", () => {
+    const builtin = { id: 7, source: "builtin", key: "builtin:7", cat: "Pharmacology", diff: 1, type: "mc", stem: "built in" };
+    const bank = { id: 7, source: "bank", key: "bank:7", cat: "Pharmacology", diff: 1, type: "mc", stem: "bank" };
+    const log = [
+      { id: 7, cat: "Pharmacology", diff: 1, correct: false, unclassified: true },
+      { id: 7, cat: "Pharmacology", diff: 1, correct: true, unclassified: true },
+    ];
+    const schedule = { 7: { interval: 3, due: "2026-10-16" } };
+    const due = reviewPools([builtin, bank], log, schedule, "2026-10-16").due.map((item) => item.id);
+    expect(due).toContain("unresolved:7");
+  });
+
   it("a miss schedules a review for the next local day", () => {
     const m = updateMissSchedule({}, 7, false);
     expect(m[7]).toMatchObject({ interval: 1, due: "2026-10-17" });
@@ -121,6 +133,29 @@ describe("Today round and Review Misses pools", () => {
     expect(todayPool(bank, log, schedule, fresh).map((x) => x.id)).toContain(2);
   });
 
+  it("an unresolved card follows the same category filter as other reviews", () => {
+    const pharmacology = { id: "unresolved:7", unresolved: true, legacyId: "7", cat: "Pharmacology", type: "mc", diff: 1 };
+    const care = q(4, CATS[2]);
+    const log = [{ id: 7, unclassified: true, key: null, correct: false, cat: "Pharmacology" }];
+    const schedule = { 7: { interval: 1, due: "2026-10-16" } };
+    const pool = sessionPool([care], {
+      log, schedule, fresh: [care], mode: "today",
+      allow: (item) => item.cat === "Health Promotion & Maintenance",
+    });
+    expect(pool.map((item) => item.id)).toEqual([4]);
+    expect(pool.some((item) => item.id === pharmacology.id)).toBe(false);
+  });
+
+  it("a deferred unresolved due card falls through to new questions", () => {
+    const fresh = [q(4, CATS[2]), q(5, CATS[3])];
+    const log = [{ id: 7, unclassified: true, key: null, correct: false, cat: "Pharmacology" }];
+    const schedule = { 7: { interval: 1, due: "2026-10-16" } };
+    const due = sessionPool(fresh, { log, schedule, fresh, mode: "today", held: [] });
+    expect(due.map((item) => item.id)).toEqual(["unresolved:7"]);
+    const next = sessionPool(fresh, { log, schedule, fresh, mode: "today", deferred: ["unresolved:7"] });
+    expect(next.map((item) => item.id)).toEqual([4, 5]);
+  });
+
   it("drops a skipped due review before the due-only shortcut, so new questions remain", () => {
     const pool = sessionPool(bank, { log, schedule, fresh, mode: "today", held: [1, 3] });
     expect(pool.map((x) => x.id)).toEqual([4, 5]);
@@ -134,5 +169,60 @@ describe("Today round and Review Misses pools", () => {
   it("Review misses reaches a miss that is not due once the due ones are held", () => {
     const pool = sessionPool(bank, { log, schedule, fresh, mode: "review", held: [1, 3] });
     expect(pool.map((x) => x.id)).toEqual([2]);
+  });
+
+  it("serves a missed trial question after its id was prefixed", () => {
+    const builtIn = q(7);
+    builtIn.stem = "Which finding is priority?";
+    const trialLog = [{ id: "guest-7", cat: "Pharmacology", diff: 2, correct: false }];
+    const pool = expandTrialQuestions([builtIn], trialLog);
+    const schedule = { "guest-7": { interval: 1, due: "2026-10-16" } };
+    const review = reviewPools(pool, trialLog, schedule).review;
+    expect(review.map((item) => item.id)).toEqual(["guest-7"]);
+    expect(review[0].stem).toBe("Which finding is priority?");
+    expect(sessionPool(pool, { log: trialLog, schedule, fresh: [], mode: "review" }).map((item) => item.id)).toEqual(["guest-7"]);
+    const bankItem = { id: 7, cat: "Pharmacology", diff: 1, type: "mc", stem: "Unrelated bank item" };
+    const resolved = expandTrialQuestions([bankItem], trialLog, [builtIn]);
+    expect(resolved.find((item) => item.id === "guest-7").stem).toBe("Which finding is priority?");
+    expect(resolved.find((item) => item.id === 7).stem).toBe("Unrelated bank item");
+  });
+
+  it("offers the case step when a saved miss shares its number and category with a bank question", () => {
+    const bankItem = { id: 101, source: "bank", key: "bank:101", cat: "Physiological Adaptation", type: "mc", stem: "Bank stem" };
+    const log = [{ id: 101, unclassified: true, unresolved: true, cat: "Physiological Adaptation", correct: false }];
+    const list = legacyCandidates([bankItem], log, []);
+    const card = reviewPools(list, log, {}).review.find((item) => item.unresolved);
+    expect(card.candidates.map((item) => item.key).sort()).toEqual(["bank:101", "case:case-sepsis-1"]);
+    expect(card.candidates.find((item) => item.source === "case").stem).toMatch(/complication/);
+    const fresh = unseenQuestions(list, log);
+    expect(fresh.some((item) => item.candidateOnly || item.source === "case")).toBe(false);
+    expect(sessionPool(list, { log, schedule: {}, fresh, mode: "new" }).some((item) => item.candidateOnly)).toBe(false);
+    const retired = [{ id: 19, unclassified: true, cat: "Psychosocial & Health Promotion", correct: false }];
+    const current = [{ id: 19, source: "builtin", key: "builtin:19", cat: "Psychosocial Integrity", type: "mc", stem: "Which finding matters most for this client?" }];
+    const named = reviewPools(legacyCandidates(current, retired, current), retired, {}).review.find((item) => item.unresolved);
+    expect(named.candidates.map((item) => item.key)).toEqual(["builtin:19"]);
+    const held = sessionPool(current, {
+      log: [{ id: 2500, source: "bank", key: "bank:2500", cat: "Pharmacology", correct: false }],
+      schedule: {},
+      fresh: current,
+      mode: "today",
+      deferred: ["bank:2500"],
+    });
+    expect(held.map((item) => item.key)).toEqual(["builtin:19"]);
+  });
+
+  it("keeps a canonical bank miss visible when that question is not in the loaded catalog", () => {
+    const log = [{ id: 2500, source: "bank", key: "bank:2500", cat: "Pharmacology", correct: false }];
+    const loaded = [{ id: 1, source: "bank", key: "bank:1", cat: "Pharmacology", type: "mc", stem: "Loaded" }];
+    const review = reviewPools(loaded, log, {}).review;
+    expect(review.map((item) => item.key)).toEqual(["bank:2500"]);
+    const corrected = [{ id: 2500, source: "bank", key: "bank:2500", cat: "Pharmacology", correct: true }];
+    const due = { "bank:2500": { interval: 3, due: "2026-11-24" } };
+    expect(reviewPools(loaded, corrected, due, "2026-11-24").review.map((item) => item.key)).toEqual(["bank:2500"]);
+    expect(reviewPools(loaded, corrected, due, "2026-11-23").review).toEqual([]);
+    expect(review[0].catalogMiss).toBe(true);
+    expect(reviewPools(loaded, log, {}, "2026-11-24").misses).toHaveLength(1);
+    const focused = sessionPool(loaded, { log, schedule: {}, fresh: [], mode: "review", allow: (item) => item.cat === "Safety & Infection Control" });
+    expect(focused).toEqual([]);
   });
 });

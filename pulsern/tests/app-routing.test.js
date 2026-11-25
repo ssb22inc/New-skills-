@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import fs from "node:fs";
 import {
   APP_SESSION_MIGRATION_KEY,
   authCallbackAppUrl,
@@ -19,6 +20,7 @@ function memoryStorage(initial = {}) {
 describe("/app/ routing and session migration", () => {
   it("maps app authentication paths and redirects to the www /app/ origin", () => {
     expect(authModeFromUrl("https://www.pulsern.app/app/sign-in")).toBe("signin");
+    expect(authModeFromUrl("https://www.pulsern.app/app/sign-in?start=1")).toBe("signin");
     expect(authModeFromUrl("https://www.pulsern.app/app/sign-up")).toBe("signup");
     expect(authModeFromUrl("https://www.pulsern.app/app/reset")).toBe("reset");
     expect(authRedirectUrl("signin", "https://www.pulsern.app")).toBe("https://www.pulsern.app/app/");
@@ -58,5 +60,16 @@ describe("/app/ routing and session migration", () => {
     const auth = { getSession: vi.fn(), signOut: vi.fn() };
     await expect(enforceOneTimeAppRelogin({ auth, storage, href: "https://www.pulsern.app/app/" })).resolves.toEqual({ action: "already-complete" });
     expect(auth.getSession).not.toHaveBeenCalled();
+  });
+
+  it("does not throw when browser storage is missing or blocked", async () => {
+    const auth = { getSession: vi.fn(), signOut: vi.fn() };
+    await expect(enforceOneTimeAppRelogin({ auth, storage: null, holdStorage: null, href: "https://www.pulsern.app/app/" })).resolves.toEqual({ action: "no-storage" });
+    expect(auth.getSession).not.toHaveBeenCalled();
+    const app = fs.readFileSync("src/app-main.jsx", "utf8");
+    expect(app).toContain("storageOrNull(() => window.localStorage)");
+    expect(app).toContain("storageOrNull(() => window.sessionStorage)");
+    expect(app).not.toMatch(/storage:\s*window\.localStorage/);
+    expect(app).not.toMatch(/holdStorage:\s*window\.sessionStorage/);
   });
 });

@@ -38,6 +38,9 @@ const TARGETS = [
   ".exh-wrap", ".exh-svg", ".dg-wrap", ".dg-svg", ".fc-scale", ".ngn-matrix", ".mx-row",
   "figure", "img", "svg", "table", "canvas", "video",
   "p", "li", "td", "th", "h1", "h2", "h3",
+  /* Rewards cards only (every rewards class starts with rw-), so #183's
+     placement on every other screen is unchanged. */
+  ":is([class^='rw-'],[class*=' rw-']) :is(dt,dd,span.mono)", ".rw-next-head > span", ".rw-best",
 ].join(",");
 
 function storage() {

@@ -6,6 +6,7 @@
 
 export const CASE_STUDIES = [
   {
+    key: "sepsis", // stable XP/log id (not the editable title)
     title: "Deteriorating Client · Sepsis",
     cat: "Physiological Adaptation",
     blurb: "A 68-year-old with pneumonia is 'more tired than usual.' Catch the pattern before it becomes shock.",
@@ -44,6 +45,7 @@ export const CASE_STUDIES = [
     ],
   },
   {
+    key: "dka", // stable XP/log id (not the editable title)
     title: "Hyperglycemic Crisis · DKA",
     cat: "Physiological Adaptation",
     blurb: "A 19-year-old with type 1 diabetes ran out of insulin two days ago and is now 'breathing funny.'",
@@ -120,6 +122,7 @@ export const CASE_STUDIES = [
     ],
   },
   {
+    key: "preeclampsia-magnesium", // stable XP/log id (not the editable title)
     title: "Severe Preeclampsia · Magnesium Sulfate",
     cat: "Pharmacology",
     blurb: "A 36-week client arrives with BP 168/112, a headache, and 'spots in my vision.'",

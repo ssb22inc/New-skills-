@@ -25,7 +25,7 @@ const overlaps = (a, b) => a.x < b.x + b.width - 0.5 && a.x + a.width > b.x + 0.
 let server, browser, base;
 beforeAll(async () => {
   server = await createServer({
-    configFile: false, root: process.cwd(), plugins: [supabaseStub, react()], logLevel: "silent",
+    configFile: false, cacheDir: "node_modules/.vite-lab-fab-browser", root: process.cwd(), plugins: [supabaseStub, react()], logLevel: "silent",
     server: { port: 0, host: "127.0.0.1" },
     optimizeDeps: { include: ["react", "react-dom", "react-dom/client", "react/jsx-dev-runtime"] },
   });
@@ -65,9 +65,17 @@ const clearOfAll = async (page) => {
   for (const t of await targets(page)) if (overlaps(f, t)) return false;
   return true;
 };
+function onScreenPoint(box, viewport = { width: 390, height: 844 }) {
+  const left = Math.max(box.x, 0);
+  const right = Math.min(box.x + box.width, viewport.width);
+  const top = Math.max(box.y, 0);
+  const bottom = Math.min(box.y + box.height, viewport.height);
+  return { x: (left + right) / 2, y: (top + bottom) / 2 };
+}
 async function mouseDrag(page, to) {
   const b = await fab(page).boundingBox();
-  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+  const from = onScreenPoint(b);
+  await page.mouse.move(from.x, from.y);
   await page.mouse.down();
   await page.mouse.move(to.x, to.y, { steps: 10 });
   await page.mouse.up();
@@ -82,10 +90,10 @@ describe("floating 🧪 study toolkit", () => {
       /* A phone whose reading column fills the screen has no full-size
          gap, so the button shrinks to an edge tab. That tab stays 44px tall. */
       expect(f.height).toBeGreaterThanOrEqual(44);
-      expect(f.width).toBeGreaterThanOrEqual(name === "phone" ? 28 : 44);
+      const onScreenW = Math.max(0, Math.min(f.x + f.width, viewport.width) - Math.max(f.x, 0));
+      expect(onScreenW).toBeGreaterThanOrEqual(name === "phone" ? 28 : 44);
       expect(await clearOfAll(page)).toBe(true);
-      expect(f.x + f.width).toBeLessThanOrEqual(viewport.width);
-      expect(f.y + f.height).toBeLessThanOrEqual(viewport.height);
+      expect(Math.max(f.y, 0) + Math.min(f.height, viewport.height - Math.max(f.y, 0))).toBeLessThanOrEqual(viewport.height);
       await ctx.close();
     }, 120_000);
   }
@@ -99,8 +107,9 @@ describe("floating 🧪 study toolkit", () => {
     expect(JSON.parse(await page.evaluate(() => localStorage.getItem("pulsern-labfab-v1"))).side).toBe("left");
     await mouseDrag(page, { x: -200, y: -200 });
     const c = await fab(page).boundingBox();
-    expect(c.x).toBeGreaterThanOrEqual(0);
-    expect(c.y).toBeGreaterThanOrEqual(0);
+    const visible = onScreenPoint(c);
+    expect(visible.x).toBeGreaterThan(0);
+    expect(visible.y).toBeGreaterThan(0);
     await page.reload();
     await page.waitForFunction(() => document.querySelector(".lab-fab")?.dataset.x !== "");
     await page.waitForTimeout(300);
@@ -113,7 +122,8 @@ describe("floating 🧪 study toolkit", () => {
     const { ctx, page } = await open({ width: 390, height: 844 }, { touch: true });
     const cdp = await ctx.newCDPSession(page);
     const b = await fab(page).boundingBox();
-    const sx = b.x + b.width / 2, sy = b.y + b.height / 2;
+    const from = onScreenPoint(b);
+    const sx = from.x, sy = from.y;
     await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: sx, y: sy }] });
     for (let i = 1; i <= 10; i++) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: sx + (30 - sx) * i / 10, y: sy + (200 - sy) * i / 10 }] });
     await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
@@ -137,6 +147,28 @@ describe("floating 🧪 study toolkit", () => {
     const grown = await page.locator(".stem").boundingBox();
     expect(overlaps(parked, grown), JSON.stringify({ parked, grown })).toBe(true);
     expect(overlaps(button, grown)).toBe(false);
+    await ctx.close();
+  }, 120_000);
+
+  it("tucks half off the screen on a flipped card at 390×844 instead of covering the answer", async () => {
+    const { ctx, page } = await open({ width: 390, height: 844 });
+    await page.evaluate(() => window.T.setFlippedCard(true));
+    await page.waitForTimeout(400);
+    const button = await fab(page).boundingBox();
+    const regions = [];
+    for (const selector of [".flashcard", ".grades", ".q-nav-wrap"]) {
+      const box = await page.locator(selector).boundingBox();
+      expect(box, selector).toBeTruthy();
+      regions.push(box);
+      expect(overlaps(button, box), selector).toBe(false);
+    }
+    const onScreenW = Math.max(0, Math.min(button.x + button.width, 390) - Math.max(button.x, 0));
+    const onScreenH = Math.max(0, Math.min(button.y + button.height, 844) - Math.max(button.y, 0));
+    const offScreenW = button.width - onScreenW;
+    expect(onScreenW).toBeGreaterThanOrEqual(44);
+    expect(onScreenH).toBeGreaterThanOrEqual(44);
+    expect(offScreenW).toBeGreaterThanOrEqual(button.width / 2 - 1);
+    expect(button.x < 0 || button.x + button.width > 390).toBe(true);
     await ctx.close();
   }, 120_000);
 

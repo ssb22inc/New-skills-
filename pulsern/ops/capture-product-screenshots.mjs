@@ -49,6 +49,52 @@ export function installCaptureFreeze(css) {
   document.addEventListener("DOMContentLoaded", () => { if (install()) observer.disconnect(); }, { once: true });
 }
 
+/* Every face the product shots are drawn with. A missing package used to
+   fall back to system fonts without a word, which made images that only
+   matched on machines missing the same fonts. Now the capture stops. */
+export const REQUIRED_CAPTURE_FONT_FILES = [
+  "@fontsource/archivo/files/archivo-latin-500-normal.woff2",
+  "@fontsource/archivo/files/archivo-latin-700-normal.woff2",
+  "@fontsource/archivo/files/archivo-latin-800-normal.woff2",
+  "@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2",
+  "@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-600-normal.woff2",
+  "@fontsource/dejavu-sans/files/dejavu-sans-latin-400-normal.woff2",
+  "@fontsource/noto-sans-symbols/files/noto-sans-symbols-symbols-400-normal.woff2",
+  "@fontsource/noto-sans-symbols-2/files/noto-sans-symbols-2-symbols-400-normal.woff2",
+];
+/* family -> how many faces of it must reach status "loaded" in the page */
+export const REQUIRED_CAPTURE_FACES = { "Archivo": 3, "IBM Plex Mono": 2, "PulseRN Capture Symbols": 3 };
+
+export async function assertCaptureFontFiles(nodeModules = "node_modules") {
+  const missing = [];
+  for (const file of REQUIRED_CAPTURE_FONT_FILES) {
+    try { await fs.access(path.join(nodeModules, file)); } catch { missing.push(file); }
+  }
+  if (missing.length) throw new Error(`Pinned capture fonts are missing (run npm ci): ${missing.join(", ")}`);
+}
+
+/* In the page: force-load every required face and count the ones that loaded. */
+export async function assertCaptureFontsLoaded(page, fontFailures = []) {
+  const faces = await page.evaluate(async (required) => {
+    const out = {};
+    for (const face of document.fonts) {
+      const family = face.family.replace(/^["']|["']$/g, "");
+      if (!(family in required)) continue;
+      try { await face.load(); } catch { /* status says error */ }
+      (out[family] ||= []).push(face.status);
+    }
+    return out;
+  }, REQUIRED_CAPTURE_FACES);
+  const problems = [...fontFailures];
+  for (const [family, need] of Object.entries(REQUIRED_CAPTURE_FACES)) {
+    const statuses = faces[family] ?? [];
+    const loaded = statuses.filter((st) => st === "loaded").length;
+    if (loaded < need || statuses.some((st) => st !== "loaded")) problems.push(`${family}: ${loaded}/${need} faces loaded (${statuses.join(",") || "none declared"})`);
+  }
+  if (problems.length) throw new Error(`Capture fonts did not load, refusing to capture: ${problems.join("; ")}`);
+  return faces;
+}
+
 async function sourceHashes(directory = "src") {
   const files = [];
   async function walk(current) {
@@ -148,6 +194,7 @@ async function screenshot(page, name, expectedText) {
 }
 
 export async function captureProductScreenshots() {
+  await assertCaptureFontFiles();
   await fs.mkdir(OUTPUT, { recursive: true });
   const server = await createServer({
     configFile: false,
@@ -184,7 +231,14 @@ export async function captureProductScreenshots() {
     await page.clock.setFixedTime(new Date(CAPTURE_TIME));
     await page.addInitScript(installCaptureFreeze, CAPTURE_STYLE);
     await page.emulateMedia({ reducedMotion: "reduce" });
+    const fontFailures = [];
+    page.on("response", (res) => { if (/\.woff2?(\?|$)/.test(res.url()) && res.status() !== 200 && res.status() !== 304) fontFailures.push(`${res.status()} ${res.url()}`); });
+    /* Every pinned face is a woff2. A .woff request means a woff2 failed
+       and the browser fell back to another file (REVIEW-4 R4-3). */
+    page.on("request", (req) => { if (/\.woff(\?|$)/.test(req.url())) fontFailures.push(`woff fallback requested ${req.url()}`); });
+    page.on("requestfailed", (req) => { if (/\.woff2?(\?|$)/.test(req.url())) fontFailures.push(`failed ${req.url()}`); });
     await page.goto("http://127.0.0.1:4174/ops/product-screenshot.html", { waitUntil: "networkidle" });
+    await assertCaptureFontsLoaded(page, fontFailures);
     await page.evaluate(installCaptureFreeze, CAPTURE_STYLE);
     if (!await page.evaluate(() => !!document.querySelector("style[data-pulsern-capture-freeze]"))) {
       const tag = await page.addStyleTag({ content: CAPTURE_STYLE });
@@ -200,8 +254,13 @@ export async function captureProductScreenshots() {
       throw error;
     }
 
+    /* Tall enough that the Clinical career card — the rank and XP progress
+       that replaced the old Rank card — is fully visible, not clipped by the
+       tab bar (Astra, PR #184 review, majors on this screenshot). */
+    await page.setViewportSize({ width: 720, height: 1280 });
+    await settle(page);
     const images = [];
-    images.push(await screenshot(page, "pulsern-today-dashboard.png", ["Start today's round", "CANDIDATE MONITOR", "Today's goal"]));
+    images.push(await screenshot(page, "pulsern-today-dashboard.png", ["Start today's round", "CANDIDATE MONITOR", "Today's shift", "Clinical career", "Student Nurse", "Day 0 of 7"]));
 
     await page.getByRole("button", { name: "Practice", exact: true }).click();
     await page.getByRole("button", { name: "New questions", exact: true }).click();

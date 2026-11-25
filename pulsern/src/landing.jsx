@@ -209,7 +209,7 @@ export default function LandingPage({ onSignIn, onStart }) {
             </div>
             <div className="land-screen-grid">
               <figure className="land-screen">
-                <img src="/product/pulsern-today-dashboard.png" width="720" height="1000" loading="lazy" alt="PulseRN Today dashboard showing the daily round, candidate monitor, study goal, and progress cards" />
+                <img src="/product/pulsern-today-dashboard.png" width="720" height="1280" loading="lazy" alt="PulseRN Today dashboard showing the daily round, candidate monitor, Today shift, and clinical career cards" />
                 <figcaption><strong>A daily plan without guesswork</strong> See due flashcards, adaptive questions, study progress, and the next focused action in one place.</figcaption>
               </figure>
               <figure className="land-screen">
