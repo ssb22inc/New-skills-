@@ -64,6 +64,7 @@ export function authRedirectUrl(kind = "signin", origin = window.location.origin
 export const GUEST_TRIAL_KEY = "pulsern-guest-v1";
 
 export async function enforceOneTimeAppRelogin({ auth, storage, holdStorage, href }) {
+  if (!storage) return { action: "no-storage" };
   if (storage.getItem(APP_SESSION_MIGRATION_KEY) === "complete") return { action: "already-complete" };
   if (isAuthCallbackUrl(href)) {
     storage.setItem(APP_SESSION_MIGRATION_KEY, "complete");
