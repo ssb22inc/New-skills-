@@ -254,8 +254,13 @@ export async function captureProductScreenshots() {
       throw error;
     }
 
+    /* Tall enough that the Clinical career card — the rank and XP progress
+       that replaced the old Rank card — is fully visible, not clipped by the
+       tab bar (Astra, PR #184 review, majors on this screenshot). */
+    await page.setViewportSize({ width: 720, height: 1280 });
+    await settle(page);
     const images = [];
-    images.push(await screenshot(page, "pulsern-today-dashboard.png", ["Start today's round", "CANDIDATE MONITOR", "Today's shift"]));
+    images.push(await screenshot(page, "pulsern-today-dashboard.png", ["Start today's round", "CANDIDATE MONITOR", "Today's shift", "Clinical career", "Student Nurse"]));
 
     await page.getByRole("button", { name: "Practice", exact: true }).click();
     await page.getByRole("button", { name: "New questions", exact: true }).click();

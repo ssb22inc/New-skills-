@@ -21,6 +21,8 @@ describe("B1: product capture expects the shipped Today screen", () => {
     const capture = fs.readFileSync("ops/capture-product-screenshots.mjs", "utf8");
     const line = capture.split("\n").find((l) => l.includes("pulsern-today-dashboard.png"));
     expect(line).toContain("Today's shift");
+    expect(line).toContain("Clinical career");
+    expect(line).toContain("Student Nurse");
     expect(line).not.toContain("Today's goal");
     expect(fs.readFileSync("src/rewards-ui.jsx", "utf8")).toContain('<p className="eyebrow">Today\'s shift</p>');
   });
