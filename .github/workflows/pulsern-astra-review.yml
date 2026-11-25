@@ -160,7 +160,7 @@ jobs:
       - name: Mark the commit under review as pending
         if: env.POST_STATUS == 'true'
         run: |
-          jq -n --arg u "$RUN_URL" '{state:"pending",context:"pulsern/astra-review",description:"Sol is reviewing this commit",target_url:$u}' |
+          jq -n --arg u "$RUN_URL" '{state:"pending",context:"pulsern/astra-review",description:"DeepSeek is reviewing this commit",target_url:$u}' |
             curl -fsS -X POST -H "Authorization: Bearer $STATUS_TOKEN" -H "Accept: application/vnd.github+json" \
               "https://api.github.com/repos/$REPO/statuses/$HEAD_SHA" -d @- >/dev/null
 
@@ -309,5 +309,5 @@ jobs:
         env:
           RC: ${{ steps.review.outputs.rc }}
         run: |
-          [ "$RC" = "0" ] && { echo "Sol: PASS (report only)"; exit 0; }
-          echo "::error::Sol: FAIL or incomplete (rc=${RC:-none}) — see the report"; exit 1
+          [ "$RC" = "0" ] && { echo "DeepSeek: PASS (report only)"; exit 0; }
+          echo "::error::DeepSeek: FAIL or incomplete (rc=${RC:-none}) — see the report"; exit 1

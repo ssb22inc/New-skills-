@@ -25,6 +25,11 @@ export const REVIEWER_NAME = "DeepSeek";
 /* OpenRouter models list, 2026-11-24: deepseek-v4-pro-0813 is text only.
    gpt-6.1-sol accepts images. Image reviews use that id, still on OpenRouter. */
 export const IMAGE_REVIEW_MODEL = "openai/gpt-6.1-sol";
+/* Astra's picture pass. deepseek-v4-pro-0813 cannot see images, so changed PNGs
+   get their own pass on a separate OpenRouter vision model; the text pass never
+   sends them. OpenRouter only, no OpenAI-direct fallback. Checked against
+   the OpenRouter models list on 2026-11-24: text+image in, 1,048,576 context. */
+export const VISION_REVIEW_MODEL = "deepseek/deepseek-v4-flash-vision-exp";
 export const reviewerFor = ({ images = false } = {}) => (images ? IMAGE_REVIEW_MODEL : REVIEW_MODEL);
 
 /* Reasoning models reject or silently ignore sampling temperature. Sending
