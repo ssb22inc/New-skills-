@@ -285,6 +285,16 @@ describe("review, restore, and import use the canonical key", () => {
     expect(unseenQuestions([bankQ, bundled], log)).toEqual([]);
   });
 
+  it("an unresolved correct row is not served again as a new question", () => {
+    const bankQ = stampCatalogQuestion({ id: 7, stem: "Bank stem.", cat: "Pharmacology", diff: 2 }, []);
+    const log = [{ id: 7, correct: true, unclassified: true, key: null, cat: "Pharmacology" }];
+    expect(settledResult(bankQ, log, [bankQ]).state).toBe("pending");
+    expect(unseenQuestions([bankQ], log)).toEqual([]);
+    const builtinQ = stampCatalogQuestion({ id: 7, stem: "Built-in stem.", cat: "Pharmacology", diff: 2 }, [{ id: 7, stem: "Built-in stem." }]);
+    expect(unseenQuestions([bankQ, builtinQ], log)).toEqual([]);
+    expect(reviewPools([bankQ], log, {}, TODAY).review).toEqual([]);
+  });
+
   it("a correct review of an ambiguous miss advances that question's schedule", () => {
     const q = stampCatalogQuestion({ id: 7, stem: "Bank stem.", cat: "Pharmacology", diff: 2 }, []);
     const state = {

@@ -84,6 +84,12 @@ export function settledResult(question, log, questions = null, index = null, pee
   /* An unkeyed fixture still groups by the raw number when this list
      has exactly one question with it. */
   if (!questionIdentity(question) && num && idx.unscoped.has(num) && (counts.get(num) ?? 0) === 1) return { state: "known", correct: idx.unscoped.get(num) };
+  /* A correct unclassified row is not a new question: serving it again
+     would pay XP and ability a second time. An incorrect one stays a
+     miss in unresolved review; a single unrelated catalog item can
+     still be new (unseenQuestions only blocks those when several
+     share the number). */
+  if (num && idx.unresolved.get(num) === true) return { state: "pending" };
   return { state: "none" };
 }
 
