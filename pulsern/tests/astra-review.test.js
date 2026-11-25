@@ -761,6 +761,10 @@ describe("the prompt", () => {
     expect(p).toMatch(/test that cannot fail/);
     expect(p).toMatch(/bypass this review/);
   });
+  it("caps the finding list and forbids repeating the same defect", () => {
+    expect(p).toMatch(/at most 20 findings/);
+    expect(p).toMatch(/Do not repeat a finding/);
+  });
 });
 
 describe("reading the answer", () => {
@@ -774,6 +778,7 @@ describe("reading the answer", () => {
   it("asks for a strict schema", () => {
     expect(FINDINGS_SCHEMA.json_schema.strict).toBe(true);
     expect(FINDINGS_SCHEMA.json_schema.schema.additionalProperties).toBe(false);
+    expect(FINDINGS_SCHEMA.json_schema.schema.properties.findings.maxItems).toBe(20);
   });
 });
 
