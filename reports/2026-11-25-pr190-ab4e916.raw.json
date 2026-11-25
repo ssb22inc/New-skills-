@@ -1,0 +1,30 @@
+{
+  "model": "deepseek/deepseek-v4-pro-0813",
+  "mode": "trusted",
+  "meta": {
+    "base": "9c2632f8be074ddb2ce3f062bc26fcc59a874c8c",
+    "head": "ab4e916f6d9e529dc4f6c71bb2b43755c5e5eb35",
+    "pr": "190"
+  },
+  "reviewedAt": "2026-11-25T05:37:35.610Z",
+  "filesReviewed": [
+    "pulsern/ops/astra-review.mjs",
+    "pulsern/tests/astra-review.test.js"
+  ],
+  "skipped": [],
+  "findings": [],
+  "usage": {
+    "promptTokens": 17028,
+    "completionTokens": 64,
+    "reasoningTokens": 0,
+    "costUsd": 0.0227304
+  },
+  "error": null,
+  "verdict": "PASS",
+  "assessment": "The change adds a maxItems: 20 cap to the findings schema and prompt instructions to avoid duplicate findings. The schema cap is enforced by the API's structured output, and the prompt text is consistent with it. No clinical, scoring, or security logic is affected.",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}
