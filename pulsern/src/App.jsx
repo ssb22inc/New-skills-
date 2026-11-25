@@ -459,6 +459,9 @@ const store = {
       err.code = "conflict";
       throw err;
     }
+    /* A successful write (update or the first insert) is this account's row.
+       Drop the module flag so it cannot leak into a later account. */
+    legacyHold = false;
     const bound = bindCommittedProgress(
       { accepted: acceptedBlob, baseline: loadedBaseline, revision: progressGate.revision() },
       { blob, revision, current: current(), epoch, seenEpoch: epoch },
@@ -517,6 +520,9 @@ const store = {
     acceptedBlob = null;
     loadedBaseline = null;
     accountRead = { user: null, blob: null, revision: 0, epoch: accountEpoch };
+    /* A reset may have raised this flag for the account that just left.
+       It must not travel with the module into the next account's first insert. */
+    legacyHold = false;
   },
   /* A reset keeps the row and advances its revision; it never deletes it.
      A deleted row would be re-created at revision 1, the same number another

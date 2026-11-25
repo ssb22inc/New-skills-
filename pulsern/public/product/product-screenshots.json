@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-11-25T04:25:53.241Z",
+  "capturedAt": "2026-11-25T04:28:44.457Z",
   "sourceCommitSha": "74619ed1b537ec484cb8d3bccd124c78dda131c0",
   "renderer": "PulseRN App.jsx deterministic built-in-content harness",
   "browser": "151.0.7922.34",
   "containsLearnerData": false,
-  "sourceSetSha256": "49b61027d6344b051202d4182b59da2f04a3eadfc4fee9d689fb189bc6815a2e",
+  "sourceSetSha256": "98e779b09e0ac37e6f8feee73c539acdbec3686e280419e954010636bed94ca0",
   "sourceFiles": {
-    "src/App.jsx": "33a8724b65690fdadc09d66956641481e5f3cc54da4a42c6391a41af2bacfa55",
+    "src/App.jsx": "f573f16931d16ffbb20dc89acbf8ce6d4761b14c28c94b963ee61d4c2d73cd51",
     "src/ability-engine.js": "af8784ea68eaf9e977ecff47f2071b151d7e4def781b454ac9dec35459b7ef76",
     "src/answer-apply.js": "656e6d23c052923e24dfc5a2ef8ffe11a6e20210fc9da0fefac15fb6b28ca001",
     "src/app-main.jsx": "cbac9414c71d5b0e0237211f947023f54b6730c4fe5c6144ff6d48169b76bab6",
@@ -101,8 +101,8 @@
     },
     {
       "file": "pulsern-today-dashboard.png",
-      "sha256": "3cbad34e9d9bde3c563413c5b33f9147ed743e8a1c1357968394f07423ddfdbc",
-      "bytes": 113825,
+      "sha256": "5e732d873aa2bea00ad3343a256287819e635811fc92293124cedc598694818b",
+      "bytes": 112569,
       "width": 720,
       "height": 1280,
       "alt": "PulseRN Today dashboard showing the daily round, candidate monitor, study goal, and progress cards",

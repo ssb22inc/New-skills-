@@ -72,6 +72,14 @@ describe("Codex P2 wiring", () => {
     expect(grant).toContain("maybeGrantCover");
     expect(grant).toContain("rewards.covers");
   });
+  it("does not carry a reset's legacy hold into the next account's first insert", () => {
+    const release = app.slice(app.indexOf("releaseAccount()"), app.indexOf("releaseAccount()") + 500);
+    expect(release).toContain("legacyHold = false");
+    const set = app.slice(app.indexOf("async set(key, value"), app.indexOf("async absorbPending"));
+    expect(set).toContain("legacy_hold: legacyHold");
+    const afterInsert = set.slice(set.lastIndexOf("if (!revision)"));
+    expect(afterInsert).toContain("legacyHold = false");
+  });
 });
 
 describe("N1: unreadable saved progress", () => {
