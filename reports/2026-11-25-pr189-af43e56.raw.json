@@ -1,0 +1,32 @@
+{
+  "model": "deepseek/deepseek-v4-pro-0813",
+  "mode": "trusted",
+  "meta": {
+    "base": "7ec72ea65a3f5ebf92a9fb215af4f30d6375df1a",
+    "head": "af43e56a70be6582a730d688837ebfa7882ea7e7",
+    "pr": "189"
+  },
+  "reviewedAt": "2026-11-25T03:18:37.710Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-astra-review.yml",
+    "pulsern/ops/astra-review.mjs",
+    "pulsern/ops/models.mjs",
+    "pulsern/tests/astra-review.test.js"
+  ],
+  "skipped": [],
+  "findings": [],
+  "usage": {
+    "promptTokens": 32026,
+    "completionTokens": 19263,
+    "reasoningTokens": 19250,
+    "costUsd": 0.089082606
+  },
+  "error": null,
+  "verdict": "PASS",
+  "assessment": "",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}
