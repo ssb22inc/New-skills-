@@ -103,6 +103,36 @@ describe("revision-less saves wait for the client merge", () => {
     expect(pending.rows).toEqual([]);
   });
 
+  /* Astra, PR #184 review, finding 1: a reset used to delete the row, and the
+     next save re-created it at revision 1 — the number a second device still
+     held, so its stale save matched and wrote the erased history back. A reset
+     now advances the row's revision; the stale device matches nothing. */
+  it("a stale device cannot write erased history back after a reset", async () => {
+    const history = { log: [{ id: 1, attempt: "old-device" }], xp: 50 };
+    await db.query(`delete from public.progress where user_id = $1`, [userId]);
+    await db.query(`delete from public.progress_pending_merge where user_id = $1`, [userId]);
+    await db.query(`insert into public.progress (user_id, key, blob, revision) values ($1, 'pulsern-v1', $2::jsonb, 1)`, [userId, JSON.stringify(history)]);
+    /* Device B resets: keep the row, advance the revision, hold legacy saves. */
+    await db.query(
+      `update public.progress set blob = '{"resetGeneration":1}'::jsonb, revision = 2, legacy_hold = true where user_id = $1 and key = 'pulsern-v1' and revision = 1`,
+      [userId],
+    );
+    /* Device B's first new save lands on the reset revision. */
+    await db.query(
+      `update public.progress set blob = '{"resetGeneration":1,"log":[]}'::jsonb, revision = 3, legacy_hold = false where user_id = $1 and key = 'pulsern-v1' and revision = 2`,
+      [userId],
+    );
+    /* Device A still holds revision 1 and tries to save its old history. */
+    const stale = await db.query(
+      `update public.progress set blob = $2::jsonb, revision = 2 where user_id = $1 and key = 'pulsern-v1' and revision = 1 returning revision`,
+      [userId, JSON.stringify({ ...history, theme: "light" })],
+    );
+    expect(stale.rows).toEqual([]);
+    const saved = await row(db);
+    expect(saved.revision).toBe(3);
+    expect(saved.blob).toEqual({ resetGeneration: 1, log: [] });
+  });
+
   it("rejects a client that sends an older revision", async () => {
     await db.query(`delete from public.progress where user_id = $1`, [userId]);
     await db.query(

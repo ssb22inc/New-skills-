@@ -518,7 +518,14 @@ const store = {
     loadedBaseline = null;
     accountRead = { user: null, blob: null, revision: 0, epoch: accountEpoch };
   },
-  async delete(key) {
+  /* A reset keeps the row and advances its revision; it never deletes it.
+     A deleted row would be re-created at revision 1, the same number another
+     device may still hold, so that device's next save would match and put the
+     erased history back (Astra, PR #184 review, finding 1). The stored row
+     becomes a tombstone that carries the new reset generation, so every
+     older snapshot is also dropped by the merge, and legacy_hold stops an
+     older open app from parking its history beside it. */
+  async delete(key, nextGeneration = 0) {
     const seenEpoch = accountEpoch;
     const { data: { session } } = await supabase.auth.getSession();
     if (seenEpoch !== accountEpoch) return;
@@ -526,14 +533,44 @@ const store = {
     const { error: pendingError } = await supabase.from("progress_pending_merge").delete().eq("user_id", session.user.id).eq("key", key);
     if (seenEpoch !== accountEpoch) return;
     if (pendingError) throw new Error(pendingError.message || "Could not erase saved progress");
-    const { error } = await supabase.from("progress").delete().eq("user_id", session.user.id).eq("key", key);
-    if (seenEpoch !== accountEpoch) return;
-    if (error) throw new Error(error.message || "Could not erase saved progress");
+    const tombstone = { resetGeneration: Math.max(1, Number(nextGeneration) || 0) };
+    let expected = progressGate.revision();
+    let revision = null;
+    for (let attempt = 0; attempt < 3 && !revision; attempt++) {
+      const { data, error } = await supabase.from("progress")
+        .update({ blob: tombstone, revision: expected + 1, updated_at: new Date().toISOString(), legacy_hold: true })
+        .eq("user_id", session.user.id).eq("key", key).eq("revision", expected)
+        .select("revision");
+      if (seenEpoch !== accountEpoch) return;
+      if (error) throw new Error(error.message || "Could not erase saved progress");
+      revision = Array.isArray(data) ? Number(data[0]?.revision) || null : null;
+      if (revision) break;
+      /* Another device wrote since this one loaded. The reset is the
+         student's decision, so it lands on top of whatever is stored now. */
+      const { data: current, error: readError } = await supabase.from("progress")
+        .select("revision").eq("user_id", session.user.id).eq("key", key).maybeSingle();
+      if (seenEpoch !== accountEpoch) return;
+      if (readError) throw new Error(readError.message || "Could not erase saved progress");
+      if (!current) break;
+      expected = Number(current.revision) || 0;
+    }
+    const rowExists = revision != null;
+    if (!rowExists) {
+      const { data: left, error: leftError } = await supabase.from("progress")
+        .select("revision").eq("user_id", session.user.id).eq("key", key).maybeSingle();
+      if (seenEpoch !== accountEpoch) return;
+      if (leftError) throw new Error(leftError.message || "Could not erase saved progress");
+      if (left) throw new Error("Could not erase saved progress");
+    }
     legacyHold = true;
     accountEpoch += 1;
     progressGate.abandon();
+    /* The screen starts fresh and its first save is the whole new blob, so
+       nothing is carried as accepted or baseline. But the row's new revision
+       is kept, so that save lands on the row this reset advanced. */
     acceptedBlob = null;
     loadedBaseline = null;
+    if (rowExists) progressGate.note(revision, progressGate.epoch());
     accountRead = { user: null, blob: null, revision: 0, epoch: accountEpoch };
   },
 };
@@ -1327,7 +1364,7 @@ export default function App() {
     /* Never while not saving: the only server copy is the row we couldn't open (REVIEW-4 R4-1). */
     if (saveBlocked) return;
     saveQueue.current?.invalidate();
-    try { await store.delete(STORE_KEY); } catch (e) { setSaveFailed(true); return; }
+    try { await store.delete(STORE_KEY, resetGeneration.current + 1); } catch (e) { setSaveFailed(true); return; }
     resetGeneration.current += 1;
     setXp(0); setRun(0); setBestRun(0); setLog([]); setFlagged([]); setCustomQs([]);
     touchedDay.current = null;

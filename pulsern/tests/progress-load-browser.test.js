@@ -97,7 +97,9 @@ const progress = new Proxy({}, { get(_t, p) {
           window.__hasRow = true;
           window.__revision = current + 1;
           window.__row = row.blob;
-          (window.__upserts ||= []).push(row.blob);
+          /* A reset keeps the row and advances its revision (tombstone). */
+          if (kind === "update" && row.legacy_hold === true) { window.__deletes = (window.__deletes || 0) + 1; (window.__tombstones ||= []).push({ blob: row.blob, revision: window.__revision }); }
+          else (window.__upserts ||= []).push(row.blob);
           const result = { data: [{ revision: window.__revision }], error: null };
           if (releaseAfter) await releaseAfter;
           return result;
@@ -615,6 +617,31 @@ describe("reset survives a save that finishes late", () => {
       await page.getByRole("radio").first().click();
       await page.getByRole("button", { name: "Check answer" }).click();
       await page.waitForFunction(() => (window.__upserts || []).some((blob) => Array.isArray(blob.log) && blob.log.length === 1));
+    } finally { await ctx.close(); }
+  }, 120_000);
+});
+
+describe("reset keeps the row and advances its revision (Astra, PR #184 review, finding 1)", () => {
+  it("never deletes the row, so a stale device cannot match the replacement revision", async () => {
+    const { ctx, page } = await open({ session: sessionFor(NOW - 90 * 86400000), row: existingRow });
+    try {
+      await page.getByRole("button", { name: "Stats", exact: true }).click({ timeout: 30_000 });
+      const before = await page.evaluate(() => window.__revision || 0);
+      await page.getByRole("button", { name: /Reset all progress/ }).click();
+      await page.getByRole("button", { name: /Yes, erase everything/ }).click();
+      await page.waitForFunction(() => (window.__tombstones || []).length === 1);
+      const tomb = await page.evaluate(() => window.__tombstones[0]);
+      expect(tomb.revision).toBe(before + 1);
+      expect(tomb.blob).toEqual({ resetGeneration: 1 });
+      /* the row still exists: a delete would have cleared it */
+      expect(await page.evaluate(() => window.__hasRow)).toBe(true);
+      await page.getByRole("button", { name: "Practice", exact: true }).click();
+      await page.getByRole("button", { name: /New questions/ }).click();
+      await page.getByRole("radio").first().click();
+      await page.getByRole("button", { name: "Check answer" }).click();
+      await page.waitForFunction(() => (window.__upserts || []).some((blob) => Array.isArray(blob.log) && blob.log.length === 1 && blob.resetGeneration === 1));
+      /* the next save went on top of the reset revision, never back to 1 */
+      expect(await page.evaluate(() => window.__revision)).toBeGreaterThan(before + 1);
     } finally { await ctx.close(); }
   }, 120_000);
 });
