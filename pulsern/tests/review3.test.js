@@ -93,6 +93,20 @@ describe("Codex P2 wiring", () => {
     expect(ui).toContain("var(--mon-track)");
     expect(ui).not.toContain("#24433C");
   });
+  it("draws the streak as a flame with an ECG line, colored by theme variables", () => {
+    const ui = fs.readFileSync("src/rewards-ui.jsx", "utf8");
+    const glyph = ui.slice(ui.indexOf("export function StreakGlyph"), ui.indexOf("export function ShieldGlyph"));
+    expect(glyph).toContain("rw-streak-flame");
+    expect(glyph).toContain("rw-streak-ecg");
+    expect(glyph).toContain("M8 1.3c.4 2.2"); // flame
+    expect(glyph).not.toMatch(/#[0-9A-Fa-f]{3,8}/);
+    expect(ui).toContain("var(--streak-flame-fill)");
+    expect(ui).toContain("var(--streak-flame)");
+    expect(ui).toContain("var(--streak-ecg)");
+    expect(app).toContain("--streak-flame:#E2701A");
+    expect(app).toContain("--streak-ecg:var(--ink)");
+    expect(app).toMatch(/data-theme="dim"[\s\S]{0,500}--streak-flame:/);
+  });
 });
 
 describe("N1: unreadable saved progress", () => {

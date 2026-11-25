@@ -20,11 +20,13 @@ export function friendlyDay(day, today) {
 }
 
 /* ---------- glyphs ---------- */
+/* Flame with an ECG line fully inside the bowl. Option 3 of the
+   streak-icon mockup, tightened so the trace stays readable at 14–22px. */
 export function StreakGlyph({ size = 14, className = "" }) {
   return (
-    <svg className={"rw-glyph " + className} width={size} height={size} viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-      <path d="M8 14.2 2.6 8.9A3.3 3.3 0 0 1 8 4.6a3.3 3.3 0 0 1 5.4 4.3Z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-      <path d="M3.6 8.6h2.2l1-1.8 1.4 3.2 1-1.4h3.2" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    <svg className={"rw-glyph rw-streak " + className} width={size} height={size} viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <path className="rw-streak-flame" d="M8 1.3c.4 2.2 2 3.3 3.2 4.9 1 1.3 1.6 2.6 1.6 4 0 2.6-2.1 4.5-4.8 4.5S3.2 12.8 3.2 10.2c0-1.6.8-3 1.9-4 .1 1.1.6 1.9 1.4 2.3-.2-2.6.3-5.1 1.5-7.2Z" />
+      <path className="rw-streak-ecg" d="M5.05 10.35h1.2l.7-1.25 1.15 2.5.7-1.25h2.2" />
     </svg>
   );
 }
@@ -422,6 +424,9 @@ export function RewardsStyle() {
     <style>{`
       .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
       .rw-glyph{display:inline-block;vertical-align:-2px;flex:0 0 auto}
+      .rw-streak-flame{fill:var(--streak-flame-fill);stroke:var(--streak-flame);stroke-width:1.4;stroke-linejoin:round}
+      .rw-streak-ecg{fill:none;stroke:var(--streak-ecg);stroke-width:1.2;stroke-linecap:round;stroke-linejoin:round}
+      .rw-moment-hero{--streak-flame-fill:var(--streak-flame-fill-on-mon);--streak-ecg:var(--streak-ecg-on-mon)}
       .rw-row-between{display:flex;justify-content:space-between;align-items:center;gap:8px}
       .rw-count{font-size:12px;font-weight:600;color:var(--accent-ink);background:var(--chip-bg);border-radius:99px;padding:3px 9px}
       /* insignia + dial */
