@@ -427,15 +427,14 @@ function mergeRewards(base, server, local, replayed, localReplay, serverReplay, 
 /* A save that is no longer the newest snapshot must not become the
    baseline. The next save still has to see what the other device wrote. */
 /* Same rule as migration 022. A missing or unchanged revision is an
-   older client. Before any revision-aware save, the snapshot lands and
-   the counter moves to 1. After one, the stored revision stays put and
-   the snapshot is parked for the client merge. A client that sends a
-   revision must send a greater one. */
+   older client. At any revision, including 0, the stored row stays put and
+   the snapshot is parked for the client merge: a revision-0 row carries
+   migration 020's labels, and an old tab's pre-migration history must not
+   replace them. A client that sends a revision must send a greater one. */
 export function progressRevisionOnUpdate(oldRevision, incoming) {
   const oldRev = Number(oldRevision) || 0;
   if (incoming == null || Number(incoming) === oldRev) {
-    if (oldRev > 0) return { revision: oldRev, legacy: true, pending: true };
-    return { revision: oldRev + 1, legacy: true, pending: false };
+    return { revision: oldRev, legacy: true, pending: true };
   }
   const next = Number(incoming);
   if (!Number.isFinite(next) || next < oldRev) throw new Error("progress revision conflict");

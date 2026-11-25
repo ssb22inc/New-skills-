@@ -431,7 +431,8 @@ describe("a revision conflict keeps both devices' answers", () => {
     expect(sql).toMatch(/before update on public\.progress/i);
     expect(sql).toMatch(/new\.revision < old\.revision/);
     expect(progressRevisionOnUpdate(4, undefined)).toEqual({ revision: 4, legacy: true, pending: true });
-    expect(progressRevisionOnUpdate(0, undefined)).toEqual({ revision: 1, legacy: true, pending: false });
+    expect(progressRevisionOnUpdate(0, undefined)).toEqual({ revision: 0, legacy: true, pending: true });
+    expect(progressRevisionOnUpdate(0, 1)).toEqual({ revision: 1, legacy: false, pending: false });
     expect(progressRevisionOnUpdate(4, 5)).toEqual({ revision: 5, legacy: false, pending: false });
     expect(() => progressRevisionOnUpdate(4, 3)).toThrow(/revision conflict/);
     const rollback = fs.readFileSync(new URL("../supabase/rollback/rollback_relabel_legacy_progress_20261124.sql", import.meta.url), "utf8");

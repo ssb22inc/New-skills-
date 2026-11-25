@@ -3,9 +3,11 @@
 -- A save that does not send a revision is the app already open in
 -- browsers. That write is never rejected.
 --
--- Before any revision-aware save, the snapshot is stored as sent and
--- the revision becomes 1.
--- After one, the stored progress row stays as it is. The incoming
+-- A revision-less save never replaces the stored row, at ANY revision,
+-- including 0. Migration 020 labelled the stored log rows and migration
+-- 021 left them at revision 0; an old tab that still holds the
+-- pre-migration history must not be able to write it back over those
+-- labels. The stored progress row stays as it is. The incoming
 -- snapshot is copied into progress_pending_merge. The signed-in app
 -- reads those rows, merges them with the conflict path it already
 -- uses for two devices, saves a new revision, and deletes the rows
@@ -53,15 +55,11 @@ set search_path = public
 as $$
 begin
   if new.revision is null or new.revision = old.revision then
-    if old.revision > 0 then
-      if old.legacy_hold is not true and new.blob is not null then
-        insert into public.progress_pending_merge (user_id, key, snapshot)
-        values (old.user_id, old.key, new.blob);
-      end if;
-      return old;
+    if old.legacy_hold is not true and new.blob is not null then
+      insert into public.progress_pending_merge (user_id, key, snapshot)
+      values (old.user_id, old.key, new.blob);
     end if;
-    new.revision := old.revision + 1;
-    return new;
+    return old;
   end if;
   if new.revision < old.revision then
     raise exception 'progress revision conflict' using errcode = '40001';

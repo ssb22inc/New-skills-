@@ -68,23 +68,35 @@ describe("revision-less saves wait for the client merge", () => {
     expect(guarded.rows).toEqual([]);
   });
 
-  it("still stores a revision-less save when the row has never been revision-aware", async () => {
-    const first = { log: [{ id: 2, attempt: "old" }], xp: 3, theme: "dim" };
+  /* Astra, PR #184 review, finding 4: migration 020 labels the stored log
+     and migration 021 leaves it at revision 0. An old tab that still holds
+     the pre-migration history must not write it back over those labels. */
+  it("parks a revision-0 old-app snapshot instead of replacing migration 020's labels", async () => {
+    const labelled = { log: [{ id: 42, key: "bank:42", source: "bank", cat: "Pharmacology", correct: false }], xp: 3, theme: "dim" };
+    const preMigration = { log: [{ id: 42, cat: "Pharmacology", correct: false }], xp: 3, theme: "light" };
     await db.query(`delete from public.progress where user_id = $1`, [userId]);
     await db.query(`delete from public.progress_pending_merge where user_id = $1`, [userId]);
     await db.query(
-      `insert into public.progress (user_id, key, blob, revision) values ($1, 'pulsern-v1', '{"log":[]}'::jsonb, 0)`,
-      [userId],
+      `insert into public.progress (user_id, key, blob, revision) values ($1, 'pulsern-v1', $2::jsonb, 0)`,
+      [userId, JSON.stringify(labelled)],
     );
     await db.query(
       `update public.progress set blob = $2::jsonb where user_id = $1 and key = 'pulsern-v1'`,
-      [userId, JSON.stringify(first)],
+      [userId, JSON.stringify(preMigration)],
     );
     const saved = await row(db);
-    expect(saved.revision).toBe(1);
-    expect(saved.blob).toEqual(first);
-    const pending = await db.query(`select id from public.progress_pending_merge where user_id = $1`, [userId]);
-    expect(pending.rows).toEqual([]);
+    expect(saved.revision).toBe(0);
+    expect(saved.blob).toEqual(labelled);
+    const pending = await db.query(`select snapshot from public.progress_pending_merge where user_id = $1`, [userId]);
+    expect(pending.rows).toHaveLength(1);
+    expect(asObject(pending.rows[0].snapshot)).toEqual(preMigration);
+    /* The first revision-aware save still lands on the same row. */
+    await db.query(
+      `update public.progress set blob = $2::jsonb, revision = 1 where user_id = $1 and key = 'pulsern-v1' and revision = 0`,
+      [userId, JSON.stringify({ ...labelled, xp: 9 })],
+    );
+    expect((await row(db)).revision).toBe(1);
+    await db.query(`delete from public.progress_pending_merge where user_id = $1`, [userId]);
   });
 
   it("does not park an older snapshot after progress was reset", async () => {
