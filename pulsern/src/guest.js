@@ -16,6 +16,7 @@ import { answerXp, answerCountsForRun, emptyRewards, MAX_COVERS, advanceStreak, 
 import { applyAnswer, stampedQuestion } from "./answer-apply.js";
 import { emptyAbility, ABILITY_CATS, undoAbility, updateAbility } from "./ability-engine.js";
 import { canonicalKey } from "./question-key.js";
+import { fmtLocal } from "./dates.js";
 
 export const GUEST_KEY = "pulsern-guest-v1";
 export const GUEST_HOLD_KEY = "pulsern-guest-hold-v1";
@@ -639,10 +640,26 @@ function reviewStamp(entry) {
   return typeof entry?.seen === "string" ? `d:${entry.seen}` : "";
 }
 
-/* The later review stands. When two grades only share a calendar day,
-   the one due sooner stays, so a same-day miss is not replaced by an
-   older longer interval. */
+/* The calendar day a grade was made. A card written by the old app has only
+   `seen`; a newer one also has a timestamp. `seen` is the day when present,
+   otherwise the local day of the timestamp. "" when neither is readable. */
+function reviewDay(entry) {
+  if (typeof entry?.seen === "string" && /^\d{4}-\d{2}-\d{2}$/.test(entry.seen)) return entry.seen;
+  const ts = Number.isFinite(Number(entry?.reviewedAt)) ? Number(entry.reviewedAt) : Number.isFinite(Number(entry?.at)) ? Number(entry.at) : null;
+  return ts == null ? "" : fmtLocal(new Date(ts));
+}
+
+/* The later review stands, and "later" is decided by the calendar day first:
+   a timestamp must never make an earlier day beat a later day that only the
+   old app recorded as a date (Astra, PR #184 review, finding 3). On the same
+   day the timestamped grade stays over a date-only one, and two timestamps
+   compare by time. When two grades only share a day and a stamp, the one due
+   sooner stays, so a same-day miss is not replaced by an older longer
+   interval. */
 function preferSchedule(serverEntry, localEntry) {
+  const serverDay = reviewDay(serverEntry);
+  const localDay = reviewDay(localEntry);
+  if (serverDay && localDay && serverDay !== localDay) return serverDay > localDay ? serverEntry : localEntry;
   const serverStamp = reviewStamp(serverEntry);
   const localStamp = reviewStamp(localEntry);
   if (serverStamp !== localStamp) return serverStamp > localStamp ? serverEntry : localEntry;
