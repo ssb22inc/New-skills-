@@ -3,7 +3,7 @@
    covers protect missed days; milestones fire once. */
 import { describe, it, expect } from "vitest";
 import {
-  answerXp, minThinkMs, answerCountsForRun, xpNote, comboFor, bumpDay, reverseCardDay, shiftStatus, shiftCompleteNote, todayQuestionCount, weekRounds, maybeGrantCover, advanceStreak, streakDayCounted,
+  answerXp, minThinkMs, answerCountsForRun, xpNote, comboFor, bumpDay, reverseCardDay, shiftStatus, shiftCompleteNote, todayQuestionCount, weekRounds, maybeGrantCover, advanceStreak, streakDayCounted, streakPillLabel,
   categoryMastery, badgeBoard, careerStatus, legacyRankIndex, detectMoments, markMomentsSeen, sessionRecap,
   emptyRewards, migrateRewards, daysBetween, shiftDay, mondayOf, TIERS, CAREER, REVIEW_FIX_BONUS, MAX_COVERS, TEST_PLAN,
 } from "../src/rewards.js";
@@ -225,6 +225,26 @@ describe("Today's shift and weekly rounds", () => {
     expect(wk.shifts).toBe(5);
     expect(wk.days[4].state).toBe("shift");
     expect(wk.days[6].state).toBe("future");
+  });
+  it("does not spend the week's cover grant while the bank is full, so a later spend can still bank it", () => {
+    let r = emptyRewards();
+    for (const d of ["2026-11-23", "2026-11-24", "2026-11-25", "2026-11-26", "2026-11-27"]) r = bumpDay(r, d, { q: 8, ok: 6 });
+    const monday = mondayOf("2026-11-27");
+    const capped = maybeGrantCover({ ...r, covers: MAX_COVERS }, "2026-11-27");
+    expect(capped.granted).toBe(false);
+    expect(capped.rewards.covers).toBe(MAX_COVERS);
+    expect(capped.rewards.coverWeeks).not.toContain(monday);
+    const spent = { ...capped.rewards, covers: MAX_COVERS - 1 };
+    const after = maybeGrantCover(spent, "2026-11-27");
+    expect(after.granted).toBe(true);
+    expect(after.rewards.covers).toBe(MAX_COVERS);
+    expect(after.rewards.coverWeeks).toContain(monday);
+  });
+  it("labels the streak pill as the current day of the next milestone", () => {
+    expect(streakPillLabel(0)).toBe("Day 0 of 7");
+    expect(streakPillLabel(3)).toBe("Day 3 of 7");
+    expect(streakPillLabel(7)).toBe("Day 7 of 30");
+    expect(streakPillLabel(365)).toBe("Day 365");
   });
 });
 

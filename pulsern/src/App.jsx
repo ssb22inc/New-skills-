@@ -1329,7 +1329,9 @@ export default function App() {
     momentsPrimed.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, log.length, xp]);
-  /* Five shifts in a week bank one shift cover (max MAX_COVERS). */
+  /* Five shifts in a week bank one shift cover (max MAX_COVERS).
+     covers is a dependency so a cover spent later the same week can still
+     bank the cover that was earned while the bank was full. */
   useEffect(() => {
     if (!loaded) return;
     const g = maybeGrantCover(rewardsRef.current, today);
@@ -1337,7 +1339,7 @@ export default function App() {
     setRewards((r) => maybeGrantCover(r, today).rewards);
     if (g.granted) setMoments((m) => [...m, { kind: "cover", title: "Shift cover earned", line: "Five shifts this week. A cover protects your streak on a day you can't study, like a clinical day.", next: `${g.rewards.covers} of ${MAX_COVERS} banked` }]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, rewards.days, today]);
+  }, [loaded, rewards.days, rewards.covers, today]);
 
   /* ---- session recap: snapshot at the start, summary at the end ---- */
   const sessionStart = useRef(null);

@@ -260,7 +260,7 @@ export async function captureProductScreenshots() {
     await page.setViewportSize({ width: 720, height: 1280 });
     await settle(page);
     const images = [];
-    images.push(await screenshot(page, "pulsern-today-dashboard.png", ["Start today's round", "CANDIDATE MONITOR", "Today's shift", "Clinical career", "Student Nurse"]));
+    images.push(await screenshot(page, "pulsern-today-dashboard.png", ["Start today's round", "CANDIDATE MONITOR", "Today's shift", "Clinical career", "Student Nurse", "Day 0 of 7"]));
 
     await page.getByRole("button", { name: "Practice", exact: true }).click();
     await page.getByRole("button", { name: "New questions", exact: true }).click();

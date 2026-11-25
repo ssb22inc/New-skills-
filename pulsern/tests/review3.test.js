@@ -67,6 +67,11 @@ describe("Codex P2 wiring", () => {
     expect(guest.indexOf("<footer")).toBeGreaterThan(guest.indexOf("stage === \"quiz\""));
     expect(guest.indexOf("<footer")).toBeLessThan(guest.indexOf("<LabFab"));
   });
+  it("retries a weekly cover grant after a cover is spent the same week", () => {
+    const grant = app.slice(app.indexOf("Five shifts in a week bank one shift cover"), app.indexOf("Five shifts in a week bank one shift cover") + 900);
+    expect(grant).toContain("maybeGrantCover");
+    expect(grant).toContain("rewards.covers");
+  });
 });
 
 describe("N1: unreadable saved progress", () => {

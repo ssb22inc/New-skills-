@@ -4,7 +4,7 @@
    by prefers-reduced-motion or the in-app "Reduce effects" setting
    (the .fx-reduced class on .app). */
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { CAREER, TIERS, SHORT_CAT, RECENT_WINDOW, COVER_EVERY_WEEK, MAX_COVERS, nextMilestone } from "./rewards.js";
+import { CAREER, TIERS, SHORT_CAT, RECENT_WINDOW, COVER_EVERY_WEEK, MAX_COVERS, nextMilestone, streakPillLabel } from "./rewards.js";
 
 const INITIALS = ["SN", "GN", "NG", "RN", "PR", "CN", "NE", "CNS"];
 
@@ -188,7 +188,6 @@ export function streakMoment(count) {
 
 /* ---------- Today's shift ---------- */
 export function ShiftCard({ shift, streak, rewards, tourClass = "", children }) {
-  const nm = nextMilestone(streak.count);
   return (
     <section className={"card rw-shift" + tourClass}>
       <div className="rw-row-between">
@@ -208,7 +207,7 @@ export function ShiftCard({ shift, streak, rewards, tourClass = "", children }) 
         ))}
       </ul>
       <div className="rw-streakline">
-        <span className="rw-pill"><StreakGlyph /> Day {streak.count}{nm ? ` · ${nm - streak.count} to ${nm}` : ""}</span>
+        <span className="rw-pill"><StreakGlyph /> {streakPillLabel(streak.count)}</span>
         <span className={streak.shield ? "rw-pill" : "rw-pill caution"}><ShieldGlyph used={!streak.shield} /> {streak.shield ? "Shield ready" : "Shield used"}</span>
         <span className="rw-pill"><ShieldGlyph /> {rewards.covers} shift cover{rewards.covers === 1 ? "" : "s"}</span>
       </div>

@@ -346,9 +346,13 @@ export function weekRounds(rewards, today) {
 export function maybeGrantCover(rewards, today) {
   const wk = weekRounds(rewards, today);
   if (wk.shifts < COVER_EVERY_WEEK || rewards.coverWeeks.includes(wk.monday)) return { rewards, granted: false };
+  /* Do not mark the week until a cover is actually banked. If the bank is
+     already full, a cover spent later the same week can still receive the
+     cover that was earned while at the cap. */
+  if (rewards.covers >= MAX_COVERS) return { rewards, granted: false };
   return {
-    rewards: { ...rewards, covers: Math.min(MAX_COVERS, rewards.covers + 1), coverWeeks: [...rewards.coverWeeks, wk.monday].slice(-12) },
-    granted: rewards.covers < MAX_COVERS,
+    rewards: { ...rewards, covers: rewards.covers + 1, coverWeeks: [...rewards.coverWeeks, wk.monday].slice(-12) },
+    granted: true,
   };
 }
 
@@ -406,6 +410,13 @@ export function advanceStreak(streak, rewards, today) {
 
 export function nextMilestone(count) {
   return STREAK_MILESTONES.find((m) => m > count) ?? null;
+}
+
+/* Clear day-and-milestone label for the Today streak pill. "Day 0 · 7 to 7"
+   read as a garbled "Day 0-7 to 7" on a fresh account. */
+export function streakPillLabel(count) {
+  const nm = nextMilestone(count);
+  return nm ? `Day ${count} of ${nm}` : `Day ${count}`;
 }
 
 /* ---------------- mastery badges (Benner, novice to expert) ---------------- */
