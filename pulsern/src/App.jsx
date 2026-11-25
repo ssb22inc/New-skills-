@@ -3727,6 +3727,7 @@ export function Style() {
         --surface:#F7FAF8; --line:#D8E2DD; --bar-bg:#E7EFEA;
         --teal:#0E7C6B; --btn-ink:#FFFFFF; --accent-ink:#0A5A4E;
         --mon:#0C201D; --ecg:#3BE08F; --mon-track:#24433C;
+        /* Approved streak accent: orange flame, ink ECG. Not --amber (caution). */
         --streak-flame:#E2701A; --streak-flame-fill:#F8D2A8; --streak-ecg:var(--ink);
         --streak-flame-fill-on-mon:#5A3514; --streak-ecg-on-mon:#EAF1ED;
         --amber:#E9A23B; --coral:#D9503F; --danger-ink:#B23A2B;

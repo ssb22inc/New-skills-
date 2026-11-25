@@ -47,6 +47,13 @@ drop policy if exists pending_merge_delete on public.progress_pending_merge;
 create policy pending_merge_delete on public.progress_pending_merge
   for delete using (auth.uid() = user_id);
 
+-- The trigger is SECURITY DEFINER (table owner bypasses RLS). This
+-- insert policy still covers any non-definer write so a parked
+-- snapshot cannot be inserted for another user.
+drop policy if exists pending_merge_insert on public.progress_pending_merge;
+create policy pending_merge_insert on public.progress_pending_merge
+  for insert with check (auth.uid() = user_id);
+
 create or replace function public.progress_revision_guard()
 returns trigger
 language plpgsql

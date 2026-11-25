@@ -166,7 +166,7 @@ describe("revision-less saves wait for the client merge", () => {
     const locked = await db.query(`select relrowsecurity from pg_class where oid = 'public.progress_pending_merge'::regclass`);
     expect(locked.rows[0].relrowsecurity).toBe(true);
     const names = policies.rows.map((policy) => `${policy.polname}:${policy.polcmd}`).sort();
-    expect(names).toEqual(expect.arrayContaining(["pending_merge_select:r", "pending_merge_delete:d"]));
+    expect(names).toEqual(expect.arrayContaining(["pending_merge_select:r", "pending_merge_delete:d", "pending_merge_insert:a"]));
     const defs = await db.query(`select pg_get_expr(polqual, polrelid) as expr from pg_policy where polrelid = 'public.progress_pending_merge'::regclass`);
     expect(defs.rows.map((policy) => policy.expr).join("\n")).toMatch(/auth\.uid\(\)/);
   });

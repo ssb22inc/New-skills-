@@ -1,6 +1,6 @@
 /* Reward surfaces, drawn in the app's own language: the monitor motif,
    teal palette, Archivo + IBM Plex Mono, hand-drawn inline SVG. No emoji,
-   no clip-art, no new colors. Every animation is CSS and is switched off
+   no clip-art, no new colors except the approved streak-flame tokens. Every animation is CSS and is switched off
    by prefers-reduced-motion or the in-app "Reduce effects" setting
    (the .fx-reduced class on .app). */
 import React, { useCallback, useEffect, useRef, useState } from "react";
