@@ -1,0 +1,40 @@
+{
+  "id": "tonicity",
+  "title": "IV fluid tonicity",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-11-22T22:54:42.883Z",
+  "images": 14,
+  "key": "44616603988ca23f",
+  "findings": [
+    {
+      "severity": "major",
+      "area": "accessibility",
+      "where": "Images 1–4 and 8–11; tonicity.jsx Dot and Panel sample-cell gradients",
+      "title": "Effective-solute dots miss the required contrast",
+      "problem": "Dot uses ink at 75% opacity over a variable teal gradient. Near the sample-cell rims, the composited contrast is approximately 3.7–4.0:1, below the project's 4.5:1 requirement. These small dots carry the concentration comparison; checking the ink token against the card background does not establish their actual contrast.",
+      "fix": "Give each particle a contrasting solid backing or halo, or lighten/flatten the sample-cell fill and use opaque particles. Test the composited particle/background colors at their actual positions in both themes.",
+      "confidence": "high"
+    },
+    {
+      "severity": "minor",
+      "area": "pedagogy",
+      "where": "Images 1, 5, 6, 8, 12 and 13; bags step; LISTS, FLUIDS, fact 5 and corresponding descriptions",
+      "title": "The osmolarity table uses tonicity names",
+      "problem": "The table explicitly classifies in-bag osmolarity but labels its rows isotonic, hypotonic and hypertonic. Those terms were just defined by effective solutes and cell-volume effects. The in-bag qualification and dextrose explanation mitigate the problem, but the terminology still blurs the distinction being taught.",
+      "fix": "Use approximately iso-osmolar, hypo-osmolar and hyperosmolar for the osmolarity classification. Preserve familiar nursing-exam bag labels in a clearly identified note, separate from the fluid's effective tonicity after dextrose clearance.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.2896985
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "Needs revision for particle contrast and osmolarity terminology. No clinical blocker identified in the tonicity content.",
+  "verdict": "FAIL",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 1
+  }
+}

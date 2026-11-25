@@ -1,0 +1,21 @@
+{
+  "id": "abg",
+  "title": "ABG: acid–base reading",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-11-22T22:47:49.495Z",
+  "images": 16,
+  "key": "94f4a11de5cdd0df",
+  "findings": [],
+  "usage": {
+    "costUsd": 0.3758085
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "No substantiated defects found in the supplied stills, clinical claims, scripts, or static source review. Live audio/animation playback and exhaustive execution across all supported input combinations were not verified.",
+  "verdict": "PASS",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}

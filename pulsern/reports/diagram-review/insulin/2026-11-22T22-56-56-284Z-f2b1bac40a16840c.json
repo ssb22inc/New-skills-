@@ -1,0 +1,31 @@
+{
+  "id": "insulin",
+  "title": "Insulin action times",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-11-22T22:56:56.284Z",
+  "images": 16,
+  "key": "f2b1bac40a16840c",
+  "findings": [
+    {
+      "severity": "minor",
+      "area": "rules",
+      "where": "Images 9 and 15, dark-theme curves crossing amber peak bands; insulin.jsx Curve()",
+      "title": "Peak overlays reduce curve contrast below the required 4.5:1",
+      "problem": "The accent-colored curves have only approximately 3.0–3.2:1 contrast against the composited amber bands in dark mode. The teal glow further reduces contrast locally. The source comment claiming at least 4.5:1 over these fills is incorrect.",
+      "fix": "Reduce the dark-theme amber-band opacity or add a card-colored separating stroke beneath each curve. Test contrast against the fully composited band, area fill and glow—not against the card background alone.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.320316
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "Minor revision needed: the dark-theme peak overlays fail the project's contrast requirement.",
+  "verdict": "PASS",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1
+  }
+}
