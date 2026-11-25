@@ -451,6 +451,7 @@ export const FINDINGS_SCHEMA = {
         assessment: { type: "string" },
         findings: {
           type: "array",
+          maxItems: 20,
           items: {
             type: "object",
             additionalProperties: false,
@@ -483,6 +484,7 @@ WHAT COUNTS
 
 HOW TO REPORT
 - Every finding names a file and, where possible, a line in the post-change file. State the concrete failure: what input or state, and what goes wrong.
+- Report each distinct defect once. Do not repeat a finding or rephrase the same defect. Return at most 20 findings, highest severity first. Keep each field to a few sentences.
 - No style preferences, no restating what the code does, no generic advice. If the code is correct, say so and return no findings for it.
 - If you are unsure, say exactly what you could not verify and lower the confidence — do not inflate severity to be safe, and do not omit a real concern to be polite.
 - Check the tests as hard as the code: a test that cannot fail is worse than no test, because it reports safety that does not exist.
