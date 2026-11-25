@@ -9,7 +9,7 @@ import { stampCatalogQuestion, stampLoadedCatalog, questionIdentity } from "../s
 import { reviewPools, todayPool, sessionPool, unseenQuestions, questionByIdentity, latestResults, expandTrialQuestions, settledResult, legacyCandidates, scheduleEntry, deriveMissSchedule } from "../src/question-review.js";
 import { emptyNav, appendQuestion, goBack, present } from "../src/question-nav.js";
 import { itemRating } from "../src/ability-engine.js";
-import { emptyRewards, REVIEW_FIX_BONUS, caseStepIds } from "../src/rewards.js";
+import { emptyRewards, REVIEW_FIX_BONUS, caseStepIds, legacyRepeatPending, categoryMastery } from "../src/rewards.js";
 import { emptyAbility } from "../src/ability-engine.js";
 import { readProgress, sessionReadDecision } from "../src/progress-load.js";
 import { forgetTrialOnRemoteSignOut } from "../src/sign-out.js";
@@ -135,9 +135,13 @@ describe("legacy rows", () => {
     expect(none.unclassified).toBe(true);
     const collided = classifyLog([{ id: 101, cat: "Physiological Adaptation", diff: 3, correct: true }], { ...catalogs, bankIds: [101] })[0];
     expect(collided.unclassified).toBe(true);
+    /* The unresolved correct row already earned its credit: the first new
+       answer with that number pays nothing; the other catalog's question
+       after that pays as usual. */
     const fresh = live({ ...blank(), log: [tagged] }, builtin, true);
-    expect(fresh.xp).toBe(20);
+    expect(fresh.xp).toBe(0);
     expect(fresh.log).toHaveLength(2);
+    expect(live(fresh, bank, true).xp).toBe(20);
   });
   it("does not rename an answer that was recorded with its source", () => {
     const row = { id: 7, source: "builtin", key: "builtin:7", origin: "recorded", correct: true };
@@ -285,14 +289,40 @@ describe("review, restore, and import use the canonical key", () => {
     expect(unseenQuestions([bankQ, bundled], log)).toEqual([]);
   });
 
-  it("an unresolved correct row is not served again as a new question", () => {
+  it("an unresolved correct row does not hide the question forever", () => {
     const bankQ = stampCatalogQuestion({ id: 7, stem: "Bank stem.", cat: "Pharmacology", diff: 2 }, []);
     const log = [{ id: 7, correct: true, unclassified: true, key: null, cat: "Pharmacology" }];
-    expect(settledResult(bankQ, log, [bankQ]).state).toBe("pending");
-    expect(unseenQuestions([bankQ], log)).toEqual([]);
-    const builtinQ = stampCatalogQuestion({ id: 7, stem: "Built-in stem.", cat: "Pharmacology", diff: 2 }, [{ id: 7, stem: "Built-in stem." }]);
-    expect(unseenQuestions([bankQ, builtinQ], log)).toEqual([]);
-    expect(reviewPools([bankQ], log, {}, TODAY).review).toEqual([]);
+    expect(settledResult(bankQ, log, [bankQ]).state).toBe("none");
+    expect(unseenQuestions([bankQ], log)).toEqual([bankQ]);
+  });
+
+  it("the first new answer after an unresolved correct row pays no XP and no ability, once", () => {
+    const q = { id: 7, source: "bank", cat: "Pharmacology", diff: 2, stem: "Bank stem." };
+    const state = { ...blank(), log: [{ id: 7, correct: true, unclassified: true, key: null, cat: "Pharmacology", diff: 2 }] };
+    const first = applyAnswer(state, { q, correct: true, ms: 9000, today: TODAY, attempt: "again-1" });
+    expect(first.result.xp).toBe(0);
+    expect(first.result.reason).toBe("legacy-repeat");
+    expect(first.state.xp).toBe(state.xp);
+    expect(first.state.ability).toEqual(state.ability);
+    expect(first.state.run).toBe(0);
+    expect(first.state.log.at(-1).legacyRepeat).toBe("7");
+    /* Not new mastery: the repeat row is left out of mastery and rank counts. */
+    expect(categoryMastery(first.state.log, "Pharmacology").n).toBe(categoryMastery(state.log, "Pharmacology").n);
+    /* Idempotent across a reload or another device: the stamp travels in the saved log. */
+    const reloaded = JSON.parse(JSON.stringify(first.state));
+    const replay = applyAnswer(reloaded, { q, correct: true, ms: 9000, today: TODAY, attempt: "again-1" });
+    expect(replay.duplicate).toBe(true);
+    const otherDevice = applyAnswer(reloaded, { q: { ...q, source: "builtin" }, correct: true, ms: 9000, today: TODAY, attempt: "builtin-7" });
+    expect(otherDevice.result.reason).not.toBe("legacy-repeat");
+    expect(legacyRepeatPending(q, reloaded.log)).toBe(false);
+    /* The next answer to the same question follows the normal rules (a repeat pays 0). */
+    const second = applyAnswer(reloaded, { q, correct: true, ms: 9000, today: TODAY, attempt: "again-2" });
+    expect(second.result.reason).toBe("repeat");
+  });
+
+  it("an incorrect unresolved row is not held: it stays a miss to correct", () => {
+    const q = { id: 7, source: "bank", cat: "Pharmacology", diff: 2, stem: "Bank stem." };
+    expect(legacyRepeatPending(q, [{ id: 7, correct: false, unclassified: true, key: null }])).toBe(false);
   });
 
   it("a correct review of an ambiguous miss advances that question's schedule", () => {

@@ -1,7 +1,7 @@
 /* One live answer. A brand-new account imports a trial by calling this
    once per answer, in order. An account that already has history does
    not come through here for the trial: there is no replay. */
-import { answerXp, answerCountsForRun, bumpDay, advanceStreak, streakDayCounted, sameAnswer } from "./rewards.js";
+import { answerXp, answerCountsForRun, bumpDay, advanceStreak, streakDayCounted, sameAnswer, legacyRepeatPending } from "./rewards.js";
 import { updateAbility } from "./ability-engine.js";
 import { updateMissSchedule } from "./question-review.js";
 import { canonicalKey } from "./question-identity.js";
@@ -72,10 +72,13 @@ export function applyAnswer(state, input) {
   const calibration = input.calibration ?? {};
   const at = Number.isFinite(Number(input.at)) ? Number(input.at) : Date.now();
   const seq = Number.isFinite(Number(input.seq)) ? Number(input.seq) : nextAnswerSeq();
+  const legacyRepeat = legacyRepeatPending(q, log);
   const res = q.unclassified
     ? { xp: 0, reason: "unclassified", base: 0, bonus: 0, fix: false }
-    : answerXp({ q, correct, ms, log });
-  const counts = !q.unclassified && answerCountsForRun({ correct, q, ms });
+    : legacyRepeat
+      ? { xp: 0, reason: "legacy-repeat", base: 0, bonus: 0, fix: false }
+      : answerXp({ q, correct, ms, log });
+  const counts = !q.unclassified && !legacyRepeat && answerCountsForRun({ correct, q, ms });
   const run = counts ? (state.run ?? 0) + 1 : 0;
   const row = {
     id: q.id,
@@ -94,6 +97,7 @@ export function applyAnswer(state, input) {
     ...(Number.isFinite(input.words) ? { words: input.words } : {}),
     ...(Number.isFinite(input.rating) ? { rating: input.rating } : {}),
     ...(input.schedule === false ? { schedule: false } : {}),
+    ...(legacyRepeat ? { legacyRepeat: String(q.id) } : {}),
     origin: "recorded",
   };
   if (q.unclassified) {
@@ -105,8 +109,8 @@ export function applyAnswer(state, input) {
     };
   }
   const prior = [...log].reverse().find((r) => sameAnswer(q, r));
-  const ability = updateAbility(state.ability, q, correct, calibration).ability;
-  let rewards = bumpDay(state.rewards, today, { q: 1, ok: correct ? 1 : 0, xp: res.xp, fixes: correct && prior && prior.correct === false ? 1 : 0 });
+  const ability = legacyRepeat ? state.ability : updateAbility(state.ability, q, correct, calibration).ability;
+  let rewards = bumpDay(state.rewards, today, { q: 1, ok: correct && !legacyRepeat ? 1 : 0, xp: res.xp, fixes: !legacyRepeat && correct && prior && prior.correct === false ? 1 : 0 });
   let streak = state.streak;
   let streakNote = null;
   if (!streakDayCounted(streak, null, today)) {

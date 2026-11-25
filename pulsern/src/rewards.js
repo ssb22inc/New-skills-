@@ -199,6 +199,27 @@ export function sameAnswer(q, row) {
   return !!a && a === b;
 }
 
+/* A correct legacy answer that could not be tied to one question
+   (migration 020 left it unclassified) is not hidden from practice. The
+   first new answer to a question with that number pays no XP and no
+   ability credit, and is stamped legacyRepeat so the hold is spent once:
+   the stamp is in the saved log, so a reload or another device sees it. */
+export function legacyRepeatPending(q, log) {
+  if (!q || q.id == null || q.unclassified) return false;
+  const num = String(q.id);
+  let held = false;
+  for (const row of log ?? []) {
+    if (!row) continue;
+    if (row.legacyRepeat != null && String(row.legacyRepeat) === num) return false;
+    if (row.unclassified && String(row.id) === num && row.correct === true) held = true;
+  }
+  return held;
+}
+
+/* A legacyRepeat row is the second answer to work already credited by
+   the legacy row. It is kept in the log, but it is not new mastery. */
+const masteryRows = (log) => (log ?? []).filter((row) => !row?.legacyRepeat);
+
 export function answerXp({ q, correct, ms = Infinity, log = [], skipped = false }) {
   if (skipped) return { xp: 0, reason: "skip", base: 0, bonus: 0 };
   const same = (row) => sameAnswer(q, row);
@@ -237,6 +258,7 @@ export function xpNote(res) {
   if (res.reason === "fix") return `+${res.xp} XP · miss corrected`;
   if (res.reason === "correct") return `+${res.xp} XP`;
   if (res.reason === "repeat") return "XP counts once per question";
+  if (res.reason === "legacy-repeat") return "Already credited from your earlier answer";
   if (res.reason === "too-fast") return "XP counts for considered answers";
   return "";
 }
@@ -366,6 +388,54 @@ export function maybeGrantCover(rewards, today) {
 /* This calendar day has already moved the streak when the saved last day
    is today, or this session already counted today. Reset clears the
    session mark so the first answer after a reset can start day one. */
+/* Undo of a card grade. A grade can open the day (advance the streak,
+   spend or bank a cover, hit a milestone) and can lift the rank high-water
+   mark. gradeSnapshot is taken before the grade; undoGradeEffects puts
+   every one of those back when the undone grade was the day's only study,
+   so grade -> undo leaves the streak, covers, milestones, best streak and
+   rank exactly as they were. Moments queued by the grade are dropped. */
+export function gradeSnapshot({ streak, rewards, touched = null, today, id }) {
+  const r = rewards ?? {};
+  return {
+    id, day: today, touched,
+    streak: { ...(streak ?? {}) },
+    covers: r.covers, coverDays: r.coverDays, milestones: r.milestones,
+    bestStreak: r.best?.streak ?? 0,
+    rankHigh: Number.isInteger(r.rankHigh) ? r.rankHigh : null,
+  };
+}
+
+export function undoGradeEffects({ streak, rewards, daily, moments = [], earnedNow = 0 }, snap) {
+  if (!snap) return { streak, rewards, moments, touched: undefined, reverted: false };
+  let r = rewards;
+  let s = streak;
+  let touched;
+  let m = moments ?? [];
+  /* Only this grade studied today: the day it opened is closed again. */
+  const onlyActivity = !daily || daily.day !== snap.day || (daily.answered ?? 0) <= 1;
+  const opened = streak?.lastDay === snap.day && snap.streak?.lastDay !== snap.day;
+  let reverted = false;
+  if (opened && onlyActivity) {
+    s = { ...snap.streak };
+    touched = snap.touched;
+    r = {
+      ...r, covers: snap.covers, coverDays: snap.coverDays, milestones: snap.milestones,
+      best: { ...(r.best ?? {}), streak: snap.bestStreak },
+    };
+    reverted = true;
+    m = m.filter((x) => x?.source !== snap.id);
+  }
+  /* A rank the grade's XP lifted is taken back when the XP is. */
+  if (snap.rankHigh != null && Number.isInteger(r.rankHigh) && r.rankHigh > snap.rankHigh) {
+    const keep = Math.max(snap.rankHigh, earnedNow);
+    if (keep < r.rankHigh) {
+      r = { ...r, rankHigh: keep };
+      m = m.filter((x) => !(x?.kind === "rank" && x.index > keep));
+    }
+  }
+  return { streak: s, rewards: r, moments: m, touched, reverted };
+}
+
 export function streakDayCounted(streak, markedDay, today) {
   return streak?.lastDay === today || markedDay === today;
 }
@@ -429,7 +499,7 @@ export const TIERS = [
 ];
 
 export function categoryMastery(log, cat) {
-  const rows = log.filter((l) => l.cat === cat);
+  const rows = masteryRows(log).filter((l) => l.cat === cat);
   const recent = rows.slice(-RECENT_WINDOW);
   const acc = recent.length ? Math.round((recent.filter((r) => r.correct).length / recent.length) * 100) : null;
   let tier = 0;
@@ -471,11 +541,12 @@ export function legacyRankIndex(xp) {
 }
 
 export function recentAccuracy(log) {
-  const recent = log.slice(-RECENT_WINDOW);
+  const recent = masteryRows(log).slice(-RECENT_WINDOW);
   return recent.length ? Math.round((recent.filter((r) => r.correct).length / recent.length) * 100) : null;
 }
 
-function rankReqs(rank, { xp, log, board }) {
+function rankReqs(rank, { xp, log: allRows, board }) {
+  const log = masteryRows(allRows);
   const acc = recentAccuracy(log);
   const competent = board.filter((b) => b.tier >= 2).length;
   const proficient = board.filter((b) => b.tier >= 3).length;

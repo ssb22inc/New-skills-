@@ -309,7 +309,7 @@ import { useSessionReport } from "./session-report.js";
 import { tourMark, tourStepAt, tourStepsFor } from "./tour.js";
 import { LeaveDialog, Tour, useTourDismissScroll, useTourPlacement } from "./tour.jsx";
 import {
-  emptyRewards, answerXp, answerCountsForRun, sameAnswer, xpNote, comboFor, cardXp, questionsOn, todayQuestionCount, shiftCompleteNote, caseStepIds, bumpDay, reverseCardDay, recordCardGrade, undoCardGrade, advanceStreak, streakDayCounted, shiftStatus, weekRounds, maybeGrantCover,
+  emptyRewards, answerXp, answerCountsForRun, sameAnswer, xpNote, comboFor, cardXp, questionsOn, todayQuestionCount, shiftCompleteNote, caseStepIds, bumpDay, reverseCardDay, recordCardGrade, undoCardGrade, advanceStreak, streakDayCounted, gradeSnapshot, undoGradeEffects, shiftStatus, weekRounds, maybeGrantCover,
   careerStatus, badgeBoard, detectMoments, markMomentsSeen, sessionRecap, MAX_COVERS,
 } from "./rewards.js";
 import { motionAllowed, rewardBeat } from "./effects.js";
@@ -1118,7 +1118,10 @@ export default function App() {
   const [catalogAttempt, setCatalogAttempt] = useState(0);
   const [bankFailed, setBankFailed] = useState(false);
   const [casesFailed, setCasesFailed] = useState(false);
-  const catalogError = bankFailed || casesFailed;
+  /* The alert is for the question bank. A case-library failure alone gets
+     a quieter note: questions still work. */
+  const catalogError = bankFailed;
+  const casesOnlyError = casesFailed && !bankFailed;
   useEffect(() => {
     if (!bankOpen) return;
     (async () => {
@@ -1185,10 +1188,13 @@ export default function App() {
   /* Streak: the existing {count, lastDay, shield} rule, plus banked shift
      covers and once-only milestone moments (src/rewards.js advanceStreak). */
   const touchedDay = useRef(null);
+  /* Returns a snapshot taken before the touch, so an Undo grade can put
+     the streak, covers, milestones and rank back (undoGradeEffects). */
   const touchDay = () => {
-    setDaily((d) => d.day === todayStr() ? { ...d, answered: d.answered + 1 } : { day: todayStr(), answered: 1 });
     const today = todayStr();
-    if (streakDayCounted(streak, touchedDay.current, today)) return;
+    const snap = gradeSnapshot({ streak, rewards: rewardsRef.current, touched: touchedDay.current, today, id: `touch:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}` });
+    setDaily((d) => d.day === today ? { ...d, answered: d.answered + 1 } : { day: today, answered: 1 });
+    if (streakDayCounted(streak, touchedDay.current, today)) return snap;
     touchedDay.current = today;
     const adv = advanceStreak(streak, rewardsRef.current, today);
     setStreak(adv.streak);
@@ -1196,8 +1202,9 @@ export default function App() {
       ...r, covers: adv.rewards.covers, coverDays: adv.rewards.coverDays, milestones: adv.rewards.milestones,
       best: { ...r.best, streak: Math.max(r.best.streak, adv.streak.count) },
     }));
-    if (adv.milestone) setMoments((m) => [...m, streakMoment(adv.milestone)]);
-    if (adv.event === "cover") setMoments((m) => [...m, { kind: "cover-used", title: "Your streak is protected", line: `A shift cover covered the day you missed. Day ${adv.streak.count} today.`, next: `${adv.rewards.covers} cover${adv.rewards.covers === 1 ? "" : "s"} left` }]);
+    if (adv.milestone) setMoments((m) => [...m, { ...streakMoment(adv.milestone), source: snap.id }]);
+    if (adv.event === "cover") setMoments((m) => [...m, { kind: "cover-used", title: "Your streak is protected", line: `A shift cover covered the day you missed. Day ${adv.streak.count} today.`, next: `${adv.rewards.covers} cover${adv.rewards.covers === 1 ? "" : "s"} left`, source: snap.id }]);
+    return snap;
   };
 
   /* `correct` is the FULL-CREDIT outcome (every NCSBN partial-credit point
@@ -1240,14 +1247,15 @@ export default function App() {
     if (note?.milestone) setMoments((m) => [...m, streakMoment(note.milestone)]);
     if (note?.event === "cover") setMoments((m) => [...m, { kind: "cover-used", title: "Your streak is protected", line: `A shift cover covered the day you missed. Day ${note.streak.count} today.`, next: `${note.rewards.covers} cover${note.rewards.covers === 1 ? "" : "s"} left` }]);
     const { itemDelta } = updateAbility(beforeAbility, item, correct, calibration);
-    if (source === "bank" && calibration[q.id] !== undefined) {
+    const legacyRepeat = res.reason === "legacy-repeat";
+    if (!legacyRepeat && source === "bank" && calibration[q.id] !== undefined) {
       fetch("/api/telemetry", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ itemId: q.id, correct, itemDelta }),
       }).catch(() => {});
     }
-    const counts = answerCountsForRun({ correct, q: item, ms: opts.ms ?? Infinity });
+    const counts = !legacyRepeat && answerCountsForRun({ correct, q: item, ms: opts.ms ?? Infinity });
     const newBest = next.run >= 3 && next.run > bestRun;
     const combo = counts ? comboFor(next.run) : null;
     announce(comboSpeech(combo, newBest));
@@ -1260,12 +1268,25 @@ export default function App() {
   const noteCard = (cardXpGain = 0, op) => setRewards((r) => (op?.id
     ? recordCardGrade(r, { id: op.id, day: op.day || todayStr(), xp: cardXpGain || 0 })
     : bumpDay(r, todayStr(), { cards: 1, xp: cardXpGain || 0 })));
-  const unnoteCard = (cardXpGain = 0, day, op) => {
+  const unnoteCard = (cardXpGain = 0, day, op, snap = null) => {
     const credited = day || todayStr();
+    const p = progressRef.current;
     setRewards((r) => (op?.id
       ? undoCardGrade(r, { id: op.id, day: credited, xp: cardXpGain })
       : reverseCardDay(r, credited, cardXpGain)));
     setDaily((d) => (d.day === credited && d.answered > 0 ? { ...d, answered: d.answered - 1 } : d));
+    if (!snap) return;
+    /* The grade that opened the day, and any rank its XP lifted, is
+       undone with it: state is exactly what it was before the grade. */
+    const earnedNow = careerStatus({ xp: Math.max(0, (p.xp ?? 0) - (cardXpGain || 0)), log: p.log, cats: CATS }).earnedNow;
+    const base = { streak: p.streak, daily: p.daily, earnedNow };
+    const probe = undoGradeEffects({ ...base, rewards: rewardsRef.current }, snap);
+    if (probe.reverted) {
+      setStreak(probe.streak);
+      touchedDay.current = probe.touched ?? null;
+    }
+    setRewards((r) => undoGradeEffects({ ...base, rewards: r }, snap).rewards);
+    setMoments((m) => undoGradeEffects({ ...base, rewards: rewardsRef.current, moments: m }, snap).moments);
   };
   const resolveLegacy = (legacyId, chosen, logIndex = -1) => {
     if (!chosen?.key || !chosen?.source || !Number.isInteger(logIndex) || logIndex < 0) return;
@@ -1643,6 +1664,12 @@ export default function App() {
             <p className="small">Saved misses stay in Review misses. Retry to open the rest of the bank.</p>
             <button type="button" className="btn" onClick={() => setCatalogAttempt((n) => n + 1)}>Retry</button>
           </section>
+        )}
+        {casesOnlyError && loaded && !saveBlocked && (
+          <p className="small" role="status">
+            Some case studies didn't load. Practice questions still work.{" "}
+            <button type="button" className="btn ghost" onClick={() => setCatalogAttempt((n) => n + 1)}>Retry</button>
+          </p>
         )}
         {saveFailed && loaded && !saveBlocked && !guestSaveError && (
           <section className="card rw-saved" role="alert">
@@ -3236,13 +3263,13 @@ export function Flashcards({ addXp, onGrade, onUngrade, cards, srsMap, setSrsMap
     const result = gradeCard(session, g);
     if (!result.recorded) return;
     const id = currentCard(session).id;
-    touchDay();
+    const daySnap = touchDay?.() ?? null;
     // first grade of a never-seen card counts against today's new-card cap.
     // Undo refunds that charge; grading the card again counts it once.
     if (!srsMap[id] && !countedNew.current.has(id)) { countedNew.current.add(id); onNewCard?.(id); }
     const xpGain = cardXp(g, Date.now() - flipAt.current);
     const opId = `card:${id}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`;
-    undoLog.current[id] = { prev: srsMap[id], xp: xpGain, day: todayStr(), opId };
+    undoLog.current[id] = { prev: srsMap[id], xp: xpGain, day: todayStr(), opId, daySnap };
     setSrsMap((m) => ({ ...m, [id]: nextSchedule(m[id], g) }));
     if (xpGain) addXp(xpGain);
     onGrade?.(xpGain, { id: opId, day: todayStr() });
@@ -3265,7 +3292,7 @@ export function Flashcards({ addXp, onGrade, onUngrade, cards, srsMap, setSrsMap
         return n;
       });
       if (rec.xp) addXp(-rec.xp);
-      onUngrade?.(rec.xp, rec.day, rec.opId ? { id: rec.opId } : null);
+      onUngrade?.(rec.xp, rec.day, rec.opId ? { id: rec.opId } : null, rec.daySnap ?? null);
       delete undoLog.current[id];
     }
     flipAt.current = Date.now(); // the answer is shown again: the 1.5 s floor restarts (REVIEW-3 N10)
