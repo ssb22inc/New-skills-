@@ -57,6 +57,16 @@ function page({ slug, title, description, eyebrow, h1, body, schema, published, 
   <footer><div class="wrap"><div class="footlinks"><a href="/">Home</a><a href="/pricing/">Pricing</a><a href="/methodology/">Methodology</a><a href="/editorial-policy/">Editorial policy</a><a href="/about/">About</a><a href="/legal/">Terms, Privacy, and Disclaimer</a></div><p class="grading">${esc(GRADING_NOTE)}</p><p>Educational exam preparation only, not medical advice or a clinical reference. NCLEX® is a registered trademark of NCSBN, which is not affiliated with and does not endorse PulseRN.</p></div></footer></body></html>`;
 }
 
+/* The page Vercel serves, with a 404 status, for any URL that matches no file.
+   It is noindex and has no canonical, so a mistyped link never becomes a
+   copy of the homepage in the index. */
+function notFoundPage() {
+  return `<!doctype html><html lang="en-US"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Page not found | PulseRN</title><link rel="icon" type="image/svg+xml" href="/icon.svg"><meta name="theme-color" content="#0E7C6B">${ATTRIBUTION_BOOT_TAG}<style>${CSS}</style></head><body>
+  <header class="wrap"><nav class="nav" aria-label="Primary navigation"><a class="brand" href="/">PulseRN</a><div class="links"><a href="/how-it-works/">How it works</a><a href="/learn/">Guides</a><a href="/pricing/">Pricing</a><a href="/app/sign-in">Sign in</a></div></nav></header>
+  <main class="wrap"><div class="eyebrow">Error 404</div><h1>We can't find that page.</h1><p class="lead">The link may be old or mistyped. These are good places to start:</p><ul><li><a href="/free-nclex-practice-test/">Free NCLEX-RN practice questions</a></li><li><a href="/learn/">NCLEX study guides</a></li><li><a href="/how-it-works/">How PulseRN works</a></li><li><a href="/pricing/">Pricing</a></li></ul><p><a class="button" href="/">Go to the homepage</a></p></main>
+  <footer><div class="wrap"><div class="footlinks"><a href="/">Home</a><a href="/pricing/">Pricing</a><a href="/methodology/">Methodology</a><a href="/editorial-policy/">Editorial policy</a><a href="/about/">About</a><a href="/legal/">Terms, Privacy, and Disclaimer</a></div><p>Educational exam preparation only, not medical advice or a clinical reference. NCLEX® is a registered trademark of NCSBN, which is not affiliated with and does not endorse PulseRN.</p></div></footer></body></html>`;
+}
+
 const free = PLANS.find((p) => p.id === "pass1");
 const paid = PLANS.filter((p) => !p.addon && p.cents > 0);
 const addons = PLANS.filter((p) => p.addon);
@@ -153,6 +163,8 @@ for (const data of [...pages, ...COMMERCIAL_PAGES.map((item) => ({ ...item, cont
   mkdirSync(directory, { recursive: true });
   writeFileSync(`${directory}/index.html`, page(data));
 }
+
+writeFileSync("public/404.html", notFoundPage());
 
 writeFileSync("public/comparison-evidence.json", JSON.stringify(evidence, null, 2) + "\n");
 writeFileSync("public/commercial-search-intents.json", JSON.stringify({ schemaVersion: 1, generatedAt: evidence.generatedAt, intents: Object.fromEntries(evidence.pages.map((item) => [item.route, item.intent])) }, null, 2) + "\n");
