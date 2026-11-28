@@ -6,7 +6,7 @@ import { ON_PURPOSE } from "../src/on-purpose.js";
 import { PLANS, fmtUsd } from "../src/pricing.js";
 import { COMMERCIAL_PAGES, COMMERCIAL_SOURCES, commercialEvidence, relatedCommercial } from "./commercial-content.mjs";
 import { ATTRIBUTION_BOOT_TAG, writeAttributionBoot } from "./attribution-boot.mjs";
-import { personNode, AUTHOR_BIO, LICENSE_LOOKUP_LABEL, displayDate } from "./author.mjs";
+import { personNode, AUTHOR_SENTENCE, LICENSE_LOOKUP_LABEL, displayDate } from "./author.mjs";
 
 const SITE = "https://www.pulsern.app";
 const AUTHOR = `${SITE}/about/#sheldon-bennett-rn`;
@@ -85,7 +85,7 @@ function aboutPage() {
   <header class="wrap"><nav class="nav" aria-label="Primary navigation"><a class="brand" href="/">PulseRN</a><div class="links"><a href="/how-it-works/">How it works</a><a href="/learn/">Guides</a><a href="/pricing/">Pricing</a><a href="/app/sign-in">Sign in</a></div></nav></header>
   <main class="wrap"><div class="eyebrow">About</div><h1>About PulseRN</h1>
     <section class="card" id="sheldon-bennett-rn" aria-labelledby="founder"><h2 id="founder" style="margin-top:0">Sheldon Bennett, RN</h2>
-      <p><strong>Founder of PulseRN.</strong> ${esc(AUTHOR_BIO)} Associate degree in nursing.</p>
+      <p><strong>Founder of PulseRN.</strong> ${esc(AUTHOR_SENTENCE)} He holds an associate degree in nursing.</p>
       ${REVIEWER_VERIFIED ? `<p>License status is public record. <a href="${esc(lookup)}" rel="external noopener">Check his license on the ${LICENSE_LOOKUP_LABEL}</a>. Last checked ${esc(displayDate(REVIEW_LEDGER.reviewer.verifiedAt))}.</p>` : ""}
       <p>Sheldon writes and reviews every public study guide on this site.</p></section>
     <section><h2>Why I built it</h2><div class="card"><p>I'm a hospital RN, and I remember studying for the NCLEX between shifts. The tools I had were either a giant question bank or a lecture, and neither was built around how memory works.</p><p>PulseRN is for the nursing student fitting study around clinicals, work, and the rest of life. Every session starts with a question. What you miss comes back right before you'd forget it, and weak areas get extra reps until they aren't weak anymore.</p></div></section>
@@ -171,7 +171,7 @@ const pages = [
     slug: "editorial-policy", title: "Editorial and clinical review policy", eyebrow: "Content governance", h1: "How PulseRN's study content is built and checked.",
     description: "How PulseRN builds practice from the NCSBN test plan, checks items automatically, has an RN review every public guide, and handles corrections.",
     body: `<p class="lead">PulseRN is educational material for NCLEX-RN preparation, built by Sheldon Bennett, RN. This page explains how content is written, checked, and corrected.</p>
-      <section><h2>Authorship and accountability</h2><div class="card"><p>${esc(AUTHOR_LABEL.includes(",") ? `${AUTHOR_LABEL},` : AUTHOR_LABEL)} is the founder and content owner. ${esc(AUTHOR_BIO)} Public guides show versioned source, content-digest, reviewer, and review-status evidence. A guide counts as approved when that evidence is in place.</p></div></section>
+      <section><h2>Authorship and accountability</h2><div class="card"><p>${esc(AUTHOR_LABEL.includes(",") ? `${AUTHOR_LABEL},` : AUTHOR_LABEL)} is the founder and content owner. ${esc(AUTHOR_SENTENCE)} Public guides show versioned source, content-digest, reviewer, and review-status evidence. A guide counts as approved when that evidence is in place.</p></div></section>
       <section><h2>Source hierarchy</h2><div class="card"><p>Exam-format claims prioritize NCSBN materials. Clinical content on the public guides favors current primary or authoritative sources such as government health agencies, official professional guidance, and peer-reviewed evidence. Sources are linked where they materially support a guide.</p></div></section>
       <section><h2>Practice items and AI assistance</h2><div class="card"><p>AI may assist with drafting practice items and with on-demand tutoring. Practice questions, case studies, flashcards, and readiness items are built around NCSBN's published test plan and pass automated quality checks before they go live. Sheldon Bennett, RN, can correct or remove any item. Public study guides are separate: each approved guide has an RN review record bound to the exact page.</p></div></section>
       <section><h2>Claims and safety</h2><ul><li>Practice items are original, built around the published test plan, and kept separate from live NCLEX content.</li><li>Readiness is an estimate, not a prediction of your exam result.</li><li>Educational content is exam preparation, and it stays separate from patient-specific medical advice.</li><li>Material uncertainty or conflicting guidance must be surfaced, not hidden.</li></ul></section>

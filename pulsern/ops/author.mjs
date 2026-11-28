@@ -13,6 +13,7 @@ export const VERIFIED = REVIEWER?.verificationStatus === "verified" && /^https:\
 export const AUTHOR_LABEL = VERIFIED ? `${REVIEWER.displayName}, ${REVIEWER.credential}` : REVIEWER.displayName;
 
 /* Visible one-line bio. Licensed since June 2020 per the state record. */
+export const AUTHOR_SENTENCE = "Sheldon has been a registered nurse since 2020. He is licensed in Florida (multistate) and has six years of cardiac, neurology and orthopedic nursing experience.";
 export const AUTHOR_BIO = "Registered nurse since 2020, licensed in Florida (multistate), with six years in cardiac, neurology and orthopedic nursing.";
 export const LICENSE_LOOKUP_LABEL = "Florida Department of Health license lookup";
 
