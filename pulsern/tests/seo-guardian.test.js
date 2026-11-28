@@ -858,7 +858,7 @@ describe("SEO guardian", () => {
     const captureDirectory = path.join(directory, "capture");
     await Promise.all([fs.mkdir(publicDirectory), fs.mkdir(captureDirectory)]);
     const specs = [
-      ["pulsern-adaptive-practice.png", 720, 620, "PulseRN adaptive NCLEX practice screen with one question, four answer choices, and the control to check the answer", "Authentic adaptive NCLEX practice with answer-first review."],
+      ["pulsern-adaptive-practice.png", 720, 620, "PulseRN adaptive NCLEX practice screen with one question, four answer choices, and the control to check the answer", "Adaptive NCLEX-style practice, answer first."],
       ["pulsern-today-dashboard.png", 720, 1280, "PulseRN Today dashboard showing the daily round, candidate monitor, Today shift, and clinical career cards", "A daily plan without guesswork"],
       ["pulsern-lab-reference.png", 430, 932, "PulseRN mobile lab-reference drawer open over an adaptive practice question", "Lab reference at your fingertips"],
     ];
@@ -917,7 +917,7 @@ describe("SEO guardian", () => {
     const captureDirectory = path.join(directory, "capture");
     await Promise.all([fs.mkdir(publicDirectory), fs.mkdir(captureDirectory)]);
     const specs = [
-      ["pulsern-adaptive-practice.png", 720, 620, "PulseRN adaptive NCLEX practice screen with one question, four answer choices, and the control to check the answer", "Authentic adaptive NCLEX practice with answer-first review."],
+      ["pulsern-adaptive-practice.png", 720, 620, "PulseRN adaptive NCLEX practice screen with one question, four answer choices, and the control to check the answer", "Adaptive NCLEX-style practice, answer first."],
       ["pulsern-today-dashboard.png", 720, 1280, "PulseRN Today dashboard showing the daily round, candidate monitor, Today shift, and clinical career cards", "A daily plan without guesswork"],
       ["pulsern-lab-reference.png", 430, 932, "PulseRN mobile lab-reference drawer open over an adaptive practice question", "Lab reference at your fingertips"],
     ];

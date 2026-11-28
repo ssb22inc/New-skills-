@@ -202,7 +202,10 @@ export function auditHtml(route, html) {
     const people = nodes.filter((node) => node["@type"] === "Person");
     const organizations = nodes.filter((node) => node["@type"] === "Organization");
     const authorId = article?.author?.["@id"];
-    const reviewerId = article?.reviewedBy?.["@id"];
+    /* schema.org defines reviewedBy on WebPage, not Article, so the reviewer
+       may sit on the WebPage whose mainEntity is the article. */
+    const reviewPage = nodes.find((node) => node["@type"] === "WebPage" && article?.["@id"] && node.mainEntity?.["@id"] === article["@id"]);
+    const reviewerId = article?.reviewedBy?.["@id"] ?? reviewPage?.reviewedBy?.["@id"];
     const authorResolved = people.some((person) => person["@id"] === authorId && person.name && person.jobTitle)
       || organizations.some((organization) => organization["@id"] === authorId && organization.name);
     const reviewerResolved = people.some((person) => person["@id"] === reviewerId && person.name && person.jobTitle);

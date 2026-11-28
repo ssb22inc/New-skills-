@@ -31,9 +31,6 @@
       "datePublished": "2026-08-03",
       "dateModified": "2026-08-26",
       "author": {
-        "@id": "https://www.pulsern.app/#org"
-      },
-      "reviewedBy": {
         "@id": "https://www.pulsern.app/about/#sheldon-bennett-rn"
       },
       "publisher": {
@@ -79,14 +76,49 @@
         "@id": "https://www.pulsern.app/#org"
       },
       "jobTitle": "Registered Nurse",
-      "sameAs": [
-        "https://www.nursys.com"
+      "description": "Registered nurse since 2020, licensed in Florida (multistate), with six years in cardiac, neurology and orthopedic nursing.",
+      "knowsAbout": [
+        "NCLEX-RN preparation",
+        "Cardiac nursing",
+        "Neurology nursing",
+        "Orthopedic nursing"
       ],
-      "hasCredential": {
-        "@type": "EducationalOccupationalCredential",
-        "credentialCategory": "Registered Nurse",
-        "recognizedBy": "Florida Board of Nursing"
-      }
+      "sameAs": [
+        "https://mqa-internet.doh.state.fl.us/MQASearchServices/HealthcareProviders/LicenseVerification?LicInd=648118&Procde=1701"
+      ],
+      "hasCredential": [
+        {
+          "@type": "EducationalOccupationalCredential",
+          "credentialCategory": "license",
+          "name": "Registered Nurse (multistate license)",
+          "recognizedBy": {
+            "@type": "GovernmentOrganization",
+            "name": "Florida Board of Nursing"
+          },
+          "url": "https://mqa-internet.doh.state.fl.us/MQASearchServices/HealthcareProviders/LicenseVerification?LicInd=648118&Procde=1701"
+        },
+        {
+          "@type": "EducationalOccupationalCredential",
+          "credentialCategory": "degree",
+          "name": "Associate degree in nursing",
+          "recognizedBy": {
+            "@type": "EducationalOrganization",
+            "name": "Carleen Health Institute of South Florida"
+          }
+        }
+      ]
+    },
+    {
+      "@type": "WebPage",
+      "@id": "https://www.pulsern.app/learn/abg-interpretation/#page",
+      "url": "https://www.pulsern.app/learn/abg-interpretation/",
+      "mainEntity": {
+        "@id": "https://www.pulsern.app/learn/abg-interpretation/#article"
+      },
+      "reviewedBy": {
+        "@id": "https://www.pulsern.app/about/#sheldon-bennett-rn"
+      },
+      "lastReviewed": "2026-08-26"
     },
     {
       "@type": "BreadcrumbList",
@@ -156,6 +188,8 @@
   ul, ol { padding-left:22px; margin-bottom:12px; }
   a { color:var(--teal); }
   .sub { color:var(--muted); font-size:13px; margin-bottom:18px; }
+  .hubnav { margin-bottom:18px; font-size:14px; font-weight:600; }
+  .hubnav a { text-decoration:none; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:14px; }
   .back { display:inline-block; margin-bottom:14px; font-weight:600; text-decoration:none; }
   .meta { color:var(--muted); font-size:13px; margin-bottom:16px; }
@@ -189,7 +223,7 @@
 <a class="back" href="/learn/">&larr; All guides</a>
 <article>
 <h1>How to interpret ABGs without panicking</h1>
-<p class="meta">High-yield clinical &middot; published <time datetime="2026-08-03">2026-08-03</time> &middot; clinically reviewed <time datetime="2026-08-26">2026-08-26</time> by <a href="/about/#sheldon-bennett-rn">Sheldon Bennett, RN</a></p>
+<p class="meta">High-yield clinical &middot; Published <time datetime="2026-08-03">Aug 3, 2026</time> &middot; clinically reviewed <time datetime="2026-08-26">Aug 26, 2026</time> by <a href="/about/#sheldon-bennett-rn">Sheldon Bennett, RN</a></p>
 
 <div class="card">
 <p>Arterial blood gas questions become more manageable with a consistent screening sequence. The four-step method below helps classify common primary disturbances in exam questions. Real patients can have mixed disorders, so ABG values must also be interpreted with the history, assessment, oxygen delivery, trends and local reference ranges.</p>
@@ -242,11 +276,11 @@
 <div class="card"><h2 style="margin-top:0">Common questions</h2><h3>How do I interpret an ABG quickly?</h3><p>Check the pH for acidemia or alkalemia, compare PaCO2 and HCO3 to identify the likely primary process, assess whether the other system moved in the expected compensatory direction, and then evaluate PaO2 in the oxygen-delivery and clinical context.</p><h3>How do I tell if an ABG is compensated?</h3><p>A shift in the other system in the expected direction suggests compensation. If both PaCO2 and HCO3 are abnormal with a normal-range pH, do not assume full compensation automatically; compare the values with expected compensation and assess for a mixed disorder.</p><h3>Does vomiting cause acidosis or alkalosis?</h3><p>Metabolic alkalosis, because gastric acid is lost. Prolonged diarrhea does the opposite, causing metabolic acidosis through loss of bicarbonate.</p></div>
 <div class="card">
   <h2 style="margin-top:0">Sources and further reading</h2>
-  <ul><li id="source-medlineplus-abg"><a href="https://medlineplus.gov/lab-tests/arterial-blood-gas-abg-test/" rel="external noopener">MedlinePlus — Arterial Blood Gas (ABG) Test</a> (U.S. National Library of Medicine); evidence locator: Measurements, uses, and results sections; source updated <time datetime="2025-06-26">2025-06-26</time>; accessed <time datetime="2026-08-26">2026-08-26</time></li><li id="source-ncbi-statpearls-abg-2026"><a href="https://www.ncbi.nlm.nih.gov/books/NBK536919/" rel="external noopener">Arterial Blood Gas Analysis: Fundamentals, Interpretation, and Clinical Utility</a> (StatPearls Publishing via NCBI Bookshelf); evidence locator: Pathophysiology; Results, Reporting, and Critical Findings; Clinical Significance; source updated <time datetime="2026-07-05">2026-07-05</time>; accessed <time datetime="2026-08-26">2026-08-26</time></li><li id="source-ncbi-statpearls-acid-base-balance"><a href="https://www.ncbi.nlm.nih.gov/books/NBK507807/" rel="external noopener">Physiology, Acid Base Balance</a> (StatPearls Publishing via NCBI Bookshelf); evidence locator: Introduction; Related Testing; Pathophysiology; source updated <time datetime="2022-09-12">2022-09-12</time>; accessed <time datetime="2026-08-26">2026-08-26</time></li><li id="source-ncsbn-2026-rn-test-plan"><a href="https://www.nclex.com/test-plans.page" rel="external noopener">NCSBN — 2026 RN Test Plan</a> (National Council of State Boards of Nursing); evidence locator: 2026 RN Test Plan; effective April 1, 2026–March 31, 2029; source updated <time datetime="2026-04-01">2026-04-01</time>; accessed <time datetime="2026-08-26">2026-08-26</time></li></ul>
+  <ul><li id="source-medlineplus-abg"><a href="https://medlineplus.gov/lab-tests/arterial-blood-gas-abg-test/" rel="external noopener">MedlinePlus — Arterial Blood Gas (ABG) Test</a> (U.S. National Library of Medicine). Section: Measurements, uses, and results sections. Updated <time datetime="2025-06-26">Jun 26, 2025</time>. Accessed <time datetime="2026-08-26">Aug 26, 2026</time>.</li><li id="source-ncbi-statpearls-abg-2026"><a href="https://www.ncbi.nlm.nih.gov/books/NBK536919/" rel="external noopener">Arterial Blood Gas Analysis: Fundamentals, Interpretation, and Clinical Utility</a> (StatPearls Publishing via NCBI Bookshelf). Section: Pathophysiology; Results, Reporting, and Critical Findings; Clinical Significance. Updated <time datetime="2026-07-05">Jul 5, 2026</time>. Accessed <time datetime="2026-08-26">Aug 26, 2026</time>.</li><li id="source-ncbi-statpearls-acid-base-balance"><a href="https://www.ncbi.nlm.nih.gov/books/NBK507807/" rel="external noopener">Physiology, Acid Base Balance</a> (StatPearls Publishing via NCBI Bookshelf). Section: Introduction; Related Testing; Pathophysiology. Updated <time datetime="2022-09-12">Sep 12, 2022</time>. Accessed <time datetime="2026-08-26">Aug 26, 2026</time>.</li><li id="source-ncsbn-2026-rn-test-plan"><a href="https://www.nclex.com/test-plans.page" rel="external noopener">NCSBN — 2026 RN Test Plan</a> (National Council of State Boards of Nursing). Section: 2026 RN Test Plan; effective April 1, 2026–March 31, 2029. Updated <time datetime="2026-04-01">Apr 1, 2026</time>. Accessed <time datetime="2026-08-26">Aug 26, 2026</time>.</li></ul>
 </div>
 <div class="cta">
-  <p><b>Practice this for real.</b> PulseRN drills ABG interpretation inside full clinical scenarios, not just isolated numbers.</p>
-  <p><a href="/">Start studying on PulseRN &rarr;</a></p>
+  <p><b>Try 20 free questions.</b> PulseRN drills ABG interpretation inside full clinical scenarios, not just isolated numbers.</p>
+  <p><a href="/free-nclex-practice-test/">Try 20 free NCLEX-RN questions &rarr;</a></p>
 </div>
 
 <div class="card">
@@ -256,6 +290,6 @@
 </article>
 </main>
 
-<footer><p class="foot">Readiness self-assessments are graded more strictly than the NCLEX: a multi-part question counts only when every part is right, where the NCLEX can give partial credit.</p><p class="foot">Educational exam preparation only, not medical advice or a clinical reference. Always follow your own institution's policies and your instructors' guidance. NCLEX&reg; is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse this product. <a href="/legal/">Terms, Privacy, and Disclaimer</a> &middot; <a href="/about/">About</a> &middot; <a href="/editorial-policy/">Editorial policy</a></p></footer>
+<footer><p class="foot">Readiness self-assessments are graded more strictly than the NCLEX: a multi-part question counts only when every part is right, whereas the NCLEX can give partial credit.</p><p class="foot">Educational exam preparation only, not medical advice or a clinical reference. Always follow your own institution's policies and your instructors' guidance. NCLEX&reg; is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse this product. <a href="/legal/">Terms, Privacy, and Disclaimer</a> &middot; <a href="/about/">About</a> &middot; <a href="/editorial-policy/">Editorial policy</a></p></footer>
 </body>
 </html>

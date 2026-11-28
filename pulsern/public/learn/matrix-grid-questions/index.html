@@ -31,9 +31,6 @@
       "datePublished": "2026-08-03",
       "dateModified": "2026-08-28",
       "author": {
-        "@id": "https://www.pulsern.app/#org"
-      },
-      "reviewedBy": {
         "@id": "https://www.pulsern.app/about/#sheldon-bennett-rn"
       },
       "publisher": {
@@ -78,14 +75,49 @@
         "@id": "https://www.pulsern.app/#org"
       },
       "jobTitle": "Registered Nurse",
-      "sameAs": [
-        "https://www.nursys.com"
+      "description": "Registered nurse since 2020, licensed in Florida (multistate), with six years in cardiac, neurology and orthopedic nursing.",
+      "knowsAbout": [
+        "NCLEX-RN preparation",
+        "Cardiac nursing",
+        "Neurology nursing",
+        "Orthopedic nursing"
       ],
-      "hasCredential": {
-        "@type": "EducationalOccupationalCredential",
-        "credentialCategory": "Registered Nurse",
-        "recognizedBy": "Florida Board of Nursing"
-      }
+      "sameAs": [
+        "https://mqa-internet.doh.state.fl.us/MQASearchServices/HealthcareProviders/LicenseVerification?LicInd=648118&Procde=1701"
+      ],
+      "hasCredential": [
+        {
+          "@type": "EducationalOccupationalCredential",
+          "credentialCategory": "license",
+          "name": "Registered Nurse (multistate license)",
+          "recognizedBy": {
+            "@type": "GovernmentOrganization",
+            "name": "Florida Board of Nursing"
+          },
+          "url": "https://mqa-internet.doh.state.fl.us/MQASearchServices/HealthcareProviders/LicenseVerification?LicInd=648118&Procde=1701"
+        },
+        {
+          "@type": "EducationalOccupationalCredential",
+          "credentialCategory": "degree",
+          "name": "Associate degree in nursing",
+          "recognizedBy": {
+            "@type": "EducationalOrganization",
+            "name": "Carleen Health Institute of South Florida"
+          }
+        }
+      ]
+    },
+    {
+      "@type": "WebPage",
+      "@id": "https://www.pulsern.app/learn/matrix-grid-questions/#page",
+      "url": "https://www.pulsern.app/learn/matrix-grid-questions/",
+      "mainEntity": {
+        "@id": "https://www.pulsern.app/learn/matrix-grid-questions/#article"
+      },
+      "reviewedBy": {
+        "@id": "https://www.pulsern.app/about/#sheldon-bennett-rn"
+      },
+      "lastReviewed": "2026-08-28"
     },
     {
       "@type": "BreadcrumbList",
@@ -155,6 +187,8 @@
   ul, ol { padding-left:22px; margin-bottom:12px; }
   a { color:var(--teal); }
   .sub { color:var(--muted); font-size:13px; margin-bottom:18px; }
+  .hubnav { margin-bottom:18px; font-size:14px; font-weight:600; }
+  .hubnav a { text-decoration:none; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:14px; }
   .back { display:inline-block; margin-bottom:14px; font-weight:600; text-decoration:none; }
   .meta { color:var(--muted); font-size:13px; margin-bottom:16px; }
@@ -188,7 +222,7 @@
 <a class="back" href="/learn/">&larr; All guides</a>
 <article>
 <h1>Matrix and grid questions on the NCLEX</h1>
-<p class="meta">Question types &middot; published <time datetime="2026-08-03">2026-08-03</time> &middot; reviewed <time datetime="2026-08-28">2026-08-28</time> by <a href="/about/#sheldon-bennett-rn">Sheldon Bennett, RN</a></p>
+<p class="meta">Question types &middot; Published <time datetime="2026-08-03">Aug 3, 2026</time> &middot; reviewed <time datetime="2026-08-28">Aug 28, 2026</time> by <a href="/about/#sheldon-bennett-rn">Sheldon Bennett, RN</a></p>
 
 <div class="card">
 <p>A matrix item gives you a table. Findings run down the side, categories run across the top, and you classify every row. Typical category sets are <i>expected / unexpected</i>, <i>effective / ineffective</i>, or <i>indicated / contraindicated / non-essential</i>.</p>
@@ -224,11 +258,11 @@
 <div class="card"><h2 style="margin-top:0">Common questions</h2><h3>How are matrix questions scored on the NCLEX?</h3><p>NCSBN states that items with more than one key can receive partial credit under plus/minus, zero/one or rationale scoring. Do not assume every matrix uses a specific row-level or all-or-nothing rule; follow the item directions.</p><h3>What categories do matrix questions use?</h3><p>Commonly expected versus unexpected, effective versus ineffective, or indicated versus contraindicated versus non-essential. Read the column headings first — they change what question you are actually answering.</p><h3>Do matrix questions have an even number of answers per column?</h3><p>No. There is no requirement that categories be evenly used. If every finding in a scenario is unexpected, every row is marked unexpected.</p></div>
 <div class="card">
   <h2 style="margin-top:0">Sources and further reading</h2>
-  <ul><li id="source-ncsbn-2026-rn-test-plan"><a href="https://www.nclex.com/test-plans.page" rel="external noopener">NCSBN — 2026 RN Test Plan</a> (National Council of State Boards of Nursing); evidence locator: 2026 RN Test Plan; effective April 1, 2026–March 31, 2029; source updated <time datetime="2026-04-01">2026-04-01</time>; accessed <time datetime="2026-08-26">2026-08-26</time></li><li id="source-ncsbn-next-generation-nclex"><a href="https://www.nclex.com/next-generation-nclex.page" rel="external noopener">NCSBN — Next Generation NCLEX</a> (National Council of State Boards of Nursing); evidence locator: NGN Project and Clinical Judgment Measurement Model sections; source updated <time datetime="2023-04-01">2023-04-01</time>; accessed <time datetime="2026-08-26">2026-08-26</time></li><li id="source-ncsbn-nclex-faqs"><a href="https://www.nclex.com/faqs.page" rel="external noopener">NCSBN — NCLEX Frequently Asked Questions</a> (National Council of State Boards of Nursing); evidence locator: How the NCLEX Works — item selection and initial difficulty; What the Exam Looks Like — partial-credit methods and unanswered-item prompt; live page checked 2026-08-28 and no page-level revision date is published; accessed <time datetime="2026-08-28">2026-08-28</time></li></ul>
+  <ul><li id="source-ncsbn-2026-rn-test-plan"><a href="https://www.nclex.com/test-plans.page" rel="external noopener">NCSBN — 2026 RN Test Plan</a> (National Council of State Boards of Nursing). Section: 2026 RN Test Plan; effective April 1, 2026–March 31, 2029. Updated <time datetime="2026-04-01">Apr 1, 2026</time>. Accessed <time datetime="2026-08-26">Aug 26, 2026</time>.</li><li id="source-ncsbn-next-generation-nclex"><a href="https://www.nclex.com/next-generation-nclex.page" rel="external noopener">NCSBN — Next Generation NCLEX</a> (National Council of State Boards of Nursing). Section: NGN Project and Clinical Judgment Measurement Model sections. Updated <time datetime="2023-04-01">Apr 1, 2023</time>. Accessed <time datetime="2026-08-26">Aug 26, 2026</time>.</li><li id="source-ncsbn-nclex-faqs"><a href="https://www.nclex.com/faqs.page" rel="external noopener">NCSBN — NCLEX Frequently Asked Questions</a> (National Council of State Boards of Nursing). Section: How the NCLEX Works — item selection and initial difficulty; What the Exam Looks Like — partial-credit methods and unanswered-item prompt; live page checked 2026-08-28 and no page-level revision date is published. Accessed <time datetime="2026-08-28">Aug 28, 2026</time>.</li></ul>
 </div>
 <div class="cta">
-  <p><b>Practice this for real.</b> PulseRN can provide matrix/grid-style practice and rationales; it does not reproduce the official item bank or predict an NCLEX result.</p>
-  <p><a href="/">Start studying on PulseRN &rarr;</a></p>
+  <p><b>Try 20 free questions.</b> PulseRN can provide matrix/grid-style practice and rationales; it does not reproduce the official item bank or predict an NCLEX result.</p>
+  <p><a href="/free-nclex-practice-test/">Try 20 free NCLEX-RN questions &rarr;</a></p>
 </div>
 
 <div class="card">
@@ -238,6 +272,6 @@
 </article>
 </main>
 
-<footer><p class="foot">Readiness self-assessments are graded more strictly than the NCLEX: a multi-part question counts only when every part is right, where the NCLEX can give partial credit.</p><p class="foot">Educational exam preparation only, not medical advice or a clinical reference. Always follow your own institution's policies and your instructors' guidance. NCLEX&reg; is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse this product. <a href="/legal/">Terms, Privacy, and Disclaimer</a> &middot; <a href="/about/">About</a> &middot; <a href="/editorial-policy/">Editorial policy</a></p></footer>
+<footer><p class="foot">Readiness self-assessments are graded more strictly than the NCLEX: a multi-part question counts only when every part is right, whereas the NCLEX can give partial credit.</p><p class="foot">Educational exam preparation only, not medical advice or a clinical reference. Always follow your own institution's policies and your instructors' guidance. NCLEX&reg; is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse this product. <a href="/legal/">Terms, Privacy, and Disclaimer</a> &middot; <a href="/about/">About</a> &middot; <a href="/editorial-policy/">Editorial policy</a></p></footer>
 </body>
 </html>

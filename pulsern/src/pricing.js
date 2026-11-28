@@ -5,14 +5,14 @@
 export const PLANS = [
   { id: "pass1",  name: "7-Day Free Pass", days: 7,   cents: 0,     exams: 0, blurb: "Unlimited study-content access for 7 days. Readiness self-assessments are not included." },
   { id: "sub30",  name: "30-Day",          days: 30,  cents: 9900,  exams: 1, blurb: "10,000+ practice questions · 500+ case studies · 1,100+ flashcards · 1 readiness self-assessment" },
-  { id: "sub60",  name: "60-Day",          days: 60,  cents: 15900, exams: 2, blurb: "10,000+ practice questions · 500+ case studies · 1,100+ flashcards · 2 self-assessments" },
-  { id: "sub90",  name: "90-Day",          days: 90,  cents: 21900, exams: 3, blurb: "10,000+ practice questions · 500+ case studies · 1,100+ flashcards · 3 self-assessments" },
-  { id: "sub180", name: "180-Day",         days: 180, cents: 31900, exams: 4, blurb: "10,000+ practice questions · 500+ case studies · 1,100+ flashcards · 4 self-assessments" },
-  { id: "sub360", name: "360-Day",         days: 360, cents: 37900, exams: 5, blurb: "10,000+ practice questions · 500+ case studies · 1,100+ flashcards · 5 self-assessments" },
-  { id: "sub730", name: "730-Day",         days: 730, cents: 43900, exams: 6, blurb: "10,000+ practice questions · 500+ case studies · 1,100+ flashcards · 6 self-assessments" },
+  { id: "sub60",  name: "60-Day",          days: 60,  cents: 15900, exams: 2, blurb: "10,000+ practice questions · 500+ case studies · 1,100+ flashcards · 2 readiness self-assessments" },
+  { id: "sub90",  name: "90-Day",          days: 90,  cents: 21900, exams: 3, blurb: "10,000+ practice questions · 500+ case studies · 1,100+ flashcards · 3 readiness self-assessments" },
+  { id: "sub180", name: "180-Day",         days: 180, cents: 31900, exams: 4, blurb: "10,000+ practice questions · 500+ case studies · 1,100+ flashcards · 4 readiness self-assessments" },
+  { id: "sub360", name: "360-Day",         days: 360, cents: 37900, exams: 5, blurb: "10,000+ practice questions · 500+ case studies · 1,100+ flashcards · 5 readiness self-assessments" },
+  { id: "sub730", name: "730-Day",         days: 730, cents: 43900, exams: 6, blurb: "10,000+ practice questions · 500+ case studies · 1,100+ flashcards · 6 readiness self-assessments" },
   /* Post-subscription add-ons */
   { id: "renew7", name: "7-Day Renewal",   days: 7,   cents: 4500,  exams: 0, addon: true, blurb: "Need a little more time? Full content access, with no new self-assessment." },
-  { id: "exam1",  name: "Extra Self-Assessment", days: 0, cents: 4500, exams: 1, addon: true, blurb: "One more never-seen readiness exam on your current pass." },
+  { id: "exam1",  name: "Extra Self-Assessment", days: 0, cents: 4500, exams: 1, addon: true, blurb: "One more unseen readiness self-assessment on your current pass." },
 ];
 
 export const planById = (id) => PLANS.find((p) => p.id === id) ?? null;

@@ -15,6 +15,7 @@ import { ARTICLES } from "./learn-content.mjs";
 import { MANIFEST_GENERATED_AT, POLICY_VERSION, SEARCH_INTENTS, intentFor, sourcesFor } from "./seo-content-policy.mjs";
 import { COMMERCIAL_PAGES } from "./commercial-content.mjs";
 import { ATTRIBUTION_BOOT_TAG, writeAttributionBoot } from "./attribution-boot.mjs";
+import { personNode, displayDate, AUTHOR_SENTENCE } from "./author.mjs";
 
 const SITE = "https://www.pulsern.app";
 const OUT = "public/learn";
@@ -90,6 +91,8 @@ const CSS = `
   ul, ol { padding-left:22px; margin-bottom:12px; }
   a { color:var(--teal); }
   .sub { color:var(--muted); font-size:13px; margin-bottom:18px; }
+  .hubnav { margin-bottom:18px; font-size:14px; font-weight:600; }
+  .hubnav a { text-decoration:none; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:14px; }
   .back { display:inline-block; margin-bottom:14px; font-weight:600; text-decoration:none; }
   .meta { color:var(--muted); font-size:13px; margin-bottom:16px; }
@@ -154,20 +157,7 @@ ${JSON.stringify(jsonld, null, 2)}
 
 export function articleJsonLd(a, url, provenance) {
   const citations = provenance.sources;
-  const reviewer = REVIEW_LEDGER.reviewer;
-  const person = {
-    "@type": "Person",
-    "@id": AUTHOR_URL,
-    name: reviewer.displayName,
-    url: AUTHOR_URL,
-    worksFor: { "@id": `${SITE}/#org` },
-  };
-  if (reviewer.verificationStatus === "verified" && reviewer.verificationUrl) {
-    person.name = `${reviewer.displayName}, ${reviewer.credential}`;
-    person.jobTitle = reviewer.licenseType;
-    person.sameAs = [reviewer.verificationUrl];
-    person.hasCredential = { "@type": "EducationalOccupationalCredential", credentialCategory: reviewer.licenseType, recognizedBy: reviewer.licenseJurisdiction };
-  }
+  const person = personNode();
   const graph = [
     {
       "@type": "Article",
@@ -178,8 +168,7 @@ export function articleJsonLd(a, url, provenance) {
       inLanguage: "en-US",
       datePublished: a.published,
       dateModified: a.updated,
-      author: { "@id": `${SITE}/#org` },
-      ...(provenance.review.decision === "approved" ? { reviewedBy: { "@id": AUTHOR_URL } } : {}),
+      author: provenance.review.decision === "approved" ? { "@id": AUTHOR_URL } : { "@id": `${SITE}/#org` },
       publisher: { "@type": "Organization", "@id": `${SITE}/#org`, name: "PulseRN", url: SITE, logo: `${SITE}/icon-512.png` },
       isPartOf: { "@type": "WebSite", name: "PulseRN", url: SITE },
       about: { "@type": "Thing", name: "NCLEX-RN examination preparation" },
@@ -194,7 +183,14 @@ export function articleJsonLd(a, url, provenance) {
       url: SITE,
       logo: `${SITE}/icon-512.png`,
     },
-    ...(provenance.review.decision === "approved" ? [person] : []),
+    ...(provenance.review.decision === "approved" ? [person, {
+      "@type": "WebPage",
+      "@id": `${url}#page`,
+      url,
+      mainEntity: { "@id": `${url}#article` },
+      reviewedBy: { "@id": AUTHOR_URL },
+      lastReviewed: provenance.review.reviewedAt,
+    }] : []),
     {
       "@type": "BreadcrumbList",
       "@id": `${url}#crumbs`,
@@ -244,27 +240,27 @@ function renderArticle(a, all, provenance) {
 
   const clinical = provenance.risk === "clinical";
   const practiceHub = a.topic === "Practice questions"
-    ? `\n<div class="cta"><p><b>Want the complete free set?</b> <a href="/free-nclex-practice-test/">Open all 20 free NCLEX-RN practice questions</a> across pharmacology, prioritization, dosage calculations, and NGN bow-tie items.</p></div>`
+    ? `\n<div class="cta"><p><b>Want the complete free set?</b> <a href="/free-nclex-practice-test/">Open all 20 free NCLEX-RN practice questions</a> across pharmacology, prioritization, dosage calculation, and NGN bow-tie items.</p></div>`
     : "";
   const reviewLine = provenance.review.decision === "approved"
-    ? `${clinical ? "clinically reviewed" : "reviewed"} <time datetime="${esc(provenance.review.reviewedAt)}">${esc(provenance.review.reviewedAt)}</time> by <a href="/about/#sheldon-bennett-rn">${esc(REVIEW_LEDGER.reviewer.displayName)}, ${esc(REVIEW_LEDGER.reviewer.credential)}</a>`
-    : `last updated <time datetime="${esc(a.updated)}">${esc(a.updated)}</time> &middot; ${clinical ? "clinical" : "editorial"} review evidence pending`;
+    ? `${clinical ? "clinically reviewed" : "reviewed"} <time datetime="${esc(provenance.review.reviewedAt)}">${esc(displayDate(provenance.review.reviewedAt))}</time> by <a href="/about/#sheldon-bennett-rn">${esc(REVIEW_LEDGER.reviewer.displayName)}, ${esc(REVIEW_LEDGER.reviewer.credential)}</a>`
+    : `last updated <time datetime="${esc(a.updated)}">${esc(displayDate(a.updated))}</time> &middot; ${clinical ? "clinical" : "editorial"} review evidence pending`;
   return usEnglish(`${head({ title: `${a.title} | PulseRN`, description: a.description, url, jsonld: articleJsonLd(a, url, provenance) })}
 <main>
 <a class="back" href="/learn/">&larr; All guides</a>
 <article>
 <h1>${esc(a.h1 ?? a.title)}</h1>
-<p class="meta">${esc(a.topic)} &middot; published <time datetime="${esc(a.published)}">${esc(a.published)}</time> &middot; ${reviewLine}</p>
+<p class="meta">${esc(a.topic)} &middot; Published <time datetime="${esc(a.published)}">${esc(displayDate(a.published))}</time> &middot; ${reviewLine}</p>
 
 <div class="card">${a.body}</div>${practiceHub}
 ${faq}
 <div class="card">
   <h2 style="margin-top:0">Sources and further reading</h2>
-  <ul>${sources.map((source) => `<li id="source-${esc(source.id)}"><a href="${source.url}" rel="external noopener">${esc(source.title)}</a> (${esc(source.publisher)}); evidence locator: ${esc(source.locator)}${source.sourceUpdated ? `; source updated <time datetime="${esc(source.sourceUpdated)}">${esc(source.sourceUpdated)}</time>` : ""}; accessed <time datetime="${esc(source.accessedAt)}">${esc(source.accessedAt)}</time></li>`).join("")}</ul>
+  <ul>${sources.map((source) => `<li id="source-${esc(source.id)}"><a href="${source.url}" rel="external noopener">${esc(source.title)}</a> (${esc(source.publisher)}). Section: ${esc(source.locator)}.${source.sourceUpdated ? ` Updated <time datetime="${esc(source.sourceUpdated)}">${esc(displayDate(source.sourceUpdated))}</time>.` : ""} Accessed <time datetime="${esc(source.accessedAt)}">${esc(displayDate(source.accessedAt))}</time>.</li>`).join("")}</ul>
 </div>
 <div class="cta">
-  <p><b>Practice this for real.</b> ${esc(a.cta ?? "PulseRN drills this with adaptive questions that adjust to your level, every Next Gen item type, and 85-question readiness exams.")}</p>
-  <p><a href="/">Start studying on PulseRN &rarr;</a></p>
+  <p><b>${a.slug === "failed-the-nclex-what-now" ? "Rebuild from your Candidate Performance Report." : "Try 20 free questions."}</b> ${esc(a.slug === "failed-the-nclex-what-now" ? "Start with your weakest areas: the free sets show the answer, the rationale, and the sources for every item." : (a.cta ?? "PulseRN drills this with adaptive questions that adjust to your level, every Next Generation NCLEX item type, and 85-question readiness self-assessments."))}</p>
+  <p><a href="/free-nclex-practice-test/">Try 20 free NCLEX-RN questions &rarr;</a></p>
 </div>
 
 <div class="card">
@@ -315,12 +311,12 @@ function renderIndex(all) {
 
   return usEnglish(`${head({
     title: "NCLEX-RN guides: how the exam works and how to study | PulseRN",
-    description: REVIEW_LEDGER.reviewer.verificationStatus === "verified" ? "Straight answers on NCLEX scoring, Next Gen item types, dosage calculation, lab values, prioritization, and delegation from a working hospital RN." : "Straight answers on NCLEX scoring, Next Gen item types, and study topics, with transparent sources and clinical-review status.",
+    description: REVIEW_LEDGER.reviewer.verificationStatus === "verified" ? "Straight answers on NCLEX scoring, Next Generation item types, dosage calculation, lab values, prioritization, and delegation, written by an RN." : "Straight answers on NCLEX scoring, Next Gen item types, and study topics, with transparent sources and clinical-review status.",
     url, jsonld,
   })}
-<main><a class="back" href="/">&larr; Back to PulseRN</a>
+<main><nav class="hubnav" aria-label="Primary navigation"><a href="/">PulseRN</a> &middot; <a href="/how-it-works/">How it works</a> &middot; <a href="/free-nclex-practice-test/">Free practice</a> &middot; <a href="/pricing/">Pricing</a> &middot; <a href="/app/sign-up">Start free</a></nav>
 <h1>NCLEX-RN <b>guides</b></h1>
-<p class="sub">Guides written by <a href="/about/#sheldon-bennett-rn">${esc(REVIEW_LEDGER.reviewer.displayName)}</a>, a working hospital RN. Each approved guide is tied to its sources and a review record.</p>
+<p class="sub">${all.every((a) => provenanceFor(a).review.decision === "approved") ? "Every guide is written and reviewed by" : "Guides are written by, and approved guides are reviewed by,"} <a href="/about/#sheldon-bennett-rn">${esc(REVIEW_LEDGER.reviewer.displayName)}, RN</a>. ${esc(AUTHOR_SENTENCE)} Each guide lists its sources and its review status.</p>
 <div class="cta"><p><b>Start with a question.</b> <a href="/free-nclex-practice-test/">Try 20 free NCLEX-RN practice questions</a> with the answer, the rationale, and the sources on the page. No sign-in required.</p></div>
 ${sections}
 </main><footer><p class="foot">${GRADING_NOTE}</p><p class="foot">${DISCLAIMER} <a href="/legal/">Terms, Privacy, and Disclaimer</a> &middot; <a href="/about/">About</a> &middot; <a href="/editorial-policy/">Editorial policy</a></p></footer>
