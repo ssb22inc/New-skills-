@@ -31,9 +31,6 @@
       "datePublished": "2026-08-03",
       "dateModified": "2026-08-27",
       "author": {
-        "@id": "https://www.pulsern.app/#org"
-      },
-      "reviewedBy": {
         "@id": "https://www.pulsern.app/about/#sheldon-bennett-rn"
       },
       "publisher": {
@@ -78,14 +75,49 @@
         "@id": "https://www.pulsern.app/#org"
       },
       "jobTitle": "Registered Nurse",
-      "sameAs": [
-        "https://www.nursys.com"
+      "description": "Registered nurse since 2020, licensed in Florida (multistate), with six years in cardiac, neurology and orthopedic nursing.",
+      "knowsAbout": [
+        "NCLEX-RN preparation",
+        "Cardiac nursing",
+        "Neurology nursing",
+        "Orthopedic nursing"
       ],
-      "hasCredential": {
-        "@type": "EducationalOccupationalCredential",
-        "credentialCategory": "Registered Nurse",
-        "recognizedBy": "Florida Board of Nursing"
-      }
+      "sameAs": [
+        "https://mqa-internet.doh.state.fl.us/MQASearchServices/HealthcareProviders/LicenseVerification?LicInd=648118&Procde=1701"
+      ],
+      "hasCredential": [
+        {
+          "@type": "EducationalOccupationalCredential",
+          "credentialCategory": "license",
+          "name": "Registered Nurse (multistate license)",
+          "recognizedBy": {
+            "@type": "GovernmentOrganization",
+            "name": "Florida Board of Nursing"
+          },
+          "url": "https://mqa-internet.doh.state.fl.us/MQASearchServices/HealthcareProviders/LicenseVerification?LicInd=648118&Procde=1701"
+        },
+        {
+          "@type": "EducationalOccupationalCredential",
+          "credentialCategory": "degree",
+          "name": "Associate degree in nursing",
+          "recognizedBy": {
+            "@type": "EducationalOrganization",
+            "name": "Carleen Health Institute of South Florida"
+          }
+        }
+      ]
+    },
+    {
+      "@type": "WebPage",
+      "@id": "https://www.pulsern.app/learn/dosage-calculation-formulas/#page",
+      "url": "https://www.pulsern.app/learn/dosage-calculation-formulas/",
+      "mainEntity": {
+        "@id": "https://www.pulsern.app/learn/dosage-calculation-formulas/#article"
+      },
+      "reviewedBy": {
+        "@id": "https://www.pulsern.app/about/#sheldon-bennett-rn"
+      },
+      "lastReviewed": "2026-08-27"
     },
     {
       "@type": "BreadcrumbList",
@@ -163,6 +195,8 @@
   ul, ol { padding-left:22px; margin-bottom:12px; }
   a { color:var(--teal); }
   .sub { color:var(--muted); font-size:13px; margin-bottom:18px; }
+  .hubnav { margin-bottom:18px; font-size:14px; font-weight:600; }
+  .hubnav a { text-decoration:none; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:14px; }
   .back { display:inline-block; margin-bottom:14px; font-weight:600; text-decoration:none; }
   .meta { color:var(--muted); font-size:13px; margin-bottom:16px; }
@@ -196,7 +230,7 @@
 <a class="back" href="/learn/">&larr; All guides</a>
 <article>
 <h1>How to solve NCLEX dosage calculations safely</h1>
-<p class="meta">Test-taking skill &middot; published <time datetime="2026-08-03">2026-08-03</time> &middot; clinically reviewed <time datetime="2026-08-27">2026-08-27</time> by <a href="/about/#sheldon-bennett-rn">Sheldon Bennett, RN</a></p>
+<p class="meta">Test-taking skill &middot; Published <time datetime="2026-08-03">Aug 3, 2026</time> &middot; clinically reviewed <time datetime="2026-08-27">Aug 27, 2026</time> by <a href="/about/#sheldon-bennett-rn">Sheldon Bennett, RN</a></p>
 
 <div class="card">
 <p>NCLEX dosage calculations test whether you can translate an order and a supplied concentration into the requested unit, perform the arithmetic and judge whether the result is safe and plausible. A formula can organize the numbers, but it does not replace reading the entire order, label and item instructions.</p>
@@ -266,11 +300,11 @@
 <div class="card"><h2 style="margin-top:0">Common questions</h2><h3>What formula is used for a simple dosage calculation?</h3><p>For a tablet or liquid problem, amount to give equals ordered dose divided by available dose, multiplied by the quantity containing the available dose. Dimensional analysis reaches the same result while showing whether units cancel.</p><h3>How do I calculate an IV drip rate?</h3><p>For gravity tubing, multiply volume in mL by the tubing drop factor in gtt/mL and divide by time in minutes; express the result as whole gtt/min. For a simple pump rate, divide mL by hours. Weight- and time-based medication infusions require the full order, patient weight and prepared concentration.</p><h3>Should I round kilograms before calculating a weight-based dose?</h3><p>Keep adequate precision through the intermediate calculation and round the final requested answer according to the item, facility policy and measuring device. Use the weight conversion supplied by the item; 1 kg = 2.2 lb is a common clinical approximation.</p><h3>What should I do if a calculated dose looks unsafe?</h3><p>Stop and recheck the order, label, units, arithmetic, safe range or maximum and patient-specific factors. In clinical practice, do not administer an unclear or implausible dose; obtain the independent verification required by policy.</p></div>
 <div class="card">
   <h2 style="margin-top:0">Sources and further reading</h2>
-  <ul><li id="source-ncbi-openrn-math-calculations-2023"><a href="https://www.ncbi.nlm.nih.gov/books/NBK596732/" rel="external noopener">Math Calculations</a> (Open RN via NCBI Bookshelf); evidence locator: Sections 5.4–5.17 — equivalencies, rounding, dimensional analysis, conversions, dosage forms, weight-based and safe-dose calculations, and IV infusion rates; source updated <time datetime="2023-01-01">2023-01-01</time>; accessed <time datetime="2026-08-27">2026-08-27</time></li><li id="source-ncsbn-2026-rn-test-plan"><a href="https://www.nclex.com/test-plans.page" rel="external noopener">NCSBN — 2026 RN Test Plan</a> (National Council of State Boards of Nursing); evidence locator: 2026 RN Test Plan; effective April 1, 2026–March 31, 2029; source updated <time datetime="2026-04-01">2026-04-01</time>; accessed <time datetime="2026-08-26">2026-08-26</time></li><li id="source-ncsbn-next-generation-nclex"><a href="https://www.nclex.com/next-generation-nclex.page" rel="external noopener">NCSBN — Next Generation NCLEX</a> (National Council of State Boards of Nursing); evidence locator: NGN Project and Clinical Judgment Measurement Model sections; source updated <time datetime="2023-04-01">2023-04-01</time>; accessed <time datetime="2026-08-26">2026-08-26</time></li></ul>
+  <ul><li id="source-ncbi-openrn-math-calculations-2023"><a href="https://www.ncbi.nlm.nih.gov/books/NBK596732/" rel="external noopener">Math Calculations</a> (Open RN via NCBI Bookshelf). Section: Sections 5.4–5.17 — equivalencies, rounding, dimensional analysis, conversions, dosage forms, weight-based and safe-dose calculations, and IV infusion rates. Updated <time datetime="2023-01-01">Jan 1, 2023</time>. Accessed <time datetime="2026-08-27">Aug 27, 2026</time>.</li><li id="source-ncsbn-2026-rn-test-plan"><a href="https://www.nclex.com/test-plans.page" rel="external noopener">NCSBN — 2026 RN Test Plan</a> (National Council of State Boards of Nursing). Section: 2026 RN Test Plan; effective April 1, 2026–March 31, 2029. Updated <time datetime="2026-04-01">Apr 1, 2026</time>. Accessed <time datetime="2026-08-26">Aug 26, 2026</time>.</li><li id="source-ncsbn-next-generation-nclex"><a href="https://www.nclex.com/next-generation-nclex.page" rel="external noopener">NCSBN — Next Generation NCLEX</a> (National Council of State Boards of Nursing). Section: NGN Project and Clinical Judgment Measurement Model sections. Updated <time datetime="2023-04-01">Apr 1, 2023</time>. Accessed <time datetime="2026-08-26">Aug 26, 2026</time>.</li></ul>
 </div>
 <div class="cta">
-  <p><b>Practice this for real.</b> PulseRN has an on-screen calculator and worked solutions on every dosage item, so you can see where a calculation went wrong.</p>
-  <p><a href="/">Start studying on PulseRN &rarr;</a></p>
+  <p><b>Try 20 free questions.</b> PulseRN has an on-screen calculator and worked solutions on every dosage item, so you can see where a calculation went wrong.</p>
+  <p><a href="/free-nclex-practice-test/">Try 20 free NCLEX-RN questions &rarr;</a></p>
 </div>
 
 <div class="card">
@@ -280,6 +314,6 @@
 </article>
 </main>
 
-<footer><p class="foot">Readiness self-assessments are graded more strictly than the NCLEX: a multi-part question counts only when every part is right, where the NCLEX can give partial credit.</p><p class="foot">Educational exam preparation only, not medical advice or a clinical reference. Always follow your own institution's policies and your instructors' guidance. NCLEX&reg; is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse this product. <a href="/legal/">Terms, Privacy, and Disclaimer</a> &middot; <a href="/about/">About</a> &middot; <a href="/editorial-policy/">Editorial policy</a></p></footer>
+<footer><p class="foot">Readiness self-assessments are graded more strictly than the NCLEX: a multi-part question counts only when every part is right, whereas the NCLEX can give partial credit.</p><p class="foot">Educational exam preparation only, not medical advice or a clinical reference. Always follow your own institution's policies and your instructors' guidance. NCLEX&reg; is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse this product. <a href="/legal/">Terms, Privacy, and Disclaimer</a> &middot; <a href="/about/">About</a> &middot; <a href="/editorial-policy/">Editorial policy</a></p></footer>
 </body>
 </html>

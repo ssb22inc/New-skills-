@@ -31,9 +31,6 @@
       "datePublished": "2026-08-03",
       "dateModified": "2026-08-27",
       "author": {
-        "@id": "https://www.pulsern.app/#org"
-      },
-      "reviewedBy": {
         "@id": "https://www.pulsern.app/about/#sheldon-bennett-rn"
       },
       "publisher": {
@@ -82,14 +79,49 @@
         "@id": "https://www.pulsern.app/#org"
       },
       "jobTitle": "Registered Nurse",
-      "sameAs": [
-        "https://www.nursys.com"
+      "description": "Registered nurse since 2020, licensed in Florida (multistate), with six years in cardiac, neurology and orthopedic nursing.",
+      "knowsAbout": [
+        "NCLEX-RN preparation",
+        "Cardiac nursing",
+        "Neurology nursing",
+        "Orthopedic nursing"
       ],
-      "hasCredential": {
-        "@type": "EducationalOccupationalCredential",
-        "credentialCategory": "Registered Nurse",
-        "recognizedBy": "Florida Board of Nursing"
-      }
+      "sameAs": [
+        "https://mqa-internet.doh.state.fl.us/MQASearchServices/HealthcareProviders/LicenseVerification?LicInd=648118&Procde=1701"
+      ],
+      "hasCredential": [
+        {
+          "@type": "EducationalOccupationalCredential",
+          "credentialCategory": "license",
+          "name": "Registered Nurse (multistate license)",
+          "recognizedBy": {
+            "@type": "GovernmentOrganization",
+            "name": "Florida Board of Nursing"
+          },
+          "url": "https://mqa-internet.doh.state.fl.us/MQASearchServices/HealthcareProviders/LicenseVerification?LicInd=648118&Procde=1701"
+        },
+        {
+          "@type": "EducationalOccupationalCredential",
+          "credentialCategory": "degree",
+          "name": "Associate degree in nursing",
+          "recognizedBy": {
+            "@type": "EducationalOrganization",
+            "name": "Carleen Health Institute of South Florida"
+          }
+        }
+      ]
+    },
+    {
+      "@type": "WebPage",
+      "@id": "https://www.pulsern.app/learn/infection-control-precautions/#page",
+      "url": "https://www.pulsern.app/learn/infection-control-precautions/",
+      "mainEntity": {
+        "@id": "https://www.pulsern.app/learn/infection-control-precautions/#article"
+      },
+      "reviewedBy": {
+        "@id": "https://www.pulsern.app/about/#sheldon-bennett-rn"
+      },
+      "lastReviewed": "2026-08-27"
     },
     {
       "@type": "BreadcrumbList",
@@ -167,6 +199,8 @@
   ul, ol { padding-left:22px; margin-bottom:12px; }
   a { color:var(--teal); }
   .sub { color:var(--muted); font-size:13px; margin-bottom:18px; }
+  .hubnav { margin-bottom:18px; font-size:14px; font-weight:600; }
+  .hubnav a { text-decoration:none; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:14px; }
   .back { display:inline-block; margin-bottom:14px; font-weight:600; text-decoration:none; }
   .meta { color:var(--muted); font-size:13px; margin-bottom:16px; }
@@ -200,7 +234,7 @@
 <a class="back" href="/learn/">&larr; All guides</a>
 <article>
 <h1>Infection control precautions for the NCLEX</h1>
-<p class="meta">High-yield clinical &middot; published <time datetime="2026-08-03">2026-08-03</time> &middot; clinically reviewed <time datetime="2026-08-27">2026-08-27</time> by <a href="/about/#sheldon-bennett-rn">Sheldon Bennett, RN</a></p>
+<p class="meta">High-yield clinical &middot; Published <time datetime="2026-08-03">Aug 3, 2026</time> &middot; clinically reviewed <time datetime="2026-08-27">Aug 27, 2026</time> by <a href="/about/#sheldon-bennett-rn">Sheldon Bennett, RN</a></p>
 
 <div class="card">
 <p>Choose infection-control precautions from the suspected or confirmed organism, route of transmission, care setting and current facility policy. <b>Standard Precautions apply to every client</b>; add one or more Transmission-Based Precautions when Standard Precautions alone do not interrupt transmission. When the diagnosis is not yet confirmed, use the indicated empiric precautions while testing is pending.</p>
@@ -273,11 +307,11 @@
 <div class="card"><h2 style="margin-top:0">Common questions</h2><h3>What precautions are used for C. difficile?</h3><p>Use Standard plus Contact Precautions, gown and gloves, dedicated equipment, and an EPA-registered sporicidal disinfectant under facility policy. Soap and water removes spores better and is emphasized when hands are visibly soiled and during outbreaks, but CDC does not recommend removing access to alcohol-based hand sanitizer.</p><h3>What is the correct order for putting on PPE?</h3><p>One CDC example is gown, mask or respirator, goggles or face shield, then gloves. Follow the posted protocol because organism-specific procedures and safe removal methods can differ.</p><h3>Which conditions commonly require Airborne Precautions?</h3><p>Suspected or confirmed pulmonary or laryngeal tuberculosis, measles, varicella, disseminated zoster, and localized zoster in an immunocompromised patient until dissemination is ruled out. Varicella and the applicable zoster presentations also require Contact Precautions.</p><h3>Does every neutropenic patient need a protective-environment room?</h3><p>No. CDC's protective-environment table specifically applies to allogeneic hematopoietic stem-cell transplant recipients. Other immunocompromised patients need individualized precautions based on facility and infection-prevention guidance.</p></div>
 <div class="card">
   <h2 style="margin-top:0">Sources and further reading</h2>
-  <ul><li id="source-cdc-isolation-precautions"><a href="https://www.cdc.gov/infection-control/hcp/isolation-precautions/precautions.html" rel="external noopener">CDC — Precautions to Prevent Transmission of Infectious Agents</a> (Centers for Disease Control and Prevention); evidence locator: III.B. Transmission-Based Precautions; Contact, Droplet, Airborne, placement, PPE, transport, and discontinuation sections; source updated <time datetime="2023-11-22">2023-11-22</time>; accessed <time datetime="2026-08-27">2026-08-27</time></li><li id="source-cdc-isolation-appendix-a-2025"><a href="https://www.cdc.gov/infection-control/hcp/isolation-precautions/appendix-a-type-duration.html" rel="external noopener">CDC — Type and Duration of Precautions for Selected Infections</a> (Centers for Disease Control and Prevention); evidence locator: Disease-specific entries for tuberculosis, measles, varicella, zoster, influenza, pertussis, meningococcal disease, mumps, rubella, group A streptococcus, MDROs, C. difficile, scabies, lice, RSV, and wounds; source updated <time datetime="2025-02-07">2025-02-07</time>; accessed <time datetime="2026-08-27">2026-08-27</time></li><li id="source-cdc-ppe-sequence-2023"><a href="https://www.cdc.gov/infection-control/hcp/isolation-precautions/appendix-a-figure.html" rel="external noopener">CDC — Example of Safe Donning and Removal of PPE</a> (Centers for Disease Control and Prevention); evidence locator: Donning of PPE; Removing PPE; Safe Work Practices; Hand Hygiene; source updated <time datetime="2023-11-27">2023-11-27</time>; accessed <time datetime="2026-08-27">2026-08-27</time></li><li id="source-cdc-cdiff-acute-care-2026"><a href="https://www.cdc.gov/c-diff/hcp/clinical-guidance/index.html" rel="external noopener">CDC — C. diff Infection Prevention in Acute Care Facilities</a> (Centers for Disease Control and Prevention); evidence locator: Isolate and initiate contact precautions; dedicated equipment; environmental cleaning; transfer communication; duration after diarrhea resolves; source updated <time datetime="2026-05-13">2026-05-13</time>; accessed <time datetime="2026-08-27">2026-08-27</time></li><li id="source-cdc-clinical-hand-hygiene-2024"><a href="https://www.cdc.gov/clean-hands/hcp/clinical-safety/index.html" rel="external noopener">CDC — Clinical Safety: Hand Hygiene for Healthcare Workers</a> (Centers for Disease Control and Prevention); evidence locator: When to wash with soap and water; C. difficile outbreaks; continued access to alcohol-based hand sanitizer; source updated <time datetime="2024-02-27">2024-02-27</time>; accessed <time datetime="2026-08-27">2026-08-27</time></li><li id="source-cdc-protective-environment-table-5"><a href="https://www.cdc.gov/infection-control/hcp/isolation-precautions/appendix-a-table-5.html" rel="external noopener">CDC — Components of a Protective Environment</a> (Centers for Disease Control and Prevention); evidence locator: Allogeneic HSCT population; Standard and Expanded Precautions; engineering controls; flowers and plants; source updated <time datetime="2023-11-27">2023-11-27</time>; accessed <time datetime="2026-08-27">2026-08-27</time></li><li id="source-ncsbn-2026-rn-test-plan"><a href="https://www.nclex.com/test-plans.page" rel="external noopener">NCSBN — 2026 RN Test Plan</a> (National Council of State Boards of Nursing); evidence locator: 2026 RN Test Plan; effective April 1, 2026–March 31, 2029; source updated <time datetime="2026-04-01">2026-04-01</time>; accessed <time datetime="2026-08-26">2026-08-26</time></li></ul>
+  <ul><li id="source-cdc-isolation-precautions"><a href="https://www.cdc.gov/infection-control/hcp/isolation-precautions/precautions.html" rel="external noopener">CDC — Precautions to Prevent Transmission of Infectious Agents</a> (Centers for Disease Control and Prevention). Section: III.B. Transmission-Based Precautions; Contact, Droplet, Airborne, placement, PPE, transport, and discontinuation sections. Updated <time datetime="2023-11-22">Nov 22, 2023</time>. Accessed <time datetime="2026-08-27">Aug 27, 2026</time>.</li><li id="source-cdc-isolation-appendix-a-2025"><a href="https://www.cdc.gov/infection-control/hcp/isolation-precautions/appendix-a-type-duration.html" rel="external noopener">CDC — Type and Duration of Precautions for Selected Infections</a> (Centers for Disease Control and Prevention). Section: Disease-specific entries for tuberculosis, measles, varicella, zoster, influenza, pertussis, meningococcal disease, mumps, rubella, group A streptococcus, MDROs, C. difficile, scabies, lice, RSV, and wounds. Updated <time datetime="2025-02-07">Feb 7, 2025</time>. Accessed <time datetime="2026-08-27">Aug 27, 2026</time>.</li><li id="source-cdc-ppe-sequence-2023"><a href="https://www.cdc.gov/infection-control/hcp/isolation-precautions/appendix-a-figure.html" rel="external noopener">CDC — Example of Safe Donning and Removal of PPE</a> (Centers for Disease Control and Prevention). Section: Donning of PPE; Removing PPE; Safe Work Practices; Hand Hygiene. Updated <time datetime="2023-11-27">Nov 27, 2023</time>. Accessed <time datetime="2026-08-27">Aug 27, 2026</time>.</li><li id="source-cdc-cdiff-acute-care-2026"><a href="https://www.cdc.gov/c-diff/hcp/clinical-guidance/index.html" rel="external noopener">CDC — C. diff Infection Prevention in Acute Care Facilities</a> (Centers for Disease Control and Prevention). Section: Isolate and initiate contact precautions; dedicated equipment; environmental cleaning; transfer communication; duration after diarrhea resolves. Updated <time datetime="2026-05-13">May 13, 2026</time>. Accessed <time datetime="2026-08-27">Aug 27, 2026</time>.</li><li id="source-cdc-clinical-hand-hygiene-2024"><a href="https://www.cdc.gov/clean-hands/hcp/clinical-safety/index.html" rel="external noopener">CDC — Clinical Safety: Hand Hygiene for Healthcare Workers</a> (Centers for Disease Control and Prevention). Section: When to wash with soap and water; C. difficile outbreaks; continued access to alcohol-based hand sanitizer. Updated <time datetime="2024-02-27">Feb 27, 2024</time>. Accessed <time datetime="2026-08-27">Aug 27, 2026</time>.</li><li id="source-cdc-protective-environment-table-5"><a href="https://www.cdc.gov/infection-control/hcp/isolation-precautions/appendix-a-table-5.html" rel="external noopener">CDC — Components of a Protective Environment</a> (Centers for Disease Control and Prevention). Section: Allogeneic HSCT population; Standard and Expanded Precautions; engineering controls; flowers and plants. Updated <time datetime="2023-11-27">Nov 27, 2023</time>. Accessed <time datetime="2026-08-27">Aug 27, 2026</time>.</li><li id="source-ncsbn-2026-rn-test-plan"><a href="https://www.nclex.com/test-plans.page" rel="external noopener">NCSBN — 2026 RN Test Plan</a> (National Council of State Boards of Nursing). Section: 2026 RN Test Plan; effective April 1, 2026–March 31, 2029. Updated <time datetime="2026-04-01">Apr 1, 2026</time>. Accessed <time datetime="2026-08-26">Aug 26, 2026</time>.</li></ul>
 </div>
 <div class="cta">
-  <p><b>Practice this for real.</b> PulseRN drills infection-control scenarios and PPE sequencing as ordered, drag-and-drop items.</p>
-  <p><a href="/">Start studying on PulseRN &rarr;</a></p>
+  <p><b>Try 20 free questions.</b> PulseRN drills infection-control scenarios and PPE sequencing as ordered, drag-and-drop items.</p>
+  <p><a href="/free-nclex-practice-test/">Try 20 free NCLEX-RN questions &rarr;</a></p>
 </div>
 
 <div class="card">
@@ -287,6 +321,6 @@
 </article>
 </main>
 
-<footer><p class="foot">Readiness self-assessments are graded more strictly than the NCLEX: a multi-part question counts only when every part is right, where the NCLEX can give partial credit.</p><p class="foot">Educational exam preparation only, not medical advice or a clinical reference. Always follow your own institution's policies and your instructors' guidance. NCLEX&reg; is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse this product. <a href="/legal/">Terms, Privacy, and Disclaimer</a> &middot; <a href="/about/">About</a> &middot; <a href="/editorial-policy/">Editorial policy</a></p></footer>
+<footer><p class="foot">Readiness self-assessments are graded more strictly than the NCLEX: a multi-part question counts only when every part is right, whereas the NCLEX can give partial credit.</p><p class="foot">Educational exam preparation only, not medical advice or a clinical reference. Always follow your own institution's policies and your instructors' guidance. NCLEX&reg; is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse this product. <a href="/legal/">Terms, Privacy, and Disclaimer</a> &middot; <a href="/about/">About</a> &middot; <a href="/editorial-policy/">Editorial policy</a></p></footer>
 </body>
 </html>

@@ -181,7 +181,10 @@ describe("a tagged landing is what signup records", () => {
   it("keeps a learn-page campaign through the bare homepage button and into bySource", async () => {
     const learn = read("public/learn/abg-interpretation/index.html");
     expect(learn).toContain(ATTRIBUTION_BOOT_TAG);
-    expect(learn).toContain('<a href="/">Start studying on PulseRN');
+    /* The guide CTA now sends readers to the free practice page, which runs the
+       same first-touch capture, so the campaign is stored either way. */
+    expect(learn).toContain('<a href="/free-nclex-practice-test/">Try 20 free NCLEX-RN questions');
+    expect(read("public/free-nclex-practice-test/index.html")).toContain(ATTRIBUTION_BOOT_TAG);
 
     const storage = memoryStorage();
     land(

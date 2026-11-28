@@ -31,9 +31,6 @@
       "datePublished": "2026-08-03",
       "dateModified": "2026-08-27",
       "author": {
-        "@id": "https://www.pulsern.app/#org"
-      },
-      "reviewedBy": {
         "@id": "https://www.pulsern.app/about/#sheldon-bennett-rn"
       },
       "publisher": {
@@ -78,14 +75,49 @@
         "@id": "https://www.pulsern.app/#org"
       },
       "jobTitle": "Registered Nurse",
-      "sameAs": [
-        "https://www.nursys.com"
+      "description": "Registered nurse since 2020, licensed in Florida (multistate), with six years in cardiac, neurology and orthopedic nursing.",
+      "knowsAbout": [
+        "NCLEX-RN preparation",
+        "Cardiac nursing",
+        "Neurology nursing",
+        "Orthopedic nursing"
       ],
-      "hasCredential": {
-        "@type": "EducationalOccupationalCredential",
-        "credentialCategory": "Registered Nurse",
-        "recognizedBy": "Florida Board of Nursing"
-      }
+      "sameAs": [
+        "https://mqa-internet.doh.state.fl.us/MQASearchServices/HealthcareProviders/LicenseVerification?LicInd=648118&Procde=1701"
+      ],
+      "hasCredential": [
+        {
+          "@type": "EducationalOccupationalCredential",
+          "credentialCategory": "license",
+          "name": "Registered Nurse (multistate license)",
+          "recognizedBy": {
+            "@type": "GovernmentOrganization",
+            "name": "Florida Board of Nursing"
+          },
+          "url": "https://mqa-internet.doh.state.fl.us/MQASearchServices/HealthcareProviders/LicenseVerification?LicInd=648118&Procde=1701"
+        },
+        {
+          "@type": "EducationalOccupationalCredential",
+          "credentialCategory": "degree",
+          "name": "Associate degree in nursing",
+          "recognizedBy": {
+            "@type": "EducationalOrganization",
+            "name": "Carleen Health Institute of South Florida"
+          }
+        }
+      ]
+    },
+    {
+      "@type": "WebPage",
+      "@id": "https://www.pulsern.app/learn/nclex-study-plan/#page",
+      "url": "https://www.pulsern.app/learn/nclex-study-plan/",
+      "mainEntity": {
+        "@id": "https://www.pulsern.app/learn/nclex-study-plan/#article"
+      },
+      "reviewedBy": {
+        "@id": "https://www.pulsern.app/about/#sheldon-bennett-rn"
+      },
+      "lastReviewed": "2026-08-28"
     },
     {
       "@type": "BreadcrumbList",
@@ -163,6 +195,8 @@
   ul, ol { padding-left:22px; margin-bottom:12px; }
   a { color:var(--teal); }
   .sub { color:var(--muted); font-size:13px; margin-bottom:18px; }
+  .hubnav { margin-bottom:18px; font-size:14px; font-weight:600; }
+  .hubnav a { text-decoration:none; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:14px; }
   .back { display:inline-block; margin-bottom:14px; font-weight:600; text-decoration:none; }
   .meta { color:var(--muted); font-size:13px; margin-bottom:16px; }
@@ -196,7 +230,7 @@
 <a class="back" href="/learn/">&larr; All guides</a>
 <article>
 <h1>Build an NCLEX study plan you can adjust</h1>
-<p class="meta">Study strategy &middot; published <time datetime="2026-08-03">2026-08-03</time> &middot; reviewed <time datetime="2026-08-28">2026-08-28</time> by <a href="/about/#sheldon-bennett-rn">Sheldon Bennett, RN</a></p>
+<p class="meta">Study strategy &middot; Published <time datetime="2026-08-03">Aug 3, 2026</time> &middot; reviewed <time datetime="2026-08-28">Aug 28, 2026</time> by <a href="/about/#sheldon-bennett-rn">Sheldon Bennett, RN</a></p>
 
 <div class="card">
 <p>An NCLEX study plan should connect the current RN Test Plan to your own evidence: what you can retrieve, which cues or item formats you misread, and what you can realistically practice before the exam. There is no evidence-based daily question quota or universal number of study weeks that fits every candidate.</p>
@@ -259,11 +293,11 @@
 <div class="card"><h2 style="margin-top:0">Common questions</h2><h3>How long should I study for the NCLEX?</h3><p>There is no evidence-based duration that fits everyone. Work backward from the test date, establish a repeatable baseline, account for your available time and support needs, and adjust the plan from performance trends rather than a universal number of weeks.</p><h3>How many NCLEX practice questions should I do each day?</h3><p>There is no validated daily quota for every candidate. Choose a set small enough that you can answer it, review the reasoning and update your error log. Increase volume only when quality and sustainability remain intact.</p><h3>Should I study new content during the week before the NCLEX?</h3><p>Use your own error pattern instead of a blanket prohibition. Address high-priority gaps without creating an unsustainable last-minute workload, continue targeted retrieval, and rely on current official instructions for exam-day preparation.</p><h3>Does a practice-bank score predict that I will pass?</h3><p>A score can provide feedback within that product, but it is not the NCLEX result and should not be treated as a guarantee. Look at repeated trends, reasoning quality, content coverage and guidance from your nursing program or qualified educator.</p></div>
 <div class="card">
   <h2 style="margin-top:0">Sources and further reading</h2>
-  <ul><li id="source-ramnanan-2024-distributed-retrieval-review"><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC11078833/" rel="external noopener">Systematic review of distributed practice and retrieval practice in health professions education</a> (Advances in Health Sciences Education via PubMed Central); evidence locator: Abstract; methods; results across 56 studies and 63 experiments; limitations and conclusions; source updated <time datetime="2023-08-24">2023-08-24</time>; accessed <time datetime="2026-08-27">2026-08-27</time></li><li id="source-khalafi-2024-spaced-learning-nursing"><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC10958887/" rel="external noopener">Khalafi et al. — Effect of spaced learning on nurse anesthesia students</a> (BMC Medical Education); evidence locator: Randomized-controlled methods, results, and conclusion; source updated <time datetime="2024-03-21">2024-03-21</time>; accessed <time datetime="2026-08-26">2026-08-26</time></li><li id="source-ncsbn-2026-rn-test-plan"><a href="https://www.nclex.com/test-plans.page" rel="external noopener">NCSBN — 2026 RN Test Plan</a> (National Council of State Boards of Nursing); evidence locator: 2026 RN Test Plan; effective April 1, 2026–March 31, 2029; source updated <time datetime="2026-04-01">2026-04-01</time>; accessed <time datetime="2026-08-26">2026-08-26</time></li></ul>
+  <ul><li id="source-ramnanan-2024-distributed-retrieval-review"><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC11078833/" rel="external noopener">Systematic review of distributed practice and retrieval practice in health professions education</a> (Advances in Health Sciences Education via PubMed Central). Section: Abstract; methods; results across 56 studies and 63 experiments; limitations and conclusions. Updated <time datetime="2023-08-24">Aug 24, 2023</time>. Accessed <time datetime="2026-08-27">Aug 27, 2026</time>.</li><li id="source-khalafi-2024-spaced-learning-nursing"><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC10958887/" rel="external noopener">Khalafi et al. — Effect of spaced learning on nurse anesthesia students</a> (BMC Medical Education). Section: Randomized-controlled methods, results, and conclusion. Updated <time datetime="2024-03-21">Mar 21, 2024</time>. Accessed <time datetime="2026-08-26">Aug 26, 2026</time>.</li><li id="source-ncsbn-2026-rn-test-plan"><a href="https://www.nclex.com/test-plans.page" rel="external noopener">NCSBN — 2026 RN Test Plan</a> (National Council of State Boards of Nursing). Section: 2026 RN Test Plan; effective April 1, 2026–March 31, 2029. Updated <time datetime="2026-04-01">Apr 1, 2026</time>. Accessed <time datetime="2026-08-26">Aug 26, 2026</time>.</li></ul>
 </div>
 <div class="cta">
-  <p><b>Practice this for real.</b> PulseRN builds a weekly plan around your weak areas and schedules flashcards on real calendar dates.</p>
-  <p><a href="/">Start studying on PulseRN &rarr;</a></p>
+  <p><b>Try 20 free questions.</b> PulseRN builds a weekly plan around your weak areas and schedules flashcards on real calendar dates.</p>
+  <p><a href="/free-nclex-practice-test/">Try 20 free NCLEX-RN questions &rarr;</a></p>
 </div>
 
 <div class="card">
@@ -273,6 +307,6 @@
 </article>
 </main>
 
-<footer><p class="foot">Readiness self-assessments are graded more strictly than the NCLEX: a multi-part question counts only when every part is right, where the NCLEX can give partial credit.</p><p class="foot">Educational exam preparation only, not medical advice or a clinical reference. Always follow your own institution's policies and your instructors' guidance. NCLEX&reg; is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse this product. <a href="/legal/">Terms, Privacy, and Disclaimer</a> &middot; <a href="/about/">About</a> &middot; <a href="/editorial-policy/">Editorial policy</a></p></footer>
+<footer><p class="foot">Readiness self-assessments are graded more strictly than the NCLEX: a multi-part question counts only when every part is right, whereas the NCLEX can give partial credit.</p><p class="foot">Educational exam preparation only, not medical advice or a clinical reference. Always follow your own institution's policies and your instructors' guidance. NCLEX&reg; is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse this product. <a href="/legal/">Terms, Privacy, and Disclaimer</a> &middot; <a href="/about/">About</a> &middot; <a href="/editorial-policy/">Editorial policy</a></p></footer>
 </body>
 </html>

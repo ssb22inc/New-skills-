@@ -1,22 +1,22 @@
 import React from "react";
-import { GRADING_NOTE, GRADING_NOTE_LONG } from "./grading-note.js";
+import { GRADING_NOTE } from "./grading-note.js";
 import { ON_PURPOSE } from "./on-purpose.js";
 import { planById } from "./pricing.js";
 
 const freePassLabel = planById("pass1").name.toLowerCase();
 
 const FEATURES = [
-  ["Retrieval practice", "You learn by pulling the answer out of memory. Every session starts with a question, not a lecture."],
+  ["Retrieval practice", "You learn by pulling the answer out of memory, so you commit to an answer before you see the rationale."],
   ["Spaced repetition", "What you miss comes back on a real calendar date, right before you'd forget it, so it's there on exam day."],
-  ["Adaptive practice", "PulseRN tracks your results across the eight NCSBN client-needs categories and focuses practice on your weaker areas."],
+  ["Adaptive practice", "PulseRN tracks your results across the eight NCSBN Client Needs categories and focuses practice on your weaker areas."],
   ["A plan for each day", "A focused Today round and a weekly plan built around your exam date, so you always know what to do next."],
   ["The study library", "10,000+ practice questions, 500+ case studies, 1,100+ flashcards, dosage calculation, and an AI tutor when you want another explanation."],
 ];
 
-const FAQ = [
-  ["Who created PulseRN?", "Sheldon Bennett, a working hospital RN. He started from how people actually learn and remember under pressure, then engineered the study loop around it."],
+export const FAQ = [
+  ["Who created PulseRN?", "Sheldon Bennett, RN, a Florida-licensed registered nurse since 2020 with experience in cardiac, neurology, and orthopedic nursing. He built the study loop around testing yourself, spaced review, and extra practice on weak areas, and he reviews every public guide."],
   ["Does PulseRN use real NCLEX questions?", "No. Practice items are original and built around NCSBN's published test plan and item formats. PulseRN is not affiliated with or endorsed by NCSBN. NCLEX® is a registered trademark of NCSBN."],
-  ["What does the readiness estimate tell me?", `Readiness is an estimate built from your work in PulseRN. It suggests what to review next, so every session moves you closer to exam day. ${GRADING_NOTE_LONG}`],
+  ["What does the readiness estimate tell me?", `Your readiness score comes from your own answers in PulseRN and tells you what to review next. It is an estimate, not a prediction of your exam result. ${GRADING_NOTE}`],
   ["How is the content checked?", "Practice questions, case studies, flashcards, and readiness items are built around the published test plan and pass automated quality checks before they go live. Public study guides are source-cited and approved by Sheldon Bennett, RN."],
   ["Is there a free option?", `Yes. A ${freePassLabel} covers study content, and no card is needed. Readiness self-assessments are included with paid plans.`],
 ];
@@ -24,13 +24,13 @@ const FAQ = [
 const SAMPLES = [
   ["Pharmacology", "Five questions on high-alert medications, reversal agents, monitoring, and label-based safety.", "/learn/nclex-pharmacology-practice-questions/"],
   ["Prioritization", "Five questions on emergency recognition, change from baseline, assessment, action, and evaluation.", "/learn/nclex-prioritization-practice-questions/"],
-  ["Dosage calculations", "Five worked questions covering tablets, liquids, pump rates, gravity tubing, and weight-based math.", "/learn/nclex-dosage-calculation-practice-questions/"],
+  ["Dosage calculation", "Five worked questions covering tablets, liquids, pump rates, gravity tubing, and weight-based math.", "/learn/nclex-dosage-calculation-practice-questions/"],
   ["NGN bow-tie", "Five text-based bow-tie examples connecting a condition, two actions, and two parameters.", "/learn/ngn-bow-tie-practice-questions/"],
 ];
 
 const WHY = [
   ["How memory works", "Every session starts with a question. What you miss comes back on a real calendar date, and adaptive practice stays with a weak area until it is no longer the weak one.", "/how-it-works/"],
-  ["Built by a working hospital RN", "Sheldon Bennett, a working hospital RN, built PulseRN around how people learn and remember under pressure.", "/about/"],
+  ["Built and reviewed by an RN", "Sheldon Bennett, RN, licensed since 2020, built PulseRN and reviews every public study guide.", "/about/"],
   ["Start free", "A 7-day free pass opens the study library. No card needed. Paid plans keep that same library open for a longer window.", "/pricing/"],
   ["The method, in the open", "Read how retrieval practice, spaced repetition, adaptive questions, and the readiness estimate work.", "/methodology/"],
 ];
@@ -171,8 +171,8 @@ export default function LandingPage({ onSignIn, onStart }) {
         <section className="land-container land-hero">
           <div>
             <div className="land-eyebrow">Built by a working hospital RN</div>
-            <h1>NCLEX-RN prep engineered around <span>how you learn.</span></h1>
-            <p className="land-lead">Every session starts with a question, not a lecture. What you miss comes back right before you'd forget it. Built to get you ready to walk into the NCLEX confident.</p>
+            <h1>NCLEX-RN prep that brings back <span>what you miss.</span></h1>
+            <p className="land-lead">Every session starts with a question, not a lecture. What you miss comes back right before you'd forget it, and adaptive practice works your weak areas.</p>
             <aside className="land-purpose" aria-label="On purpose">
               <p className="land-purpose-kicker">{ON_PURPOSE.eyebrow}</p>
               <p className="land-purpose-title">{ON_PURPOSE.headline}</p>
@@ -187,7 +187,7 @@ export default function LandingPage({ onSignIn, onStart }) {
           </div>
           <figure className="land-product">
             <img className="land-product-image" src="/product/pulsern-adaptive-practice.png" width="720" height="620" fetchpriority="high" alt="PulseRN adaptive NCLEX practice screen with one question, four answer choices, and the control to check the answer" />
-            <figcaption className="land-product-caption">Authentic adaptive NCLEX practice with answer-first review. Built-in demonstration content; no learner data.</figcaption>
+            <figcaption className="land-product-caption">Adaptive NCLEX-style practice, answer first. Demo content, no student data.</figcaption>
           </figure>
         </section>
 
@@ -225,8 +225,8 @@ export default function LandingPage({ onSignIn, onStart }) {
           <div className="land-container">
             <div className="land-section-head">
               <div className="land-eyebrow">One study system</div>
-              <h2>Engineered around how you learn and remember.</h2>
-              <p>PulseRN was researched and engineered around how people actually learn and remember under pressure. The loop is the product.</p>
+              <h2>One loop: answer, review, repeat.</h2>
+              <p>PulseRN uses three methods with strong research behind them: testing yourself, spacing your reviews, and drilling weak areas.</p>
             </div>
             <div className="land-grid">
               {FEATURES.map(([title, text], index) => (
@@ -244,7 +244,7 @@ export default function LandingPage({ onSignIn, onStart }) {
             <div className="land-section-head">
               <div className="land-eyebrow">Free sample questions</div>
               <h2>Start with a question. No account needed.</h2>
-              <p>Four public sets, five original questions each. The answer, the rationale, and the sources are on the page.</p>
+              <p>Four free sets, five original questions each. The answer, the rationale, and the sources are on the page.</p>
             </div>
             <div className="land-sample-grid">
               {SAMPLES.map(([title, text, href]) => (
@@ -261,13 +261,13 @@ export default function LandingPage({ onSignIn, onStart }) {
           <div className="land-container">
             <div className="land-section-head">
               <div className="land-eyebrow">Why PulseRN</div>
-              <h2>Built around how memory works.</h2>
-              <p>You answer first. Missed items return before you forget them. The app was built by a working hospital RN, and you can start free.</p>
+              <h2>What makes PulseRN different.</h2>
+              <p>Memory science, a clear method, an RN behind the content, and a free way to start.</p>
             </div>
             <div className="land-sample-grid">
-              {WHY.map(([title, text, href]) => (
+              {WHY.map(([title, text, href], index) => (
                 <a className="land-card land-card-link" href={href} key={href}>
-                  <div className="land-card-num" aria-hidden="true">RN</div>
+                  <div className="land-card-num" aria-hidden="true">{index + 1}</div>
                   <h3>{title}</h3><p>{text}</p>
                 </a>
               ))}
@@ -280,10 +280,10 @@ export default function LandingPage({ onSignIn, onStart }) {
             <div className="land-section-head">
               <div className="land-eyebrow">How it works</div>
               <h2>A study loop you can explain.</h2>
-              <p>You answer first. Missed items come back. Weak spots get the work. A Today round and a weekly plan are built around your exam date. Readiness is an estimate built from your work in PulseRN.</p>
+              <p>You answer first. Missed items come back. Weak areas get extra reps. A Today round and a weekly plan are built around your exam date.</p>
               <div className="land-author" id="author">
                 <div className="land-avatar" aria-hidden="true">RN</div>
-                <div><strong>Sheldon Bennett, RN</strong><p>A working hospital RN who built PulseRN around how people learn and remember under pressure. <a href="/about/#sheldon-bennett-rn">Read how the content is built.</a></p></div>
+                <div><strong>Sheldon Bennett, RN</strong><p>Registered nurse since 2020, with six years in cardiac, neurology, and orthopedic nursing. He built PulseRN and reviews every public guide. <a href="/about/#sheldon-bennett-rn">Check his license and how content is built.</a></p></div>
               </div>
             </div>
             <div className="land-steps">
@@ -291,7 +291,7 @@ export default function LandingPage({ onSignIn, onStart }) {
                 ["01", "Answer before you review", "Every session starts with a question, not a lecture. Then you read the rationale."],
                 ["02", "Miss it, and it returns", "Spaced repetition brings the item back on a calendar date, right before you'd forget it."],
                 ["03", "Work the weak spot", "Adaptive practice stays with a category until it's no longer the weak one."],
-                ["04", "Know what today is for", "A Today round and a weekly plan once your exam date is set. Readiness is an estimate built from your work in PulseRN."],
+                ["04", "Know what today is for", "A Today round and a weekly plan once your exam date is set."],
               ].map(([n, title, text]) => <article className="land-step" key={n}><b>{n}</b><div><h3>{title}</h3><p>{text}</p></div></article>)}
             </div>
           </div>
@@ -308,8 +308,8 @@ export default function LandingPage({ onSignIn, onStart }) {
 
         <section className="land-final">
           <div className="land-container">
-            <h2>Built to get you ready to walk into the NCLEX confident.</h2>
-            <p>A {freePassLabel} to the study content. No card needed.</p>
+            <h2>Start free. No card, no auto-renew.</h2>
+            <p>A {freePassLabel} opens the study content.</p>
             <button className="land-button" type="button" onClick={onStart}>Create your free account</button>
           </div>
         </section>
