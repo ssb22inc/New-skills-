@@ -45,41 +45,9 @@ const pages = [];
 
 export const COMMERCIAL_PAGES = pages.map((page) => ({ ...page, updated: page.updated || COMMERCIAL_VERIFIED_AT, published: COMMERCIAL_PUBLISHED_AT }));
 
-/* Retired comparison URLs. Each public path is listed with and without a
-   trailing slash. Destinations are canonical static pages and carry no query
-   string, so the platform keeps the visitor's original query on the 308.
-   The catch-all is last and only applies when no exact rule matched. */
-const RETIRED_COMPARE_ROUTES = [
-  ["/compare/", "/how-it-works/"],
-  ["/compare/methodology/", "/methodology/"],
-  ["/compare/pulsern-vs-uworld/", "/how-it-works/"],
-  ["/compare/pulsern-vs-archer/", "/how-it-works/"],
-  ["/compare/pulsern-vs-kaplan/", "/how-it-works/"],
-  ["/compare/best-nclex-question-banks/", "/free-nclex-practice-test/"],
-  ["/compare/best-affordable-nclex-prep/", "/pricing/"],
-  ["/compare/best-nclex-app-repeat-test-takers/", "/how-it-works/"],
-];
-
-const slashVariants = (path) => {
-  const withSlash = path.endsWith("/") ? path : `${path}/`;
-  return [withSlash.slice(0, -1), withSlash];
-};
-
-export const RETIRED_COMMERCIAL_REDIRECTS = [
-  ...RETIRED_COMPARE_ROUTES.flatMap(([path, destination]) => slashVariants(path).map((source) => ({ source, destination, permanent: true }))),
-  { source: "/compare/:path*", destination: "/how-it-works/", permanent: true },
-];
-
-export function retiredRedirectFor(pathname) {
-  const pathOnly = String(pathname ?? "").split("?")[0].split("#")[0];
-  for (const rule of RETIRED_COMMERCIAL_REDIRECTS) {
-    if (rule.source.endsWith(":path*")) {
-      const base = rule.source.slice(0, -":path*".length).replace(/\/$/, "");
-      if (pathOnly === base || pathOnly.startsWith(`${base}/`)) return rule;
-    } else if (pathOnly === rule.source) return rule;
-  }
-  return null;
-}
+/* Retired comparison URLs answer 410 Gone from middleware.js; the list and
+   matcher live in ops/retired-page.mjs. */
+export { RETIRED_PATHS, isRetired } from "./retired-page.mjs";
 
 export function relatedCommercial(slug, all = COMMERCIAL_PAGES) {
   const index = all.findIndex((page) => page.slug === slug);

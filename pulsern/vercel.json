@@ -1,51 +1,107 @@
 {
   "functions": {
-    "api/ai.js": { "maxDuration": 60 }
+    "api/ai.js": {
+      "maxDuration": 60
+    }
   },
   "redirects": [
-    { "source": "/app", "destination": "/app/", "permanent": true },
-    { "source": "/clinicals", "destination": "/app/sign-up?cohort=clinicals&utm_source=clinicals&utm_medium=in-person&utm_campaign=clinical-students", "statusCode": 302 },
-    { "source": "/clinicals/", "destination": "/app/sign-up?cohort=clinicals&utm_source=clinicals&utm_medium=in-person&utm_campaign=clinical-students", "statusCode": 302 },
-    { "source": "/clinical", "destination": "/app/sign-up?cohort=clinicals&utm_source=clinicals&utm_medium=in-person&utm_campaign=clinical-students", "statusCode": 302 },
-    { "source": "/clinical/", "destination": "/app/sign-up?cohort=clinicals&utm_source=clinicals&utm_medium=in-person&utm_campaign=clinical-students", "statusCode": 302 },
-    { "source": "/compare", "destination": "/how-it-works/", "permanent": true },
-    { "source": "/compare/", "destination": "/how-it-works/", "permanent": true },
-    { "source": "/compare/methodology", "destination": "/methodology/", "permanent": true },
-    { "source": "/compare/methodology/", "destination": "/methodology/", "permanent": true },
-    { "source": "/compare/pulsern-vs-uworld", "destination": "/how-it-works/", "permanent": true },
-    { "source": "/compare/pulsern-vs-uworld/", "destination": "/how-it-works/", "permanent": true },
-    { "source": "/compare/pulsern-vs-archer", "destination": "/how-it-works/", "permanent": true },
-    { "source": "/compare/pulsern-vs-archer/", "destination": "/how-it-works/", "permanent": true },
-    { "source": "/compare/pulsern-vs-kaplan", "destination": "/how-it-works/", "permanent": true },
-    { "source": "/compare/pulsern-vs-kaplan/", "destination": "/how-it-works/", "permanent": true },
-    { "source": "/compare/best-nclex-question-banks", "destination": "/free-nclex-practice-test/", "permanent": true },
-    { "source": "/compare/best-nclex-question-banks/", "destination": "/free-nclex-practice-test/", "permanent": true },
-    { "source": "/compare/best-affordable-nclex-prep", "destination": "/pricing/", "permanent": true },
-    { "source": "/compare/best-affordable-nclex-prep/", "destination": "/pricing/", "permanent": true },
-    { "source": "/compare/best-nclex-app-repeat-test-takers", "destination": "/how-it-works/", "permanent": true },
-    { "source": "/compare/best-nclex-app-repeat-test-takers/", "destination": "/how-it-works/", "permanent": true },
-    { "source": "/compare/:path*", "destination": "/how-it-works/", "permanent": true }
+    {
+      "source": "/app",
+      "destination": "/app/",
+      "permanent": true
+    },
+    {
+      "source": "/clinicals",
+      "destination": "/app/sign-up?cohort=clinicals&utm_source=clinicals&utm_medium=in-person&utm_campaign=clinical-students",
+      "statusCode": 302
+    },
+    {
+      "source": "/clinicals/",
+      "destination": "/app/sign-up?cohort=clinicals&utm_source=clinicals&utm_medium=in-person&utm_campaign=clinical-students",
+      "statusCode": 302
+    },
+    {
+      "source": "/clinical",
+      "destination": "/app/sign-up?cohort=clinicals&utm_source=clinicals&utm_medium=in-person&utm_campaign=clinical-students",
+      "statusCode": 302
+    },
+    {
+      "source": "/clinical/",
+      "destination": "/app/sign-up?cohort=clinicals&utm_source=clinicals&utm_medium=in-person&utm_campaign=clinical-students",
+      "statusCode": 302
+    },
+    {
+      "source": "/:page(about|legal|learn|pricing|how-it-works|methodology|editorial-policy|free-nclex-practice-test)",
+      "destination": "/:page/",
+      "permanent": true
+    },
+    {
+      "source": "/learn/:slug([a-z0-9-]+)",
+      "destination": "/learn/:slug/",
+      "permanent": true
+    }
   ],
   "headers": [
     {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "SAMEORIGIN"
+        },
+        {
+          "key": "Cross-Origin-Opener-Policy",
+          "value": "same-origin-allow-popups"
+        }
+      ]
+    },
+    {
       "source": "/app/(.*)",
       "headers": [
-        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" },
-        { "key": "Cache-Control", "value": "private, no-cache, no-store, must-revalidate" }
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "private, no-cache, no-store, must-revalidate"
+        }
       ]
     },
     {
       "source": "/app-sw.js",
       "headers": [
-        { "key": "Service-Worker-Allowed", "value": "/app/" },
-        { "key": "Cache-Control", "value": "no-cache" }
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/app/"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
       ]
     }
   ],
   "rewrites": [
-    { "source": "/api/webhooks/stripe", "destination": "/api/stripe-webhook" },
-    { "source": "/review", "destination": "/review/index.html" },
-    { "source": "/app/(.*)", "destination": "/app/index.html" },
-    { "source": "/((?!api|assets|review|app).*)", "destination": "/index.html" }
+    {
+      "source": "/api/webhooks/stripe",
+      "destination": "/api/stripe-webhook"
+    },
+    {
+      "source": "/review",
+      "destination": "/review/index.html"
+    },
+    {
+      "source": "/app/(.*)",
+      "destination": "/app/index.html"
+    }
   ]
 }

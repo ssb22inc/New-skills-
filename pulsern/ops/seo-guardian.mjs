@@ -271,7 +271,9 @@ function markdown(report) {
 }
 
 export async function runAudit({ directory = "dist", output = "reports/seo" } = {}) {
-  const files = await htmlFiles(directory);
+  /* 404.html is the platform's error page for unmatched URLs: served with a
+     404 status and noindex, it is not an indexable route. */
+  const files = (await htmlFiles(directory)).filter((file) => path.relative(directory, file).split(path.sep).join("/") !== "404.html");
   const pages = await Promise.all(files
     .map((file) => ({ file, route: routeFor(directory, file) }))
     .filter(({ route }) => !route.startsWith("/owner/") && !route.startsWith("/review/") && !route.startsWith("/app/"))
