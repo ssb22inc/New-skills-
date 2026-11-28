@@ -1,0 +1,68 @@
+{
+  "model": "deepseek/deepseek-v4-pro-0813",
+  "mode": "trusted",
+  "meta": {
+    "base": "5ece89f04eac8e635a206fb73a71e98b2ff14e20",
+    "head": "8b68a7645db173ba63a5afa8f9ed6c39fe9e6ce4",
+    "pr": "191"
+  },
+  "reviewedAt": "2026-11-28T13:13:50.079Z",
+  "filesReviewed": [
+    "pulsern/middleware.js",
+    "pulsern/ops/build-public-pages.mjs",
+    "pulsern/ops/commercial-content.mjs",
+    "pulsern/ops/retired-page.mjs",
+    "pulsern/ops/seo-guardian.mjs",
+    "pulsern/public/404.html",
+    "pulsern/public/robots.txt",
+    "pulsern/tests/retired-commercial.test.js",
+    "pulsern/vercel.json"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "minor",
+      "file": "ops/retired-page.mjs:5 and middleware.js:8",
+      "line": 5,
+      "title": "Retired-path matching logic is split and the list is dead production data",
+      "problem": "RETIRED_PATHS is exported and tested, but neither middleware.js nor isRetired() consumes it. The actual retired set is hardcoded twice: the Vercel matcher hardcodes /compare, and isRetired() hardcodes the /compare prefix. If a future retired path outside /compare is added to RETIRED_PATHS, isRetired() would return true for it but middleware would not answer 410.",
+      "failure_scenario": "Developer adds '/old-course/' to RETIRED_PATHS and assumes publication is retired; traffic to /old-course/ falls through to the normal 404/static path instead of the 410 middleware.",
+      "fix": "Have middleware or isRetired derive behavior from RETIRED_PATHS, or rename the list so it cannot be mistaken for the actual retired-path source.",
+      "confidence": "medium"
+    },
+    {
+      "severity": "minor",
+      "file": "middleware.js:16",
+      "line": 16,
+      "title": "Public 410 can be cached for an hour after same-URL relaunch",
+      "problem": "The 410 response is cacheable with public, max-age=3600. The file comment explicitly contemplates relaunching a page at the same URL later. A cached 410 could still be served by browsers/proxies for up to an hour after that relaunch.",
+      "failure_scenario": "Page /compare/pulsern-vs-uworld/ is relaunched; a visitor who previously received the 410 within the current hour may still see Gone instead of the new page.",
+      "fix": "Use a shorter TTL for the 410, add a purge mechanism on relaunch, or document that the cache TTL must be cleared as part of relaunch.",
+      "confidence": "low"
+    },
+    {
+      "severity": "minor",
+      "file": "public/404.html:1 and ops/build-public-pages.mjs notFoundPage()",
+      "line": 1,
+      "title": "404 page has two sources of truth and no drift test",
+      "problem": "The 404 markup exists both as a committed public/404.html and as notFoundPage() in build-public-pages.mjs. The tests read the committed file, not builder output, so the generated page can drift from the tested artifact without failing CI.",
+      "failure_scenario": "ATTRIBUTION_BOOT_TAG, CSS, or footer/legal copy changes in the builder; build rewrites public/404.html, but tests continue validating the old strings or no longer catch a regression in the deployed file.",
+      "fix": "Either generate the public file only and delete the duplicate source, or add a test that executes notFoundPage() and compares it to public/404.html.",
+      "confidence": "medium"
+    }
+  ],
+  "usage": {
+    "promptTokens": 39904,
+    "completionTokens": 47537,
+    "reasoningTokens": 46906,
+    "costUsd": 0.21578174
+  },
+  "error": null,
+  "verdict": "PASS",
+  "assessment": "No blockers or majors found in clinical content, scoring, data handling, or security. Three minor maintainability concerns below.",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 3
+  }
+}
