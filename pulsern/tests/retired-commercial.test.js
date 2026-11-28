@@ -68,6 +68,8 @@ describe("retired comparison pages", () => {
     expect(body).toContain('<meta name="robots" content="noindex">');
     expect(body).toContain('href="/free-nclex-practice-test/"');
     expect(body).not.toMatch(COMPETITOR);
+    expect(body).toContain('href="/legal/"');
+    expect(body).toContain("NCLEX® is a registered trademark of NCSBN");
   });
 
   it("removes the comparison directory and drops /compare/ from robots.txt", async () => {
