@@ -6,7 +6,7 @@ export const TYPE_ARTICLES = [
   {
     slug: "bow-tie-questions",
     topic: "Question types",
-    title: "Bow-tie questions: how to answer them",
+    title: "NGN bow-tie questions: how to answer them",
     h1: "Bow-tie questions on the NCLEX",
     description: "A source-bound guide to NCLEX bow-tie items: identify one potential condition, two actions, and two parameters while keeping all five selections consistent.",
     published: "2026-08-03",
@@ -17,7 +17,7 @@ export const TYPE_ARTICLES = [
 
 <div class="key" role="note" aria-labelledby="bow-tie-boundary">
 <h2 id="bow-tie-boundary" style="margin-top:0">Format and scoring boundary</h2>
-<p>Use the current NCLEX Candidate Tutorial and official sample pack for the exact interface. NCSBN states generally that items with more than one key can receive partial credit under plus/minus, zero/one or rationale scoring. Do not assume a bow-tie is all-or-nothing, that every box earns an independent point, or that an incorrect center selection automatically erases every other selection.</p>
+<p>Use the current NCLEX Candidate Tutorial and official sample pack for the exact interface. A bow-tie tells you exactly how many to pick in each box (usually one condition, two actions and two parameters), so NCSBN's zero/one rule applies: each correct pick earns a point, and a wrong pick earns nothing without cancelling the others.</p>
 </div>
 
 <h2>What each part asks</h2>
@@ -32,7 +32,7 @@ export const TYPE_ARTICLES = [
   </tbody>
 </table>
 </div>
-<p class="source-note"><b>Evidence for the format:</b> NCSBN's <a href="#source-ncsbn-next-generation-nclex">Next Generation NCLEX materials</a>. Scoring boundaries come from Scoring Items in the <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a> and the <a href="#source-ncsbn-nclex-faqs">NCLEX FAQ</a>.</p>
+<p class="source-note"><b>Evidence for the format:</b> NCSBN's <a href="#source-ncsbn-next-generation-nclex">Next Generation NCLEX materials</a>. Scoring rules come from the Scoring Items section of the <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a> and the <a href="#source-ncsbn-nclex-faqs">NCLEX FAQ</a>.</p>
 
 <h2>A consistency-first method</h2>
 <p>The NCLEX does not require candidates to fill the targets in a particular reasoning order. One useful study method is:</p>
@@ -57,15 +57,15 @@ export const TYPE_ARTICLES = [
 `,
     faq: [
       { q: "What is a bow-tie question on the NCLEX?", a: "A clinical-judgment item that asks for one potential condition, two actions to take and two parameters to monitor based on the supplied client information." },
-      { q: "How is a bow-tie question scored?", a: "NCSBN states that items with more than one key can receive partial credit under plus/minus, zero/one or rationale scoring. Follow the item directions and do not assume an unofficial per-box or all-or-nothing rule." },
-      { q: "Must I fill in the condition first?", a: "No official rule requires a particular completion order. Identifying the best-supported condition first can be a useful consistency check because the actions and monitoring parameters should fit it, but review all five selections together before advancing." },
+      { q: "How is a bow-tie question scored?", a: "A bow-tie tells you how many to pick in each box, so NCSBN's zero/one rule applies: each correct pick earns a point, and a wrong pick earns nothing without cancelling the others." },
+      { q: "Do I have to pick the condition first?", a: "No official rule requires a particular completion order. Identifying the best-supported condition first can be a useful consistency check because the actions and monitoring parameters should fit it, but review all five selections together before advancing." },
     ],
   },
 
   {
     slug: "matrix-grid-questions",
     topic: "Question types",
-    title: "Matrix and grid questions: how to answer them",
+    title: "NGN matrix and grid questions: how to answer them",
     h1: "Matrix and grid questions on the NCLEX",
     description: "How to interpret NCLEX matrix/grid rows and columns, keep classifications tied to the client context, and avoid unofficial scoring rules.",
     published: "2026-08-03",
@@ -76,7 +76,7 @@ export const TYPE_ARTICLES = [
 
 <div class="key" role="note" aria-labelledby="matrix-boundary">
 <h2 id="matrix-boundary" style="margin-top:0">Scoring boundary</h2>
-<p>NCSBN states that items with more than one key can receive partial credit under plus/minus, zero/one or rationale scoring. That does not establish that every matrix is scored row by row, that every correct row earns an independent point, or that one method applies to every matrix item. Follow the displayed directions.</p>
+<p>When each row asks for one choice, the item is scored zero/one, one point per correct row. When a row lets you check more than one column, plus/minus applies to that item. Read the directions above the grid.</p>
 </div>
 
 <p><b>Study method:</b> treat each row as its own reasoning task, then review the complete grid. This is study guidance, not an official claim about how points are assigned.</p>
@@ -85,7 +85,7 @@ export const TYPE_ARTICLES = [
 <ol>
   <li><b>Read the categories before the rows.</b> Expected-for-this-condition is a different question from normal-for-a-healthy-adult, and the column headings tell you which one is being asked.</li>
   <li><b>Establish the frame.</b> Who is this client, what is their condition, how long post-operative or post-partum, what is their age? A heart rate of 120 is expected in an infant and alarming in a resting adult.</li>
-  <li><b>Cover the other rows.</b> Work one finding at a time, deciding it fully before moving on.</li>
+  <li><b>Work one row at a time.</b> After the first skim, decide each finding fully before moving on.</li>
   <li><b>Do not balance the columns.</b> There is no rule that categories are evenly used. If nine findings are unexpected, mark nine.</li>
 </ol>
 
@@ -103,7 +103,7 @@ export const TYPE_ARTICLES = [
 <p>Skim every row before classifying any. Matrix items are often built around two or three findings that carry the clinical story, with the rest as filler that is genuinely unremarkable. Spotting the important ones early stops you from reading significance into rows that have none.</p>
 `,
     faq: [
-      { q: "How are matrix questions scored on the NCLEX?", a: "NCSBN states that items with more than one key can receive partial credit under plus/minus, zero/one or rationale scoring. Do not assume every matrix uses a specific row-level or all-or-nothing rule; follow the item directions." },
+      { q: "How are matrix questions scored on the NCLEX?", a: "When each row asks for one choice, NCSBN scores the item zero/one, one point per correct row. When a row lets you check more than one column, plus/minus applies, so a wrong check takes a point away." },
       { q: "What categories do matrix questions use?", a: "Commonly expected versus unexpected, effective versus ineffective, or indicated versus contraindicated versus non-essential. Read the column headings first — they change what question you are actually answering." },
       { q: "Do matrix questions have an even number of answers per column?", a: "No. There is no requirement that categories be evenly used. If every finding in a scenario is unexpected, every row is marked unexpected." },
     ],
@@ -113,7 +113,7 @@ export const TYPE_ARTICLES = [
     slug: "cloze-drop-down-questions",
     topic: "Question types",
     title: "Cloze (drop-down) questions: how to answer them",
-    h1: "Cloze and drop-down questions on the NCLEX",
+    h1: "Cloze (drop-down) questions on the NCLEX",
     description: "A source-bound guide to NCLEX cloze and drop-down items, with a consistency-checking study method and clear scoring limits.",
     published: "2026-08-03",
     updated: "2026-08-28",
@@ -123,10 +123,10 @@ export const TYPE_ARTICLES = [
 
 <div class="key" role="note" aria-labelledby="cloze-boundary">
 <h2 id="cloze-boundary" style="margin-top:0">Format and scoring boundary</h2>
-<p>NCSBN states generally that items with more than one key can receive partial credit under plus/minus, zero/one or rationale scoring. That does not establish that every blank is scored independently, that choices must be linked to earn credit, or that one incorrect selection automatically makes the remaining selections wrong. Follow the directions displayed for the item rather than applying an unofficial blank-level scoring rule.</p>
+<p>Each drop-down asks for one choice, so it's scored zero/one: one point for each correct blank. When two drop-downs form a cause-and-effect pair ("the client is at risk for ___ as evidenced by ___"), NCSBN uses rationale scoring, and you earn the point only when both blanks are right.</p>
 </div>
 
-<p class="source-note"><b>Evidence:</b> Item-format context comes from NCSBN's <a href="#source-ncsbn-next-generation-nclex">Next Generation NCLEX materials</a>. The scoring boundary comes from Scoring Items in the <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a> and the <a href="#source-ncsbn-nclex-faqs">NCLEX FAQ</a>.</p>
+<p class="source-note"><b>Evidence:</b> Item-format context comes from NCSBN's <a href="#source-ncsbn-next-generation-nclex">Next Generation NCLEX materials</a>. The scoring rules come from the Scoring Items section of the <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a> and the <a href="#source-ncsbn-nclex-faqs">NCLEX FAQ</a>.</p>
 
 <h2>A consistency-checking study method</h2>
 <ol>
@@ -148,7 +148,7 @@ export const TYPE_ARTICLES = [
 `,
     faq: [
       { q: "What is a cloze question on the NCLEX?", a: "A drop-down item in which the candidate selects options to complete one or more blanks in a sentence, short paragraph or table. Consult the current Candidate Tutorial and official samples for the exact interface." },
-      { q: "Are cloze-question blanks scored separately?", a: "NCSBN describes partial-credit methods for items with more than one key, but that general guidance does not prove an independent point value or linked-dependency rule for every cloze blank. Follow the item's directions." },
+      { q: "Are cloze-question blanks scored separately?", a: "Usually, yes. Each drop-down is scored zero/one, one point per correct blank. When two blanks form a cause-and-effect pair, NCSBN uses rationale scoring, and the pair earns its point only when both blanks are right." },
       { q: "Should I answer cloze blanks in order?", a: "NCSBN does not require a particular reasoning order. Choose the response best supported by the client information for each blank, then review the completed response for consistency." },
     ],
   },
@@ -156,7 +156,7 @@ export const TYPE_ARTICLES = [
   {
     slug: "highlight-questions",
     topic: "Question types",
-    title: "Highlight questions: how to answer them",
+    title: "NGN highlight questions: how to answer them",
     h1: "Highlight questions on the NCLEX",
     description: "A source-bound guide to NCLEX highlight items: follow the stem, select only supported text, and avoid invented scoring or answer-count rules.",
     published: "2026-08-03",
@@ -167,10 +167,10 @@ export const TYPE_ARTICLES = [
 
 <div class="key" role="note" aria-labelledby="highlight-boundary">
 <h2 id="highlight-boundary" style="margin-top:0">Format and scoring boundary</h2>
-<p>NCSBN states generally that items with more than one key can receive partial credit under plus/minus, zero/one or rationale scoring. That does not establish that every highlight item uses plus/minus scoring, that each highlighted phrase has an independent point value, or that a particular number of phrases is correct. Follow the item directions and do not infer a scoring formula from the interface.</p>
+<p>When a highlight item asks you to highlight every finding that applies, NCSBN scores it plus/minus: wrong highlights take points away. When it tells you how many to highlight, it's scored zero/one, and a wrong highlight just earns nothing. Read the instruction to know which you're facing.</p>
 </div>
 
-<p class="source-note"><b>Evidence:</b> The format and clinical-judgment context come from NCSBN's <a href="#source-ncsbn-next-generation-nclex">Next Generation NCLEX materials</a>. The scoring boundary comes from Scoring Items in the <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a> and the <a href="#source-ncsbn-nclex-faqs">NCLEX FAQ</a>.</p>
+<p class="source-note"><b>Evidence:</b> The format and clinical-judgment context come from NCSBN's <a href="#source-ncsbn-next-generation-nclex">Next Generation NCLEX materials</a>. The scoring rules come from the Scoring Items section of the <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a> and the <a href="#source-ncsbn-nclex-faqs">NCLEX FAQ</a>.</p>
 
 <h2>A stem-first study method</h2>
 <ol>
@@ -185,7 +185,7 @@ export const TYPE_ARTICLES = [
 <h2>Questions for evaluating a phrase</h2>
 <ul>
   <li>Does the phrase answer the wording of the stem?</li>
-  <li>Is it relevant in this client's age, condition and time course?</li>
+  <li>Is it relevant given this client's age, condition and time course?</li>
   <li>Does the prompt ask for a current finding, a change, a risk, an intervention or a response to care?</li>
   <li>Is the relationship supported by the supplied record rather than an assumption?</li>
 </ul>
@@ -196,34 +196,33 @@ export const TYPE_ARTICLES = [
   <li>Using one value in isolation while ignoring its unit, trend or client context.</li>
   <li>Choosing text that is clinically interesting but does not answer the question.</li>
   <li>Assuming an unofficial target number of selections.</li>
-  <li>Trying to calculate an unofficial partial-credit strategy instead of completing the requested response.</li>
 </ul>
 `,
     faq: [
       { q: "What is a highlight question on the NCLEX?", a: "An item that presents text from client information and asks the candidate to select the words or phrases that answer the prompt. Consult the current Candidate Tutorial and official samples for the exact interface." },
       { q: "Should I highlight every abnormal finding?", a: "No fixed rule says to select every abnormal-looking phrase. Apply the wording of the stem and select only text that directly supports the requested judgment in the supplied client context." },
-      { q: "How are highlight questions scored?", a: "NCSBN describes plus/minus, zero/one and rationale partial-credit methods for items with more than one key, but that general guidance does not prove one method or an independent point value for every highlight selection. Follow the displayed directions." },
+      { q: "How are highlight questions scored?", a: "It depends on the instruction. An item that asks you to highlight every finding that applies is scored plus/minus, so wrong highlights cost points. An item that tells you how many to highlight is scored zero/one, so a wrong highlight earns nothing but costs nothing." },
     ],
   },
 
   {
     slug: "select-all-that-apply-strategy",
     topic: "Question types",
-    title: "Select all that apply: a source-bound strategy",
+    title: "NCLEX SATA questions: how they're scored",
     h1: "Select all that apply (SATA) questions",
     description: "A source-bound guide to NCLEX multiple-response items: evaluate every option against the stem without inventing answer-count or scoring rules.",
     published: "2026-08-03",
     updated: "2026-08-29",
     cta: "PulseRN can provide multiple-response practice with rationales; it does not reproduce the official NCLEX item bank or predict an exam result.",
     body: `
-<p>Select-all-that-apply (SATA), also described as multiple response, asks the candidate to select every option that correctly answers the stem. Use the current NCLEX Candidate Tutorial and official samples for the exact interface and directions.</p>
+<p>Select-all-that-apply (SATA), which NCSBN calls multiple response, asks the candidate to select every option that correctly answers the stem. Use the current NCLEX Candidate Tutorial and official samples for the exact interface and directions.</p>
 
 <div class="key" role="note" aria-labelledby="sata-boundary">
 <h2 id="sata-boundary" style="margin-top:0">Format and scoring boundary</h2>
-<p>NCSBN states generally that items with more than one key can receive partial credit under plus/minus, zero/one or rationale scoring. That does not establish that every multiple-response item uses plus/minus scoring, that every option has an independent point value, or that a coin-flip strategy has a predictable benefit. Follow the displayed directions rather than applying an unofficial scoring formula.</p>
+<p>A select-all-that-apply item doesn't tell you how many options are correct, so NCSBN scores it plus/minus. Each correct pick earns a point, each wrong pick takes one away, and the item never scores below zero. Choosing extra options to be safe costs points.</p>
 </div>
 
-<p class="source-note"><b>Evidence:</b> Item-format context comes from NCSBN's <a href="#source-ncsbn-next-generation-nclex">Next Generation NCLEX materials</a>. The scoring boundary comes from Scoring Items in the <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a> and the <a href="#source-ncsbn-nclex-faqs">NCLEX FAQ</a>.</p>
+<p class="source-note"><b>Evidence:</b> Item-format context comes from NCSBN's <a href="#source-ncsbn-next-generation-nclex">Next Generation NCLEX materials</a>. The scoring rules come from the Scoring Items section of the <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a> and the <a href="#source-ncsbn-nclex-faqs">NCLEX FAQ</a>.</p>
 
 <h2>An option-by-option study method</h2>
 <ol>
@@ -246,7 +245,7 @@ export const TYPE_ARTICLES = [
 `,
     faq: [
       { q: "How many answers are correct in a select-all-that-apply question?", a: "Do not assume a target count. Select every option that answers the stem based on the supplied client information, and consult the current Candidate Tutorial for the exact directions." },
-      { q: "How are select-all-that-apply questions scored?", a: "NCSBN describes plus/minus, zero/one and rationale partial-credit methods for items with more than one key. That general guidance does not establish one scoring method or an independent point value for every SATA option." },
+      { q: "How are select-all-that-apply questions scored?", a: "Plus/minus. A select-all-that-apply item doesn't say how many options are correct, so each correct pick earns a point, each wrong pick takes one away, and the item can't score below zero." },
       { q: "Should I judge SATA options separately?", a: "Evaluating each option against the same stem is a useful study method. It helps prevent answer-count guessing, but it is not a claim about how NCSBN awards points." },
     ],
   },
@@ -268,7 +267,7 @@ export const TYPE_ARTICLES = [
 <p>NCSBN states generally that items with more than one key can receive partial credit under plus/minus, zero/one or rationale scoring. That does not establish that every ordering item is all-or-nothing, that every correctly placed position earns an independent point, or that an early error automatically invalidates every later position. Follow the displayed directions and do not apply an unofficial scoring formula.</p>
 </div>
 
-<p class="source-note"><b>Evidence:</b> Item-format context comes from NCSBN's <a href="#source-ncsbn-next-generation-nclex">Next Generation NCLEX materials</a>. The scoring boundary comes from Scoring Items in the <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a> and the <a href="#source-ncsbn-nclex-faqs">NCLEX FAQ</a>.</p>
+<p class="source-note"><b>Evidence:</b> Item-format context comes from NCSBN's <a href="#source-ncsbn-next-generation-nclex">Next Generation NCLEX materials</a>. The scoring rules come from the Scoring Items section of the <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a> and the <a href="#source-ncsbn-nclex-faqs">NCLEX FAQ</a>.</p>
 
 <h2>A constraint-first study method</h2>
 <ol>
@@ -290,9 +289,8 @@ export const TYPE_ARTICLES = [
 </ul>
 `,
     faq: [
-      { q: "How are NCLEX ordering questions scored?", a: "NCSBN describes plus/minus, zero/one and rationale partial-credit methods for items with more than one key. That general guidance does not establish one method or a per-position value for every ordering item." },
-      { q: "What order should I use for nursing actions?", a: "Use the task, client information and applicable current standard to determine the relationships among the supplied options. No single mnemonic determines every clinical or procedural sequence." },
-      { q: "Should assessment always come first?", a: "Do not use an absolute rule. The correct sequence depends on the prompt, information already supplied, the client's condition and the applicable current standard; in real care, follow current protocols, orders and scope of practice." },
+      { q: "What order should I use for nursing actions?", a: "Use the task and client information to determine the relationships among the supplied options. No single mnemonic determines every clinical or procedural sequence." },
+      { q: "Should assessment always come first?", a: "Do not use an absolute rule. The correct sequence depends on the prompt, information already supplied, and the client's condition; in real care, follow current protocols, orders and scope of practice." },
     ],
   },
 ];

@@ -343,7 +343,7 @@ describe("SEO guardian", () => {
     expect(guide.body.match(/scope="row"/g)).toHaveLength(5);
     expect(guide.body).toContain('class="table-wrap" role="region" aria-label="Insulin category timing estimates" tabindex="0"');
     expect(guide.body).toContain('aria-labelledby="insulin-safety-boundary"');
-    expect(guide.body).toContain("regular human insulin is not the only insulin that can ever be given IV");
+    expect(guide.body).toContain("regular human insulin is not the only insulin that can be given IV");
     expect(guide.body).toContain("Do not mix insulin glargine");
     expect(guide.body).toContain("15 grams of fast-acting carbohydrate");
     expect(guide.body).not.toContain("Only regular insulin is given intravenously");
@@ -552,7 +552,7 @@ describe("SEO guardian", () => {
     expect(guide.updated).toBe("2026-08-28");
     expect(guide.body).toContain('aria-labelledby="scoring-boundary"');
     expect(guide.body).toContain("using all previous responses and the difficulty of those items");
-    expect(guide.body).toContain("Fewer than the required minimum items is an automatic fail");
+    expect(guide.body).toContain("Answering fewer than the minimum number of items is an automatic fail");
     expect(guide.body).toContain("items with more than one key can receive partial credit");
     expect(guide.body.match(/<caption>/g)).toHaveLength(1);
     expect(guide.body.match(/scope="col"/g)).toHaveLength(3);
@@ -575,7 +575,7 @@ describe("SEO guardian", () => {
     expect(guide.body).toContain('aria-labelledby="length-boundary"');
     expect(guide.body).toContain("at least 85 items and may receive up to 150");
     expect(guide.body).toContain("five-hour limit includes all breaks");
-    expect(guide.body).toContain("fewer than 85 completed items results in a failing examination");
+    expect(guide.body).toContain("a candidate who answers fewer than 85 items fails");
     expect(guide.body).toContain("15 pretest items appear on every examination");
     expect(guide.body.match(/<caption>/g)).toHaveLength(1);
     expect(guide.body.match(/scope="col"/g)).toHaveLength(3);
@@ -641,7 +641,7 @@ describe("SEO guardian", () => {
     expect(guide.updated).toBe("2026-08-28");
     expect(guide.body).toContain('aria-labelledby="bow-tie-boundary"');
     expect(guide.body).toContain("one potential condition, two actions to take and two parameters to monitor");
-    expect(guide.body).toContain("Do not assume a bow-tie is all-or-nothing");
+    expect(guide.body).toContain("a wrong pick earns nothing without cancelling the others");
     expect(guide.body.match(/scope="col"/g)).toHaveLength(3);
     expect(guide.body.match(/scope="row"/g)).toHaveLength(3);
     expect(guide.body).not.toContain("gives you nothing for that");
@@ -654,7 +654,7 @@ describe("SEO guardian", () => {
     const guide = TYPE_ARTICLES.find((article) => article.slug === "matrix-grid-questions");
     expect(guide.updated).toBe("2026-08-28");
     expect(guide.body).toContain('aria-labelledby="matrix-boundary"');
-    expect(guide.body).toContain("does not establish that every matrix is scored row by row");
+    expect(guide.body).toContain("When a row lets you check more than one column, plus/minus applies to that item");
     expect(guide.body).not.toContain("usually scored <b>row by row</b>");
     expect(guide.body).not.toContain("Each finding you classify correctly can earn credit independently");
     expect(sourcesFor(guide).map((source) => source.id)).toEqual(["ncsbn-2026-rn-test-plan", "ncsbn-next-generation-nclex", "ncsbn-nclex-faqs"]);
@@ -664,7 +664,7 @@ describe("SEO guardian", () => {
     const guide = TYPE_ARTICLES.find((article) => article.slug === "cloze-drop-down-questions");
     expect(guide.updated).toBe("2026-08-28");
     expect(guide.body).toContain('aria-labelledby="cloze-boundary"');
-    expect(guide.body).toContain("does not establish that every blank is scored independently");
+    expect(guide.body).toContain("NCSBN uses rationale scoring, and you earn the point only when both blanks are right");
     expect(guide.body).toContain("study guidance, not a claim that NCSBN scores the blanks as a linked chain");
     expect(guide.body).not.toContain("linked selections must agree with one another to earn credit");
     expect(guide.body).not.toContain("blanks 2 and 3 are almost certainly wrong");
@@ -676,7 +676,7 @@ describe("SEO guardian", () => {
     const guide = TYPE_ARTICLES.find((article) => article.slug === "highlight-questions");
     expect(guide.updated).toBe("2026-08-28");
     expect(guide.body).toContain('aria-labelledby="highlight-boundary"');
-    expect(guide.body).toContain("does not establish that every highlight item uses plus/minus scoring");
+    expect(guide.body).toContain("When it tells you how many to highlight, it's scored zero/one");
     expect(guide.body).toContain("study guidance, not an NCSBN scoring rule");
     expect(guide.body).not.toContain("These items commonly use +/- scoring");
     expect(guide.body).not.toContain("two or three things");
@@ -688,7 +688,7 @@ describe("SEO guardian", () => {
     const guide = TYPE_ARTICLES.find((article) => article.slug === "select-all-that-apply-strategy");
     expect(guide.updated).toBe("2026-08-29");
     expect(guide.body).toContain('aria-labelledby="sata-boundary"');
-    expect(guide.body).toContain("does not establish that every multiple-response item uses plus/minus scoring");
+    expect(guide.body).toContain("so NCSBN scores it plus/minus");
     expect(guide.body).toContain("study guidance, not an assertion that NCSBN awards an independent point");
     expect(guide.body).not.toContain("expected value is roughly zero");
     expect(guide.body).not.toContain("Under older all-or-nothing scoring");

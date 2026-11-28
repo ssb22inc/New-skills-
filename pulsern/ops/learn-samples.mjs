@@ -66,12 +66,12 @@ export const SAMPLE_ARTICLES = [
   <li>Assume one dose is always sufficient for every opioid exposure.</li>
   <li>Continue respiratory support and surveillance, with repeat treatment available as ordered if the response is incomplete or symptoms recur.</li>
 </ol>
-<details><summary>Show answer and rationale</summary><p><b>Answer: D.</b> The naloxone label directs clinicians to maintain airway and resuscitative support, observe the patient, and use repeat administration when indicated because the initial response may be incomplete and opioid effects can outlast naloxone. A response does not remove the need for monitoring.</p></details>
+<details><summary>Show answer and rationale</summary><p><b>Answer: D.</b> The naloxone label directs clinicians to maintain airway and resuscitative support, observe the client, and use repeat administration when indicated because the initial response may be incomplete and opioid effects can outlast naloxone. A response does not remove the need for monitoring.</p></details>
 </section>
 
 <section class="question" aria-labelledby="pharm-q5">
 <h2 id="pharm-q5">Question 5: Flumazenil safety</h2>
-<p>Which risk is most important to recognize before administering flumazenil?</p>
+<p>Which statement about flumazenil is accurate?</p>
 <ol class="options" type="A">
   <li>It prevents all recurrence of sedation.</li>
   <li>It eliminates the need for airway and ventilatory support.</li>
@@ -109,12 +109,12 @@ export const SAMPLE_ARTICLES = [
 <h2 id="priority-q1">Question 1: Established cardiac arrest</h2>
 <p>A hospitalized adult is unresponsive, is not breathing normally, and has no definite pulse. Which action takes priority?</p>
 <ol class="options" type="A">
-  <li>Activate the emergency response and begin high-quality CPR while an AED/defibrillator is obtained.</li>
+  <li>Activate the emergency response and begin high-quality CPR while an AED or defibrillator is obtained.</li>
   <li>Complete a full pain assessment.</li>
   <li>Review the admission medication list before intervening.</li>
   <li>Wait for the primary provider to arrive before starting resuscitation.</li>
 </ol>
-<details><summary>Show answer and rationale</summary><p><b>Answer: A.</b> The scenario already establishes cardiac arrest. Current adult basic-life-support guidance prioritizes recognition, emergency-response activation, high-quality CPR, and AED use. Nonessential assessment and record review must not delay the defined emergency response.</p></details>
+<details><summary>Show answer and rationale</summary><p><b>Answer: A.</b> The scenario already establishes cardiac arrest. Current adult basic life support (BLS) guidance prioritizes recognition, activation of the emergency response, high-quality CPR, and AED use. Nonessential assessment and record review must not delay the defined emergency response.</p></details>
 </section>
 
 <section class="question" aria-labelledby="priority-q2">
@@ -126,7 +126,7 @@ export const SAMPLE_ARTICLES = [
   <li>A client awaiting routine discharge instructions</li>
   <li>A client with a documented chronic finding unchanged from baseline</li>
 </ol>
-<details><summary>Show answer and rationale</summary><p><b>Answer: B.</b> A sudden neurologic change is new, potentially time-sensitive, and carries a greater consequence of delay than stable or routine needs. “Chronic” and “expected” are context, not automatic proof of safety; the decisive comparison here is the abrupt change.</p></details>
+<details><summary>Show answer and rationale</summary><p><b>Answer: B.</b> A sudden neurologic change is new, potentially time-sensitive, and carries a greater consequence of delay than stable or routine needs. “Chronic” and “unchanged from baseline” are context, not automatic proof of safety; the decisive comparison here is the abrupt change.</p></details>
 </section>
 
 <section class="question" aria-labelledby="priority-q3">
@@ -191,25 +191,25 @@ export const SAMPLE_ARTICLES = [
 
 <section class="question" aria-labelledby="dose-q1">
 <h2 id="dose-q1">Question 1: Tablets</h2>
-<p>The educational order is 500 mg. The supplied tablet contains 250 mg. How many tablets correspond to the ordered dose?</p>
+<p>Ordered: 500 mg. Available: 250 mg tablets. How many tablets correspond to the ordered dose?</p>
 <details><summary>Show answer and rationale</summary><p><b>Answer: 2 tablets.</b> Ordered dose ÷ available dose × available quantity = 500 mg ÷ 250 mg × 1 tablet = 2 tablets. The milligram units cancel, leaving tablets.</p></details>
 </section>
 
 <section class="question" aria-labelledby="dose-q2">
 <h2 id="dose-q2">Question 2: Oral liquid</h2>
-<p>The educational order is 375 mg. The supplied concentration is 250 mg per 5 mL. How many milliliters correspond to the ordered dose?</p>
+<p>Ordered: 375 mg. Available: 250 mg/5 mL. How many milliliters correspond to the ordered dose?</p>
 <details><summary>Show answer and rationale</summary><p><b>Answer: 7.5 mL.</b> 375 mg ÷ 250 mg × 5 mL = 7.5 mL. Keep the concentration together as 250 mg per 5 mL and confirm that milligrams cancel.</p></details>
 </section>
 
 <section class="question" aria-labelledby="dose-q3">
 <h2 id="dose-q3">Question 3: Infusion-pump rate</h2>
-<p>An educational item supplies 250 mL to infuse over 2 hours. What pump rate in mL/hr completes that volume in the stated time?</p>
+<p>Ordered: 250 mL to infuse over 2 hours. What pump rate in mL/hr completes that volume in the stated time?</p>
 <details><summary>Show answer and rationale</summary><p><b>Answer: 125 mL/hr.</b> Volume ÷ time = 250 mL ÷ 2 hr = 125 mL/hr. The item asks for a pump rate, so the final unit is milliliters per hour.</p></details>
 </section>
 
 <section class="question" aria-labelledby="dose-q4">
 <h2 id="dose-q4">Question 4: Gravity drip rate</h2>
-<p>An educational item supplies 1,000 mL over 8 hours with tubing calibrated at 15 gtt/mL. Calculate the whole-number drip rate in gtt/min.</p>
+<p>Ordered: 1,000 mL over 8 hours, with tubing calibrated at 15 gtt/mL. Calculate the whole-number drip rate in gtt/min.</p>
 <details><summary>Show answer and rationale</summary><p><b>Answer: 31 gtt/min.</b> Convert 8 hours to 480 minutes. Then 1,000 mL × 15 gtt/mL ÷ 480 min = 31.25 gtt/min. A gravity drip is counted in whole drops, so round the final result to 31 gtt/min.</p></details>
 </section>
 
@@ -249,7 +249,7 @@ export const SAMPLE_ARTICLES = [
 <p><b>Select one condition:</b> opioid toxicity; hypoglycemia; airborne infection.</p>
 <p><b>Select two actions:</b> support airway and ventilation; administer naloxone as ordered; give flumazenil; end observation after the first response.</p>
 <p><b>Select two parameters:</b> respiratory effort and oxygenation; level of consciousness and recurrent sedation; dietary vitamin K intake; stool frequency.</p>
-<details><summary>Show answer and rationale</summary><p><b>Condition:</b> opioid toxicity. <b>Actions:</b> support airway/ventilation and administer naloxone as ordered. <b>Monitor:</b> respiratory effort/oxygenation and consciousness/recurrent sedation. The naloxone label keeps resuscitative support and surveillance central because the response can be incomplete and opioid effects can recur after naloxone wanes.</p></details>
+<details><summary>Show answer and rationale</summary><p><b>Condition:</b> opioid toxicity. <b>Actions:</b> support airway and ventilation and administer naloxone as ordered. <b>Monitor:</b> respiratory effort and oxygenation, and consciousness and recurrent sedation. The naloxone label keeps resuscitative support and surveillance central because the response can be incomplete and opioid effects can recur after naloxone wanes.</p></details>
 </section>
 
 <section class="question" aria-labelledby="bowtie-q2">
@@ -265,27 +265,27 @@ export const SAMPLE_ARTICLES = [
 <h2 id="bowtie-q3">Question 3: Suspected C. difficile</h2>
 <p><b>Cues:</b> A hospitalized client develops new frequent diarrhea after antibiotic exposure, and C. difficile testing is ordered.</p>
 <p><b>Select one condition:</b> suspected C. difficile infection; cardiac arrest; opioid toxicity.</p>
-<p><b>Select two actions:</b> initiate Contact Precautions according to policy; use dedicated equipment when possible; place the client in an airborne-infection isolation room solely for this finding; delay precautions until every test is final.</p>
+<p><b>Select two actions:</b> initiate Contact Precautions according to policy; use dedicated equipment when possible; place the client in an airborne infection isolation room (AIIR) solely for this finding; delay precautions until every test is final.</p>
 <p><b>Select two parameters:</b> stool pattern and hydration-related clinical status; response to the ordered evaluation and treatment; INR; insulin peak time.</p>
-<details><summary>Show answer and rationale</summary><p><b>Condition:</b> suspected C. difficile infection. <b>Actions:</b> initiate Contact Precautions according to policy and use dedicated equipment. <b>Monitor:</b> stool pattern/hydration-related status and the response to ordered evaluation/treatment. CDC guidance supports prompt isolation/contact precautions and dedicated equipment; it does not classify C. difficile as an airborne indication.</p></details>
+<details><summary>Show answer and rationale</summary><p><b>Condition:</b> suspected C. difficile infection. <b>Actions:</b> initiate Contact Precautions according to policy and use dedicated equipment. <b>Monitor:</b> stool pattern/hydration-related status and the response to ordered evaluation/treatment. CDC guidance supports prompt isolation with Contact Precautions and dedicated equipment; it does not classify C. difficile as an airborne indication.</p></details>
 </section>
 
 <section class="question" aria-labelledby="bowtie-q4">
 <h2 id="bowtie-q4">Question 4: Bleeding during heparin therapy</h2>
 <p><b>Cues:</b> A client receiving unfractionated heparin develops significant active bleeding and an excessive anticoagulation response.</p>
-<p><b>Select one condition:</b> heparin-associated over-anticoagulation; hypoglycemia; benzodiazepine reversal.</p>
+<p><b>Select one condition:</b> heparin-related bleeding (excessive anticoagulation); hypoglycemia; benzodiazepine toxicity.</p>
 <p><b>Select two actions:</b> stop heparin and notify the appropriate clinician according to the emergency process; prepare protamine sulfate if ordered; administer naloxone; encourage unsupervised ambulation.</p>
 <p><b>Select two parameters:</b> bleeding and hemodynamic response; ordered coagulation testing; stool isolation category; glucose after oral carbohydrate.</p>
-<details><summary>Show answer and rationale</summary><p><b>Condition:</b> heparin-associated over-anticoagulation. <b>Actions:</b> stop the heparin/escalate according to the clinical process and prepare ordered protamine. <b>Monitor:</b> bleeding/hemodynamic response and ordered coagulation tests. The heparin and protamine labels support coagulation monitoring and protamine neutralization, with careful administration because protamine itself can cause severe reactions.</p></details>
+<details><summary>Show answer and rationale</summary><p><b>Condition:</b> heparin-related bleeding (excessive anticoagulation). <b>Actions:</b> stop the heparin and escalate according to the clinical process and prepare ordered protamine. <b>Monitor:</b> bleeding/hemodynamic response and ordered coagulation tests. The heparin and protamine labels support coagulation monitoring and protamine neutralization, with careful administration because protamine itself can cause severe reactions.</p></details>
 </section>
 
 <section class="question" aria-labelledby="bowtie-q5">
 <h2 id="bowtie-q5">Question 5: Cardiac arrest</h2>
 <p><b>Cues:</b> An adult suddenly becomes unresponsive, is not breathing normally, and has no definite pulse.</p>
 <p><b>Select one condition:</b> cardiac arrest; stable chronic pain; isolated dietary interaction.</p>
-<p><b>Select two actions:</b> activate the emergency-response system; begin high-quality CPR and obtain an AED/defibrillator; complete routine discharge teaching; wait for a full chart review.</p>
+<p><b>Select two actions:</b> activate the emergency-response system; begin high-quality CPR and obtain an AED or defibrillator; complete routine discharge teaching; wait for a full chart review.</p>
 <p><b>Select two parameters:</b> rhythm/pulse checks at the protocol-defined times; response to CPR and defibrillation; long-term food preferences; bowel pattern before resuscitation.</p>
-<details><summary>Show answer and rationale</summary><p><b>Condition:</b> cardiac arrest. <b>Actions:</b> activate emergency response and begin CPR/obtain an AED. <b>Monitor:</b> protocol-timed rhythm/pulse assessment and response to resuscitation. Current adult basic-life-support guidance prioritizes recognition, activation, CPR, and AED use without delaying for nonessential tasks.</p></details>
+<details><summary>Show answer and rationale</summary><p><b>Condition:</b> cardiac arrest. <b>Actions:</b> activate emergency response and begin CPR/obtain an AED. <b>Monitor:</b> protocol-timed rhythm/pulse assessment and response to resuscitation. Current adult basic life support (BLS) guidance prioritizes recognition, activation, CPR, and AED use without delaying for nonessential tasks.</p></details>
 </section>
 `,
     faq: [

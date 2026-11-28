@@ -34,7 +34,7 @@ export const EXAM_ARTICLES = [
   <tbody>
     <tr><th scope="row">95% Confidence Interval</th><td>The computer becomes 95% certain that ability is clearly above or clearly below the passing standard.</td><td>The exam stops and the direction of that confidence determines pass or fail. NCSBN identifies this as the most common rule.</td></tr>
     <tr><th scope="row">Maximum-Length Exam</th><td>The 95% confidence decision is not reached before the maximum number of items.</td><td>The confidence-interval rule is disregarded. The final ability estimate based on all responses passes at or above the standard and fails below it.</td></tr>
-    <tr><th scope="row">Run-Out-Of-Time</th><td>Time expires before the maximum and no 95% confidence decision has been reached.</td><td>Fewer than the required minimum items is an automatic fail. After at least the minimum, the final ability estimate based on all completed responses passes at or above the standard and fails below it.</td></tr>
+    <tr><th scope="row">Run-Out-Of-Time</th><td>Time expires before the maximum and no 95% confidence decision has been reached.</td><td>Answering fewer than the minimum number of items is an automatic fail. After at least the minimum, the final ability estimate based on all completed responses passes at or above the standard and fails below it.</td></tr>
   </tbody>
 </table>
 </div>
@@ -62,7 +62,7 @@ export const EXAM_ARTICLES = [
 </ul>
 `,
     faq: [
-      { q: "Is there a passing percentage on the NCLEX?", a: "The NCLEX-RN reports pass or fail rather than a candidate percentage score. CAT compares the final ability decision with the passing standard under one of NCSBN's three decision rules." },
+      { q: "Is there a passing percentage on the NCLEX?", a: "The NCLEX-RN reports pass or fail rather than a candidate percentage score. CAT compares the final ability estimate with the passing standard under one of NCSBN's three decision rules." },
       { q: "Does finishing in the minimum number of questions mean I passed?", a: "No. An early stop under the 95% Confidence Interval Rule can mean ability was clearly above or clearly below the passing standard. Question count alone is not the result." },
       { q: "Do harder questions mean I am doing well?", a: "Perceived difficulty is not a reliable score signal. CAT selects an item intended to be optimal for the current estimate, and candidates are not shown calibrated difficulty. Continue answering the item in front of you rather than estimating the result." },
       { q: "Is there partial credit on the NCLEX?", a: "Yes, for items with more than one key. NCSBN identifies plus/minus, zero/one and rationale scoring as the three partial-credit methods. The applicable method depends on the item; do not treat every item as using the same scoring rule." },
@@ -107,7 +107,7 @@ export const EXAM_ARTICLES = [
 
 <h2>Time, not just items</h2>
 <p>The five-hour limit includes all breaks. NCSBN does not set a time limit for an individual item. Once a candidate confirms an answer and advances, the candidate cannot return to that item, and every item must be answered before proceeding.</p>
-<p>If time expires before the maximum and no 95% confidence decision has been reached, fewer than 85 completed items results in a failing examination. After at least 85 items, the final ability estimate from all completed responses passes at or above the standard and fails below it.</p>
+<p>If time expires before the maximum and no 95% confidence decision has been reached, a candidate who answers fewer than 85 items fails. After at least 85 items, the final ability estimate from all completed responses passes at or above the standard and fails below it.</p>
 
 <h2>Practice pacing without inventing a universal quota</h2>
 <p>There is no evidence-based requirement that every candidate complete a particular number of full-length simulations. Timed mixed sets or longer practice can help you observe pacing and concentration, but they should leave enough time to review reasoning, repair content gaps and rest. Use repeated practice evidence to adjust the workload rather than enforcing an arbitrary per-item clock.</p>
@@ -204,7 +204,7 @@ export const EXAM_ARTICLES = [
 
 <div class="key" role="note" aria-labelledby="test-day-boundary">
 <h2 id="test-day-boundary" style="margin-top:0">Verify your own appointment</h2>
-<p>This guide summarizes the 2026 NCSBN Candidate Bulletin and RN Test Plan checked on August 28, 2026. Requirements can change and accommodations or international testing can differ. Confirm your appointment email, current Candidate Bulletin and testing-accommodation instructions before test day.</p>
+<p>This guide summarizes the 2026 NCSBN Candidate Bulletin and RN Test Plan checked on August 28, 2026. Requirements can change, and accommodated or international testing can differ. Confirm your appointment email, current Candidate Bulletin and testing-accommodation instructions before test day.</p>
 </div>
 
 <h2>Before arrival</h2>
