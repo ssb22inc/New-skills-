@@ -14,7 +14,7 @@ export const LOGISTICS_ARTICLES = [
     updated: "2026-08-31",
     cta: "PulseRN can help organize study and practice after registration; it cannot determine eligibility, issue an ATT, or schedule an NCLEX appointment.",
     body: `
-<p>NCLEX-RN registration is not one form submitted to one organization. It is a sequence involving the nursing regulatory body (NRB) where you are applying for licensure and Pearson, the examination administrator. NCSBN tells candidates to complete every step and to confirm the requirements of the NRB where they seek to practice.</p>
+<p>NCLEX-RN registration is not one form submitted to one organization. It involves two organizations: the nursing regulatory body (NRB) where you're applying for a license, and Pearson VUE, which runs the exam. NCSBN tells candidates to complete every step and to confirm the requirements of the NRB where they seek to practice.</p>
 
 <div class="key" role="note" aria-labelledby="registration-boundary">
 <h2 id="registration-boundary" style="margin-top:0">Use your regulator's instructions</h2>
@@ -70,7 +70,7 @@ export const LOGISTICS_ARTICLES = [
     updated: "2026-08-31",
     cta: "PulseRN can support your preparation while you wait for an ATT, but it has no access to NRB eligibility decisions or Pearson registration records.",
     body: `
-<p>An Authorization to Test (ATT) is the Pearson email that permits an eligible, registered candidate to schedule the NCLEX. It is not the nursing license, an examination result, or a general approval without an expiration date.</p>
+<p>An Authorization to Test (ATT) is the Pearson email that permits an eligible, registered candidate to schedule the NCLEX. It is not a license, a result, or an open-ended approval.</p>
 
 <div class="key" role="note" aria-labelledby="att-boundary">
 <h2 id="att-boundary" style="margin-top:0">Your ATT controls your dates</h2>
@@ -132,7 +132,7 @@ export const LOGISTICS_ARTICLES = [
 </div>
 
 <h2>Scheduling the first appointment</h2>
-<p>Sign in to Pearson, choose a preferred test center, date and time, and verify the confirmation email. NCSBN states that first-time candidates will be offered an appointment within 30 days of the scheduling request; repeat candidates will be offered an appointment beginning 45 days after the prior attempt. A candidate may decline the offered appointment and choose a later available date.</p>
+<p>Sign in to Pearson, choose a preferred test center, date and time, and verify the confirmation email. NCSBN states that first-time candidates will be offered an appointment 30 days after the scheduling request; repeat candidates will be offered an appointment beginning 45 days after the prior attempt. A candidate may decline the offered appointment and choose a later available date.</p>
 <p>These are appointment-offer rules, not promises that every preferred center or date will be available. Scheduling early generally preserves more choices, while waiting until the ATT is close to expiration can leave no available seat inside the validity window.</p>
 
 <h2>Changing or canceling a domestic appointment</h2>
@@ -150,7 +150,7 @@ export const LOGISTICS_ARTICLES = [
 <p class="source-note"><b>Evidence for this table:</b> Changing an Appointment on the official <a href="#source-ncsbn-scheduling-rules-2026">NCLEX scheduling page</a>.</p>
 
 <h2>International and accommodated appointments</h2>
-<p>Changes to an international appointment must be made by telephone with Pearson Candidate Services. Moving between international locations can preserve the international scheduling fee, but moving from international to domestic forfeits it; moving from domestic to international adds the non-refundable fee and applicable tax.</p>
+<p>Changes to an international appointment must be made by telephone with Pearson Candidate Services. Moving between international locations can preserve the international scheduling fee, but moving from international to domestic forfeits it; moving from domestic to international adds the non-refundable fee and any applicable value-added tax (VAT).</p>
 <p>For an appointment with approved testing accommodations, call the number on the ATT and ask for the NCLEX Accommodations Coordinator. Do not assume a standard online change will preserve the approved arrangements.</p>
 
 <h2>What happens after a missed appointment</h2>
@@ -188,8 +188,8 @@ export const LOGISTICS_ARTICLES = [
   <tbody>
     <tr><th scope="row">Registration</th><td>$200 USD</td><td>$360 CAD, excluding local taxes</td><td>$200 USD</td></tr>
     <tr><th scope="row">Additional international scheduling</th><td>$150 USD plus applicable VAT</td><td>$150 CAD plus applicable VAT</td><td>$150 USD plus applicable VAT</td></tr>
-    <tr><th scope="row">Change NRB after registration</th><td>$50 USD</td><td>$50 CAD</td><td>Not applicable on the published table</td></tr>
-    <tr><th scope="row">Change RN/PN examination type</th><td>$50 USD</td><td>Not applicable on the published table</td><td>Not applicable on the published table</td></tr>
+    <tr><th scope="row">Change NRB after registration</th><td>$50 USD</td><td>$50 CAD</td><td>N/A</td></tr>
+    <tr><th scope="row">Change RN/PN examination type</th><td>$50 USD</td><td>N/A</td><td>N/A</td></tr>
   </tbody>
 </table>
 </div>
@@ -237,7 +237,7 @@ export const LOGISTICS_ARTICLES = [
   <li>Review the ATT and approved scheduling instructions.</li>
   <li>Use the accommodations contact path on the ATT when scheduling or changing the appointment.</li>
 </ol>
-<p class="source-note"><b>Evidence for this process:</b> the official NCLEX <a href="#source-ncsbn-pearson-registration-2026">Pearson-registration page</a>, the <a href="#source-ncsbn-registration-process-2026">registration-process page</a>, the official <a href="#source-ncsbn-scheduling-rules-2026">scheduling page</a>, and Pearson VUE's dated <a href="#source-pearson-vue-comfort-aid-list-2024">Comfort Aid List</a>.</p>
+<p class="source-note"><b>Evidence for this process:</b> the official NCLEX <a href="#source-ncsbn-pearson-registration-2026">Pearson-registration page</a>, the <a href="#source-ncsbn-registration-process-2026">registration-process page</a>, the official <a href="#source-ncsbn-scheduling-rules-2026">scheduling page</a>, and Pearson VUE's <a href="#source-pearson-vue-comfort-aid-list-2024">Comfort Aid List</a>.</p>
 
 <h2>Accommodations and comfort aids are not identical</h2>
 <div class="table-wrap" role="region" aria-label="NCLEX accommodations and comfort aids comparison" tabindex="0">
@@ -246,7 +246,7 @@ export const LOGISTICS_ARTICLES = [
   <thead><tr><th scope="col">Path</th><th scope="col">Approval</th><th scope="col">Action</th></tr></thead>
   <tbody>
     <tr><th scope="row">Testing accommodation</th><td>Controlled by the NRB using its requirements and decision process.</td><td>Request it from the NRB before Pearson registration and follow that regulator's current instructions.</td></tr>
-    <tr><th scope="row">Listed comfort aid</th><td>Some items do not require advance approval and are admitted after test-center inspection.</td><td>Check the current Pearson Comfort Aid List; do not assume an unlisted item qualifies.</td></tr>
+    <tr><th scope="row">Listed comfort aid</th><td>Some items do not require pre-approval and are admitted after test-center inspection.</td><td>Check the current Pearson Comfort Aid List; do not assume an unlisted item qualifies.</td></tr>
   </tbody>
 </table>
 </div>
@@ -258,7 +258,7 @@ export const LOGISTICS_ARTICLES = [
     faq: [
       { q: "Who approves NCLEX testing accommodations?", a: "The nursing regulatory body coordinates the accommodations process. Submit the request and required materials according to that regulator's instructions." },
       { q: "When should I request NCLEX accommodations?", a: "The official NCLEX registration page directs candidates to request accommodations from the NRB before registering for the NCLEX with Pearson. Follow the NRB's own documentation and deadline rules." },
-      { q: "Do all medical or comfort items require preapproval?", a: "No. Some items on Pearson's current Comfort Aid List can be admitted after visual inspection. Check the live list rather than assuming an item is covered." },
+      { q: "Do all medical or comfort items require pre-approval?", a: "No. Some items on Pearson's current Comfort Aid List can be admitted after visual inspection. Check the live list rather than assuming an item is covered." },
       { q: "How do I change an accommodated NCLEX appointment?", a: "Call the number listed on the ATT and ask for the NCLEX Accommodations Coordinator, following the official scheduling instructions." },
     ],
   },
@@ -282,18 +282,18 @@ export const LOGISTICS_ARTICLES = [
 <h2>Quick Results compared with official results</h2>
 <div class="table-wrap" role="region" aria-label="NCLEX Quick Results and official results comparison" tabindex="0">
 <table>
-  <caption>Which result channel controls</caption>
+  <caption>Quick Results vs. official results at a glance</caption>
   <thead><tr><th scope="col">Feature</th><th scope="col">Quick Results</th><th scope="col">Official results</th></tr></thead>
   <tbody>
-    <tr><th scope="row">Issuer</th><td>Accessed through the Pearson candidate account.</td><td>Sent by the nursing regulatory body.</td></tr>
-    <tr><th scope="row">Timing</th><td>May be available two business days after the exam.</td><td>NCSBN says the NRB sends them within six weeks.</td></tr>
+    <tr><th scope="row">Issuer</th><td>Pearson VUE (through your candidate account)</td><td>Sent by the nursing regulatory body.</td></tr>
+    <tr><th scope="row">Timing</th><td>May be available two business days after the exam.</td><td>Your NRB sends them, usually within six weeks. Timing varies by NRB.</td></tr>
     <tr><th scope="row">Availability</th><td>Only for eligible U.S. candidates whose NRB participates.</td><td>Every candidate's official result follows the NRB process.</td></tr>
     <tr><th scope="row">Status</th><td>Unofficial; does not authorize practice.</td><td>Official result and licensure channel.</td></tr>
     <tr><th scope="row">Published price</th><td>$7.95 when checked August 31, 2026, charged only when results are available.</td><td>NRB processes and charges vary.</td></tr>
   </tbody>
 </table>
 </div>
-<p class="source-note"><b>Evidence for this table:</b> the official <a href="#source-ncsbn-quick-results-2026">Quick Results page</a> and <a href="#source-ncsbn-results-retake">results page</a>.</p>
+<p class="source-note"><b>Evidence for this table:</b> the official <a href="#source-ncsbn-quick-results-2026">Quick Results page</a> and <a href="#source-ncsbn-nclex-results-2026-08-31">results page</a>.</p>
 
 <h2>How the published Quick Results process works</h2>
 <ol>
@@ -328,7 +328,7 @@ export const LOGISTICS_ARTICLES = [
 
 <div class="key" role="note" aria-labelledby="cpr-boundary">
 <h2 id="cpr-boundary" style="margin-top:0">The NCLEX is not graded in sections</h2>
-<p>NCSBN states that overall exam performance determines pass or fail. A category labeled Above the Passing Standard does not mean the candidate passed that independent section, and a CPR does not provide further diagnostic detail beyond the report.</p>
+<p>NCSBN states that overall exam performance determines pass or fail. A category labeled Above the Passing Standard does not mean the candidate passed that independent section, and NCSBN gives no diagnostic detail beyond the report itself.</p>
 </div>
 
 <h2>What the three indicators mean for planning</h2>
@@ -343,7 +343,7 @@ export const LOGISTICS_ARTICLES = [
   </tbody>
 </table>
 </div>
-<p class="source-note"><b>Evidence for this framework:</b> the official <a href="#source-ncsbn-candidate-performance-report">Candidate Performance Report page</a> and the current <a href="#source-ncsbn-2026-rn-test-plan">RN Test Plan</a>.</p>
+<p class="source-note"><b>Evidence for this framework:</b> the official <a href="#source-ncsbn-candidate-performance-report-2026-08-31">Candidate Performance Report page</a> and the current <a href="#source-ncsbn-2026-rn-test-plan">RN Test Plan</a>.</p>
 
 <h2>When the CPR is abbreviated</h2>
 <p>If a candidate did not answer the minimum number of items, NCSBN says the candidate receives an abbreviated CPR that identifies how many items were answered and how many were required for evaluation. It does not provide the same category-level performance indicators.</p>
@@ -353,7 +353,7 @@ export const LOGISTICS_ARTICLES = [
   <li><b>Translate labels into categories.</b> Use the current test plan to define what each client-needs and clinical-judgment category includes.</li>
   <li><b>Start with Below.</b> Review content gaps and the reasoning behind missed questions before increasing volume.</li>
   <li><b>Move to Near.</b> Use mixed practice to determine whether improvement holds outside an isolated category set.</li>
-  <li><b>Maintain Above.</b> Keep those categories in spaced mixed review rather than removing them entirely.</li>
+  <li><b>Maintain Above.</b> Keep those categories in spaced, mixed review rather than removing them entirely.</li>
 </ol>
 <p>A commercial readiness estimate can add practice feedback, but it should not be described as a conversion of the CPR or a guarantee of the next result. Use the report as one input alongside current knowledge gaps, question reasoning, pacing and the requirements of the NRB.</p>
 
@@ -381,7 +381,7 @@ export const LOGISTICS_ARTICLES = [
 
 <div class="key" role="note" aria-labelledby="international-boundary">
 <h2 id="international-boundary" style="margin-top:0">Verify the live location list</h2>
-<p>Test-center availability, temporary sites and country coverage can change. The official locator and your Pearson appointment confirmation control. This summary was checked on August 31, 2026 and is not immigration, travel, tax or licensure advice.</p>
+<p>Test-center availability, temporary sites and country coverage can change. If this page and Pearson disagree, trust Pearson's locator and your confirmation email. This summary was checked on August 31, 2026 and is not immigration, travel, tax or licensure advice.</p>
 </div>
 
 <h2>Domestic depends on the licensure destination</h2>
@@ -391,7 +391,7 @@ export const LOGISTICS_ARTICLES = [
   <thead><tr><th scope="col">Licensure destination</th><th scope="col">Domestic center definition</th><th scope="col">International center</th></tr></thead>
   <tbody>
     <tr><th scope="row">United States</th><td>United States and listed U.S. territories.</td><td>A center outside those locations.</td></tr>
-    <tr><th scope="row">Canada</th><td>Canadian provinces/territories and the mainland United States.</td><td>A center outside those locations.</td></tr>
+    <tr><th scope="row">Canada</th><td>Canadian provinces and territories and the mainland United States.</td><td>A center outside those locations.</td></tr>
     <tr><th scope="row">Australia</th><td>United States and listed U.S. territories under the current published definition.</td><td>A center outside those locations.</td></tr>
   </tbody>
 </table>
@@ -418,7 +418,7 @@ export const LOGISTICS_ARTICLES = [
       { q: "Is the NCLEX available outside the United States?", a: "Yes. NCSBN lists domestic and international Pearson test centers. Availability and the country list can change, so use the current official locator." },
       { q: "How much is the international NCLEX scheduling fee?", a: "The NCSBN table showed an additional $150 fee in the applicable USD or CAD category, plus VAT where applicable, when checked August 31, 2026." },
       { q: "Can I change an international NCLEX appointment online?", a: "No. NCSBN instructs candidates to call Pearson Candidate Services for changes to international appointments." },
-      { q: "Does changing countries extend my ATT?", a: "No automatic extension is stated. The appointment still must be available inside the validity dates on the candidate's ATT." },
+      { q: "Does changing countries extend my ATT?", a: "No automatic extension is stated. The appointment must still be available inside the validity dates on the candidate's ATT." },
     ],
   },
 ];

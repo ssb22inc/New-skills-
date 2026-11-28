@@ -42,13 +42,13 @@ export const CLINICAL_ARTICLES = [
   <li><b>Answer the question actually asked.</b> Distinguish recognition, follow-up, monitoring and prioritization tasks.</li>
 </ol>
 
-<h2>How to study without memorizing false certainty</h2>
-<p>Use retrieval practice and distribute it over time: hide the answer, retrieve the test category, unit, direction and interpretation steps, then check against one clearly identified current source. If your school or examination preparation program requires numeric ranges, record the source, units, population and revision date and recheck them when the source changes. This keeps a study range from being mistaken for a universal clinical threshold.</p>
+<h2>Memorize the ranges, then read the range on the screen</h2>
+<p>Use retrieval practice and distribute it over time: hide the answer, retrieve the test category, unit, direction and interpretation steps, then check against one clearly identified current source. If your school or exam-prep program requires numeric ranges, record the source, units, population and revision date and recheck them when the source changes. This keeps a study range from being mistaken for a universal clinical threshold.</p>
 `,
     faq: [
       { q: "What lab values do I need to know for the NCLEX?", a: "NCSBN does not publish a guaranteed memorization list. Organize study around common laboratory categories, units, direction of change, client context and the interpretation task, while following current official exam materials." },
       { q: "What is the normal potassium level?", a: "There is no single reference interval that replaces the reporting laboratory's range and units. Laboratories may use different methods and ranges, so use the interval supplied with the result and interpret it in context." },
-      { q: "Does the NCLEX provide reference ranges?", a: "Do not assume that every item will present information in the same way. Follow the data, exhibits and directions supplied in the item and use the current Candidate Tutorial and Test Plan for official exam guidance." },
+      { q: "Does the NCLEX provide reference ranges?", a: "Yes. NCSBN says items that show a numeric lab value also show its normal reference range. Learn the common ranges anyway so you can spot an abnormal value fast." },
     ],
   },
 
@@ -70,20 +70,20 @@ export const CLINICAL_ARTICLES = [
   <tr><th>Value</th><th>Typical range</th></tr>
   <tr><td>pH</td><td>7.35&ndash;7.45</td></tr>
   <tr><td>PaCO2</td><td>35&ndash;45 mmHg</td></tr>
-  <tr><td>HCO3</td><td>22&ndash;26 mEq/L</td></tr>
+  <tr><td>HCO3⁻</td><td>22&ndash;26 mEq/L</td></tr>
   <tr><td>PaO2</td><td>75&ndash;100 mmHg</td></tr>
 </table>
 
 <h2>The four steps</h2>
 <ol>
   <li><b>Look at the pH.</b> Below 7.35 is acidemia; above 7.45 is alkalemia. A pH within range does not by itself prove full compensation; it can also occur with a mixed disorder.</li>
-  <li><b>Look at the CO2.</b> This is the respiratory value. It moves opposite to pH in a respiratory problem: CO2 up, pH down.</li>
-  <li><b>Look at the HCO3.</b> This is the metabolic value. It moves with pH in a metabolic problem: bicarbonate down, pH down.</li>
+  <li><b>Look at the PaCO2.</b> This is the respiratory value. It moves opposite to pH in a respiratory problem: PaCO2 up, pH down.</li>
+  <li><b>Look at the HCO3⁻.</b> This is the metabolic value. It moves with pH in a metabolic problem: bicarbonate down, pH down.</li>
   <li><b>Identify the likely primary process.</b> Determine which value explains the pH direction, then ask whether the other value has shifted in the expected compensatory direction. A response outside the expected range can signal a second primary disorder.</li>
 </ol>
 
 <div class="key">
-<p><b>The introductory shortcut:</b> in a straightforward single-disorder question, pH and CO2 moving in <i>opposite</i> directions points toward a respiratory process; pH and HCO3 moving in the <i>same</i> direction points toward a metabolic process. This is a screening aid, not a substitute for expected-compensation calculations or clinical context.</p>
+<p><b>The introductory shortcut:</b> in a straightforward single-disorder question, pH and CO2 moving in <i>opposite</i> directions points toward a respiratory process; pH and HCO3⁻ moving in the <i>same</i> direction points toward a metabolic process. This is a screening aid, not a substitute for expected-compensation calculations or clinical context.</p>
 </div>
 
 <h2>Compensation</h2>
@@ -104,14 +104,14 @@ export const CLINICAL_ARTICLES = [
   <tr><td>Metabolic acidosis</td><td>Diabetic ketoacidosis, renal failure, severe or prolonged diarrhea, lactic acidosis, or shock.</td></tr>
   <tr><td>Metabolic alkalosis</td><td>Prolonged vomiting, diuretic-related losses, or hypovolemia.</td></tr>
 </table>
-<p>Two pairings recur often enough to be worth holding ready: <b>vomiting produces metabolic alkalosis</b> because acid is lost, while <b>diarrhea produces metabolic acidosis</b> because bicarbonate is lost.</p>
+<p>Memorize two pairings: <b>vomiting produces metabolic alkalosis</b> because acid is lost, while <b>diarrhea produces metabolic acidosis</b> because bicarbonate is lost.</p>
 
 <h2>Do not forget the oxygen</h2>
 <p>PaO2 sits outside the acid-base classification and is easy to skip. A PaO2 of 54 mmHg on room air is below the usual adult range, but oxygenation must be interpreted with the inspired oxygen concentration, age, trend and full clinical presentation. Read every reported value before deciding what the client needs; a normal PaO2 on supplemental oxygen does not by itself exclude respiratory failure.</p>
 `,
     faq: [
-      { q: "How do I interpret an ABG quickly?", a: "Check the pH for acidemia or alkalemia, compare PaCO2 and HCO3 to identify the likely primary process, assess whether the other system moved in the expected compensatory direction, and then evaluate PaO2 in the oxygen-delivery and clinical context." },
-      { q: "How do I tell if an ABG is compensated?", a: "A shift in the other system in the expected direction suggests compensation. If both PaCO2 and HCO3 are abnormal with a normal-range pH, do not assume full compensation automatically; compare the values with expected compensation and assess for a mixed disorder." },
+      { q: "How do I interpret an ABG quickly?", a: "Check the pH for acidemia or alkalemia, compare PaCO2 and HCO3⁻ to identify the likely primary process, assess whether the other system moved in the expected compensatory direction, and then evaluate PaO2 in the oxygen-delivery and clinical context." },
+      { q: "How do I tell if an ABG is compensated?", a: "A shift in the other system in the expected direction suggests compensation. If both PaCO2 and HCO3⁻ are abnormal with a normal-range pH, do not assume full compensation automatically; compare the values with expected compensation and assess for a mixed disorder." },
       { q: "Does vomiting cause acidosis or alkalosis?", a: "Metabolic alkalosis, because gastric acid is lost. Prolonged diarrhea does the opposite, causing metabolic acidosis through loss of bicarbonate." },
     ],
   },
@@ -126,7 +126,7 @@ export const CLINICAL_ARTICLES = [
     updated: "2026-08-26",
     cta: "PulseRN drills electrolyte scenarios as full cases, so you practice recognizing them from findings rather than labels.",
     body: `
-<p>Electrolyte questions connect a laboratory result with symptoms, likely causes and a nursing priority. Start with stability: new ECG changes, dysrhythmia, seizure, marked change in consciousness, paralysis or respiratory depression takes priority over memorizing a list. Then check the reporting laboratory's reference interval, the direction and speed of change, symptoms, kidney function, medications and possible specimen error.</p>
+<p>Electrolyte questions connect a laboratory result with symptoms, likely causes and a nursing priority. Start with stability: new ECG changes, dysrhythmia, seizure, marked change in consciousness, paralysis or respiratory depression take priority over memorizing a list. Then check the reporting laboratory's reference interval, the direction and speed of change, symptoms, kidney function, medications and possible specimen error.</p>
 
 <h2>Potassium</h2>
 <div class="table-wrap" role="region" aria-label="Potassium imbalance comparison" tabindex="0">
@@ -156,7 +156,7 @@ export const CLINICAL_ARTICLES = [
   <tbody>
   <tr><th scope="row">Possible findings</th><td>Headache, nausea, fatigue, confusion, gait change, seizures or reduced consciousness when severe or rapidly developing</td><td>Thirst and dehydration findings; restlessness, irritability, lethargy, seizures or coma when severe or rapidly developing</td></tr>
   <tr><th scope="row">Common contexts</th><td>SIADH, diuretics, excess water relative to solute, heart failure, kidney disease and gastrointestinal losses</td><td>Water loss, inadequate access to water, diabetes insipidus, osmotic diuresis and, less often, excess sodium</td></tr>
-  <tr><th scope="row">Nursing focus</th><td>Neurological and volume-status assessment, seizure precautions when indicated, serial sodium results and the prescribed correction plan</td><td>Neurological and volume-status assessment, intake and output, ongoing losses, serial sodium results and the prescribed correction plan</td></tr>
+  <tr><th scope="row">Nursing focus</th><td>Neurologic and volume-status assessment, seizure precautions when indicated, serial sodium results and the prescribed correction plan</td><td>Neurologic and volume-status assessment, intake and output, ongoing losses, serial sodium results and the prescribed correction plan</td></tr>
   </tbody>
 </table>
 </div>
@@ -215,7 +215,7 @@ export const CLINICAL_ARTICLES = [
     description: "Compare Standard, Airborne, Droplet and Contact Precautions, disease-specific qualifiers, PPE sequencing and protective environments.",
     published: "2026-08-03",
     updated: "2026-08-27",
-    cta: "PulseRN drills infection-control scenarios and PPE sequencing as ordered, drag-and-drop items.",
+    cta: "PulseRN drills infection-control scenarios and PPE sequencing as drag-and-drop ordering items.",
     body: `
 <p>Choose infection-control precautions from the suspected or confirmed organism, route of transmission, care setting and current facility policy. <b>Standard Precautions apply to every client</b>; add one or more Transmission-Based Precautions when Standard Precautions alone do not interrupt transmission. When the diagnosis is not yet confirmed, use the indicated empiric precautions while testing is pending.</p>
 
@@ -224,7 +224,7 @@ export const CLINICAL_ARTICLES = [
 <p>This is an NCLEX study framework, not a substitute for the isolation sign, infection-prevention direction or facility policy. Precaution type, PPE and duration can change with the organism, symptoms, immune status, procedure and care setting.</p>
 </div>
 
-<h2>The three transmission-based categories</h2>
+<h2>The three Transmission-Based categories</h2>
 <div class="table-wrap" role="region" aria-label="Transmission-based precautions comparison" tabindex="0">
 <table>
   <caption>Transmission-Based Precautions in acute care</caption>
@@ -255,7 +255,7 @@ export const CLINICAL_ARTICLES = [
   <li><b>Known or suspected meningococcal disease:</b> continue through 24 hours after effective therapy begins.</li>
   <li><b>Mumps:</b> continue through five days after swelling begins.</li>
   <li><b>Rubella:</b> continue through seven days after rash onset.</li>
-  <li><b>Group A streptococcal pharyngitis:</b> use Droplet Precautions for the first 24 hours of effective antimicrobial therapy.</li>
+  <li><b>Group A streptococcal pharyngitis in infants and young children:</b> use Droplet Precautions until 24 hours after effective antibiotics start.</li>
 </ul>
 
 <h3>Contact, with Standard Precautions</h3>
@@ -268,9 +268,9 @@ export const CLINICAL_ARTICLES = [
 </ul>
 <p class="source-note"><b>Evidence for these examples:</b> the <a href="#source-cdc-isolation-appendix-a-2025">CDC disease-specific precaution and duration table</a>. Always verify the posted isolation order and current institutional protocol.</p>
 
-<h2>C. difficile: separate spores from hand-hygiene policy</h2>
+<h2><i>C. difficile</i>: separate spores from hand-hygiene policy</h2>
 <div class="key">
-<p>Alcohol-based hand sanitizer does not have sporicidal activity, and soap-and-water washing removes spores better. However, CDC still prefers alcohol-based hand sanitizer for routine healthcare hand hygiene when hands are not visibly soiled because eliminating it can reduce overall compliance. Wash with soap and water when hands are visibly soiled and during care of patients with suspected or confirmed C. difficile in an outbreak; CDC encourages soap-and-water washing after care as an additional outbreak precaution without restricting access to alcohol-based sanitizer.</p>
+<p>Alcohol-based hand sanitizer does not have sporicidal activity, and soap-and-water washing removes spores better. However, CDC still prefers alcohol-based hand sanitizer for routine healthcare hand hygiene when hands are not visibly soiled because eliminating it can reduce overall compliance. Wash with soap and water when hands are visibly soiled and after caring for patients with suspected or confirmed <i>C. difficile</i> in an outbreak; CDC encourages soap-and-water washing after care as an additional outbreak precaution without restricting access to alcohol-based sanitizer.</p>
 </div>
 <p>Use gown and gloves, dedicated equipment and an EPA-registered sporicidal disinfectant according to the product instructions and facility protocol. In acute care, CDC recommends maintaining Contact Precautions for confirmed infection for at least 48 hours after diarrhea resolves, or longer when the facility policy requires it.</p>
 <p class="source-note"><b>Evidence for this section:</b> <a href="#source-cdc-cdiff-acute-care-2026">CDC acute-care C. difficile guidance</a>, <a href="#source-cdc-clinical-hand-hygiene-2024">CDC clinical hand-hygiene guidance</a>, and the <a href="#source-cdc-isolation-appendix-a-2025">CDC isolation appendix</a>.</p>
@@ -327,13 +327,13 @@ export const CLINICAL_ARTICLES = [
 <p class="source-note"><b>Evidence for this section:</b> <a href="#source-cdc-insulin-types-2024">CDC insulin types</a> and the <a href="#source-dailymed-lantus-2025">Lantus label</a>.</p>
 
 <div class="key">
-<p><b>Maximum glucose-lowering effect increases hypoglycemia risk, but it is not a universal clock.</b> Risk also changes with the product, dose, meal timing, activity, injection site, kidney or liver function, concurrent medications and the patient's prior response. Long- and ultra-long-acting products may not have a pronounced peak.</p>
+<p><b>Hypoglycemia risk is highest around the peak, but timing varies.</b> Risk also changes with the product, dose, meal timing, activity, injection site, kidney or liver function, concurrent medications and the patient's prior response. Long- and ultra-long-acting products may not have a pronounced peak.</p>
 </div>
 
 <h2>Route, meal timing and preparation are product-specific</h2>
 <ul>
   <li><b>Meal timing:</b> the insulin lispro label permits subcutaneous administration within 15 minutes before a meal or immediately afterward. Other rapid-acting products can have different instructions, so verify the exact label and order.</li>
-  <li><b>Intravenous use:</b> regular human insulin is not the only insulin that can ever be given IV. Some insulin lispro and insulin aspart products permit supervised IV infusion with close glucose and potassium monitoring. Never infer an IV route from the category alone.</li>
+  <li><b>Intravenous use:</b> regular human insulin is not the only insulin that can be given IV. Some insulin lispro and insulin aspart products permit supervised IV infusion with close glucose and potassium monitoring. Never infer an IV route from the category alone.</li>
   <li><b>Mixing:</b> insulin glargine must not be diluted or mixed with another insulin or solution. Compatibility is product-specific rather than a blanket rule for every long-acting insulin.</li>
   <li><b>Resuspension:</b> follow the device instructions for cloudy suspensions. Humulin N instructions specify gentle rolling and inversion with an appearance check; vigorous shaking is not the instruction.</li>
 </ul>
@@ -349,7 +349,7 @@ export const CLINICAL_ARTICLES = [
 <p class="source-note"><b>Evidence for this section:</b> <a href="#source-medlineplus-low-blood-sugar-self-care-2026">MedlinePlus low-blood-sugar self-care</a> and the <a href="#source-dailymed-insulin-lispro-2024">insulin lispro label</a>.</p>
 
 <h2>The beta-blocker interaction</h2>
-<p>Beta-blockers and other drugs that block sympathetic activity can blunt or eliminate some warning signs of hypoglycemia, and beta-blockers may increase or decrease insulin's glucose-lowering effect. Do not assume that sweating will persist or that confusion will be the first sign. The insulin lispro and insulin glargine labels call for closer glucose monitoring when medications can reduce symptom awareness.</p>
+<p>Beta-blockers and other drugs that block sympathetic activity can blunt or eliminate some warning signs of hypoglycemia, and beta-blockers may increase or decrease insulin's glucose-lowering effect. Beta-blockers can hide a fast heart rate and tremor, but sweating usually still happens. Check the glucose whenever hypoglycemia is possible, even without the usual signs. The insulin lispro and insulin glargine labels call for closer glucose monitoring when medications can reduce symptom awareness.</p>
 `,
     faq: [
       { q: "When is hypoglycemia risk highest after insulin?", a: "Risk often rises near the product's maximum glucose-lowering effect, but generic peak tables are only estimates. The exact insulin, dose, meal timing, activity, organ function, concurrent medicines and patient response all matter; some basal insulins have no pronounced peak." },
@@ -382,7 +382,7 @@ export const CLINICAL_ARTICLES = [
   <caption>High-yield pairings with the safety qualification that prevents overgeneralization</caption>
   <thead><tr><th scope="col">Medication or exposure</th><th scope="col">Reversal or treatment association</th><th scope="col">Essential limitation</th></tr></thead>
   <tbody>
-    <tr><th scope="row">Unfractionated heparin overdosage</th><td>Protamine sulfate</td><td>The IV dose depends on the heparin amount and elapsed time. Protamine can cause severe hypotensive and anaphylactoid reactions and must be administered slowly with resuscitation capability available.</td></tr>
+    <tr><th scope="row">Unfractionated heparin overdose</th><td>Protamine sulfate</td><td>The IV dose depends on the heparin amount and elapsed time. Protamine can cause severe hypotensive and anaphylactoid reactions and must be administered slowly with resuscitation capability available.</td></tr>
     <tr><th scope="row">Warfarin-associated excessive anticoagulation or bleeding</th><td>Phytonadione (vitamin K<sub>1</sub>); factor replacement may also be ordered</td><td>The response depends on INR, bleeding severity and urgency. The warfarin label includes vitamin K and, for urgent situations, options such as prothrombin complex concentrate or plasma under an individualized plan.</td></tr>
     <tr><th scope="row">Opioid-induced respiratory depression</th><td>Naloxone plus airway and ventilatory support</td><td>Naloxone does not replace resuscitation. Some opioids outlast it, so continued surveillance and repeat administration may be required; response to some partial agonists can be incomplete.</td></tr>
     <tr><th scope="row">Benzodiazepine sedation or overdose in a selected patient</th><td>Flumazenil</td><td>Flumazenil is not an automatic response to every overdose. It carries seizure risk and is contraindicated in specified situations, including serious cyclic-antidepressant overdose and when a benzodiazepine was used to control a life-threatening condition.</td></tr>
@@ -396,7 +396,7 @@ export const CLINICAL_ARTICLES = [
 <p class="source-note"><b>Evidence for this table:</b> the <a href="#source-dailymed-heparin-sodium-2024">heparin</a>, <a href="#source-dailymed-protamine-sulfate-2024">protamine</a>, <a href="#source-dailymed-warfarin-sodium-2026">warfarin</a>, <a href="#source-dailymed-naloxone-injection-2026">naloxone</a>, <a href="#source-dailymed-flumazenil-2026">flumazenil</a>, <a href="#source-dailymed-acetylcysteine-injection-2025">acetylcysteine</a>, <a href="#source-dailymed-magnesium-sulfate-in-water">magnesium sulfate</a>, <a href="#source-dailymed-digifab-2025">DigiFab</a> and <a href="#source-dailymed-deferoxamine-2026">deferoxamine</a> labels.</p>
 
 <h2>Anticoagulant monitoring is drug- and protocol-specific</h2>
-<p>For therapeutic unfractionated heparin, follow the ordered coagulation test and institutional nomogram. The cited IV heparin label uses frequent coagulation testing and an aPTT target linked to anti-factor Xa activity; do not transfer that target to every heparin product or indication. Assess for overt or occult bleeding and monitor platelet counts because heparin-induced thrombocytopenia can occur.</p>
+<p>For therapeutic unfractionated heparin, follow the ordered coagulation test and institutional nomogram. The cited IV heparin label uses frequent coagulation testing and an aPTT or anti-Xa target set by the heparin protocol; do not transfer that target to every heparin product or indication. Assess for overt or occult bleeding and monitor platelet counts because heparin-induced thrombocytopenia can occur.</p>
 <p>Warfarin dosing is guided by PT/INR for the specific indication and target. Medication changes, illness and dietary vitamin K can alter the INR. Patient teaching generally emphasizes a consistent pattern of vitamin-K intake rather than eliminating vitamin-K-containing foods, with INR follow-up when meaningful dietary or medication changes occur.</p>
 <p class="source-note"><b>Evidence for this section:</b> the <a href="#source-dailymed-heparin-sodium-2024">heparin label</a> and <a href="#source-dailymed-warfarin-sodium-2026">warfarin label</a>.</p>
 
@@ -410,7 +410,7 @@ export const CLINICAL_ARTICLES = [
 <p>When an answer choice gives an absolute rule—such as using one laboratory test for every heparin product, giving flumazenil for every benzodiazepine exposure, or performing the same double-check for every high-alert medication—look for the option that respects the exact order, label, clinical condition and protocol.</p>
 `,
     faq: [
-      { q: "What reverses unfractionated heparin overdosage?", a: "Protamine sulfate is the recognized antagonist, but its dose depends on the heparin amount and elapsed time. It must be given slowly under the ordered protocol because severe hypotensive and anaphylactoid reactions can occur." },
+      { q: "What reverses unfractionated heparin overdose?", a: "Protamine sulfate is the recognized antagonist, but its dose depends on the heparin amount and elapsed time. It must be given slowly under the ordered protocol because severe hypotensive and anaphylactoid reactions can occur." },
       { q: "Is flumazenil always given for a benzodiazepine overdose?", a: "No. Flumazenil is used only in selected patients and carries a serious seizure risk. It is contraindicated in specified situations, so airway and supportive care plus toxicology guidance remain central." },
       { q: "Does naloxone replace airway and breathing support?", a: "No. Maintain the airway and assist ventilation as needed. Continue surveillance because some opioids last longer than naloxone and repeat doses may be necessary." },
       { q: "Should a client taking warfarin avoid vitamin K foods?", a: "Not routinely. Teaching generally emphasizes a consistent dietary pattern and INR follow-up when intake changes, rather than eliminating vitamin-K-containing foods." },

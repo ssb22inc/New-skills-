@@ -63,20 +63,20 @@ export const HUB_ARTICLES = [
 </ul>
 
 <h2>Exam structure is a separate question</h2>
-<p>The test plan also documents computerized adaptive testing, the 85–150 item range, the five-hour limit, pretest items and pass/fail rules. Those mechanics matter, but they are different search needs. See <a href="/learn/how-many-questions-is-the-nclex/">how many questions are on the NCLEX</a> and <a href="/learn/how-is-the-nclex-scored/">how the NCLEX is scored</a> for focused explanations. Do not use this content-distribution page to infer an unofficial score or result.</p>
+<p>The test plan also documents computerized adaptive testing, the 85–150 item range, the five-hour limit, pretest items and pass/fail rules. Those rules are covered in separate guides. See <a href="/learn/how-many-questions-is-the-nclex/">how many questions are on the NCLEX</a> and <a href="/learn/how-is-the-nclex-scored/">how the NCLEX is scored</a> for focused explanations. Do not use this content-distribution page to infer an unofficial score or result.</p>
 `,
     faq: [
       { q: "When is the 2026 NCLEX-RN Test Plan effective?", a: "The official 2026 RN Test Plan is effective April 1, 2026 through March 31, 2029. Confirm the current NCSBN plan before your examination." },
       { q: "What is the largest 2026 NCLEX-RN content category?", a: "The plan publishes ranges rather than a fixed rank for every examination. Management of Care is 15–21%, Pharmacological and Parenteral Therapies is 13–19%, and Physiological Adaptation is 11–17%. Individual category distributions may vary within the plan's stated tolerance." },
       { q: "Can I skip categories with smaller percentages?", a: "No category is optional. The NCLEX assembles an examination that meets the test plan, and integrated processes can appear across all Client Needs categories. Use your practice evidence to adjust time without abandoning a category." },
-      { q: "Are clinical-judgment case studies included in the category percentages?", a: "The 2026 plan states that the 18 case-study items in the minimum-length examination span content areas and are counted independently of the 52 content-area-specific items. Approximately 10% stand-alone clinical-judgment items are also selected depending on exam length." },
+      { q: "Are clinical-judgment case studies included in the category percentages?", a: "The 2026 plan states that the 18 case-study items in the minimum-length examination span content areas and are counted independently of the 52 content-area-specific items. About 10% of items are stand-alone clinical-judgment items; the number depends on exam length." },
     ],
   },
   {
     slug: "nclex-clinical-judgment",
     topic: "2026 NCLEX essentials",
     title: "NCLEX clinical judgment: the six skills explained",
-    h1: "NCLEX clinical judgment: a source-bound study guide",
+    h1: "NCLEX clinical judgment: the six skills explained",
     description: "Learn the six NCSBN clinical-judgment skills, how case studies and stand-alone items measure them, and a practical method for safer NCLEX reasoning.",
     published: "2026-09-02",
     updated: "2026-09-02",
@@ -92,7 +92,7 @@ export const HUB_ARTICLES = [
 <h2>The six measurable clinical-judgment skills</h2>
 <div class="table-wrap" role="region" aria-label="Six NCLEX clinical judgment skills" tabindex="0">
 <table>
-  <caption>Layer 3 cognitive skills represented in NCLEX case studies</caption>
+  <caption>The six cognitive skills NCLEX case studies measure (NCJMM Layer 3)</caption>
   <thead><tr><th scope="col">Skill</th><th scope="col">Official focus, paraphrased</th><th scope="col">Question to ask during practice</th></tr></thead>
   <tbody>
     <tr><th scope="row">Recognize cues</th><td>Identify relevant and important information from sources such as history, assessment and vital signs.</td><td>Which findings matter to this presentation, and which are background or distractors?</td></tr>

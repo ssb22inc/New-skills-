@@ -6,14 +6,14 @@ export const SKILL_ARTICLES = [
   {
     slug: "prioritization-abc-maslow",
     topic: "Test-taking skill",
-    title: "NCLEX prioritization: who comes first",
+    title: "NCLEX prioritization: ABCs, Maslow and who goes first",
     h1: "How to answer NCLEX prioritization questions",
     description: "Use clinical judgment, immediate-threat screening, ABCs and nursing-process context to decide which client or action comes first.",
     published: "2026-08-03",
     updated: "2026-08-27",
     cta: "PulseRN interleaves prioritization across all eight categories so you practice comparing urgency in context.",
     body: `
-<p>Prioritization items test whether you can recognize relevant cues, analyze them, rank the most likely or dangerous hypotheses, choose an action and evaluate the response. A mnemonic can help organize the comparison, but no single mnemonic decides every case.</p>
+<p>Prioritization items test whether you can recognize relevant cues, analyze them, rank the most likely or most dangerous hypotheses, choose an action and evaluate the response. A mnemonic can help organize the comparison, but no single mnemonic decides every case.</p>
 
 <div class="key" role="note" aria-labelledby="prioritization-safety-boundary">
 <h2 id="prioritization-safety-boundary" style="margin-top:0">Safety boundary</h2>
@@ -75,9 +75,9 @@ export const SKILL_ARTICLES = [
     description: "Separate assignment from delegation and apply the Five Rights, scope, competence, communication and supervision before choosing who can safely perform care.",
     published: "2026-08-03",
     updated: "2026-08-27",
-    cta: "PulseRN includes delegation scenarios across management of care, with rationales for every option.",
+    cta: "PulseRN includes delegation scenarios across Management of Care, with rationales for every option.",
     body: `
-<p>Delegation questions test clinical judgment, not a universal list of tasks. The safe answer depends on the patient, the requested activity, the delegatee's verified competence, the state or jurisdiction's nurse practice provisions, employer policy and the supervision the licensed nurse can provide.</p>
+<p>Delegation questions test clinical judgment, not a universal list of tasks. The safe answer depends on the patient, the requested activity, the delegatee's verified competence, the nurse practice act in that state or jurisdiction, employer policy and the supervision the licensed nurse can provide.</p>
 
 <div class="key" role="note" aria-labelledby="delegation-safety-boundary">
 <h2 id="delegation-safety-boundary" style="margin-top:0">Safety boundary</h2>
@@ -85,7 +85,7 @@ export const SKILL_ARTICLES = [
 </div>
 
 <h2>Assignment and delegation are not the same</h2>
-<p>Under the NCSBN–ANA guidelines, an <b>assignment</b> is routine care, an activity or a procedure already within a licensed nurse's authorized scope or an assistive person's routine role. <b>Delegation</b> transfers responsibility for a specific nursing activity, skill or procedure outside the delegatee's traditional role after the required education, training and competence validation.</p>
+<p>Under the NCSBN–ANA guidelines, an <b>assignment</b> is routine care, an activity or a procedure already within a licensed nurse's authorized scope or the routine role of assistive personnel (AP). <b>Delegation</b> transfers responsibility for a specific nursing activity, skill or procedure outside the delegatee's traditional role after the required education, training and competence validation.</p>
 <p>A handoff between licensed clinicians is also different: it transfers responsibility for care between providers rather than delegating an activity.</p>
 
 <h2>A defensible delegation decision</h2>
@@ -132,7 +132,7 @@ export const SKILL_ARTICLES = [
 <p>For each answer option, identify the patient's condition, the activity, the required judgment, the proposed person's authorized role and demonstrated competence, the instructions supplied and the follow-up plan. Reject an option as soon as one required element is missing; do not rely on “stable, predictable and routine” as a complete decision rule.</p>
 `,
     faq: [
-      { q: "What can be assigned or delegated to assistive personnel?", a: "Only an activity permitted by jurisdiction and employer policy that fits the person's routine role or validated delegated competence and is appropriate for this patient. The licensed nurse must give specific directions, supervise and evaluate the outcome." },
+      { q: "What can be assigned or delegated to assistive personnel?", a: "Only an activity that jurisdiction and employer policy permit and that fits the person's routine role or validated delegated competence and is appropriate for this patient. The licensed nurse must give specific directions, supervise and evaluate the outcome." },
       { q: "What cannot be delegated by a licensed nurse?", a: "Clinical reasoning, nursing judgment and critical decision-making cannot be delegated. Whether a named activity requires those functions depends on the patient and circumstance, so avoid universal task lists." },
       { q: "What are the Five Rights of Delegation?", a: "Right task, right circumstance, right person, right directions and communication, and right supervision and evaluation. All five must fit the specific patient, delegatee and setting." },
       { q: "Is the RN the only person accountable after delegation?", a: "No. The delegating licensed nurse retains overall accountability for the patient and follow-up, while the delegatee is responsible for accepting only work they are competent to perform and for completing, documenting and reporting that activity correctly." },
@@ -147,7 +147,7 @@ export const SKILL_ARTICLES = [
     description: "Choose client-centered responses by purpose, cues, safety, culture and context—not by memorizing that one communication technique is always correct.",
     published: "2026-08-03",
     updated: "2026-08-27",
-    cta: "PulseRN includes psychosocial integrity items where the wrong answer is comfortable and the right one is harder.",
+    cta: "PulseRN includes Psychosocial Integrity items where the wrong answer is comfortable and the right one is harder.",
     body: `
 <p>Therapeutic communication is purposeful, client-centered communication that supports assessment, trust, shared decision-making and safety. An NCLEX option should be judged against the client's words, nonverbal cues, immediate needs and the goal of the encounter—not against a list of phrases labeled “always correct.”</p>
 
@@ -163,7 +163,7 @@ export const SKILL_ARTICLES = [
   <li><b>Choose the least judgmental effective response.</b> Preserve dignity, autonomy and professional boundaries.</li>
   <li><b>Check whether safety changes the sequence.</b> A concerning cue may require a direct, focused question and immediate action.</li>
 </ol>
-<p class="source-note"><b>Evidence for this approach:</b> the <a href="#source-ncbi-openrn-therapeutic-communication-2025">NCBI Open RN therapeutic communication chapter</a> and <a href="#source-ncsbn-2026-rn-test-plan">2026 NCSBN RN Test Plan</a>.</p>
+<p class="source-note"><b>Evidence for this approach:</b> the <a href="#source-ncbi-openrn-therapeutic-communication-2025">Open RN chapter on NCBI Bookshelf</a> and <a href="#source-ncsbn-2026-rn-test-plan">2026 NCSBN RN Test Plan</a>.</p>
 
 <h2>Techniques are tools, not answer keys</h2>
 <div class="table-wrap" role="region" aria-label="Therapeutic communication techniques in context" tabindex="0">
@@ -235,7 +235,7 @@ export const SKILL_ARTICLES = [
 <p>First determine exactly what the order expresses: a dose per administration, per day, per hour or per minute. Then:</p>
 <ol>
   <li>Use the measured weight and unit stated in the item. If pounds must be converted to kilograms, use the supplied conversion; a common clinical approximation is <b>1 kg = 2.2 lb</b>, so pounds ÷ 2.2 = kilograms.</li>
-  <li>Multiply the ordered amount per kilogram by the patient's weight in kilograms, keeping any time unit such as dose, day, hour or minute.</li>
+  <li>Multiply the ordered amount per kilogram by the patient's weight in kilograms, keeping the unit of the order: per dose, per day, per hour or per minute.</li>
   <li>If the order is per day but is given in divided doses, calculate the daily amount and then divide by the stated number of doses.</li>
   <li>Compare the calculated dose with the stated safe range or maximum before converting it to tablets or volume.</li>
 </ol>
@@ -245,7 +245,7 @@ export const SKILL_ARTICLES = [
 <p><b>Simple constant-rate pump problem, in milliliters per hour:</b> total volume in mL ÷ total time in hours.</p>
 <p>1,000 mL over 8 hours gives 125 mL/hour.</p>
 <p><b>Gravity infusion, in drops per minute:</b> (volume in mL × tubing drop factor in gtt/mL) ÷ time in minutes.</p>
-<p>1,000 mL over 8 hours with a drop factor of 15 becomes 1,000 times 15, divided by 480 minutes, which is about 31 drops per minute.</p>
+<p>1,000 mL over 8 hours with a drop factor of 15 gtt/mL becomes 1,000 times 15, divided by 480 minutes, which is about 31 drops per minute.</p>
 <p>A manual gravity rate is expressed as a whole number of drops per minute because a fraction of a drop cannot be counted. For medication infusions prescribed by weight and time, such as mcg/kg/min, include the patient's weight and the prepared concentration; do not substitute the simple volume-over-time formula.</p>
 
 <h2>Conversions: distinguish exact from conventional</h2>
@@ -266,11 +266,11 @@ export const SKILL_ARTICLES = [
 <h2>Rounding and format</h2>
 <ul>
   <li>Do not round intermediate results unless the item explicitly directs it. Round the final answer to the stated place or to the precision supported by the delivery device and policy.</li>
-  <li>For a medication dose below one, use a leading zero: <b>0.5 mg</b>, not .5 mg.</li>
+  <li>For a dose less than 1, use a leading zero: <b>0.5 mg</b>, not .5 mg.</li>
   <li>Do not add a trailing zero to a whole-number medication dose: <b>5 mg</b>, not 5.0 mg.</li>
   <li>Enter the number and unit exactly as the item requests; do not assume every interface uses the same response format.</li>
 </ul>
-<p>The decimal conventions reduce tenfold misreading risk. They do not authorize changing the precision of a device setting or ignoring a specific documentation standard.</p>
+<p>These conventions reduce the risk of a tenfold dosing error. They do not authorize changing the precision of a device setting or ignoring a specific documentation standard.</p>
 
 <h2>A final verification sequence</h2>
 <ol>
@@ -314,7 +314,7 @@ export const SKILL_ARTICLES = [
   <li>Choose a small number of priorities for the next cycle, then reassess with a comparable sample.</li>
 </ol>
 
-<h2>Use retrieval and spacing—with evidence-sized claims</h2>
+<h2>Use retrieval and spaced review</h2>
 <p><b>Retrieval practice</b> asks you to produce or apply an answer before seeing it. <b>Distributed practice</b> returns to material across separated sessions instead of placing all exposure in one block. A systematic review of 56 health-professions studies found that 43 reported significant benefits from distributed practice, retrieval practice or both, while also noting heterogeneous designs and assessments. A randomized study in nurse-anesthesia students found higher learning outcomes with a spaced-learning intervention in that setting.</p>
 <p>These findings support using retrieval and spacing as study tools; they do not establish one optimal interval, daily item count or guaranteed NCLEX outcome. Re-reading can still support orientation or clarification, but it should not be your only check of whether you can recall and apply information.</p>
 <p class="source-note"><b>Evidence for this section:</b> the <a href="#source-ramnanan-2024-distributed-retrieval-review">systematic review of distributed and retrieval practice</a> and <a href="#source-khalafi-2024-spaced-learning-nursing">nursing spaced-learning trial</a>.</p>
@@ -322,7 +322,7 @@ export const SKILL_ARTICLES = [
 <h2>Build a repeatable study cycle</h2>
 <div class="table-wrap" role="region" aria-label="Adaptable NCLEX study cycle" tabindex="0">
 <table>
-  <caption>Choose a workload you can complete and review; the frequencies are individualized</caption>
+  <caption>Choose a workload you can complete and review</caption>
   <thead><tr><th scope="col">Component</th><th scope="col">Action</th><th scope="col">Adjustment signal</th></tr></thead>
   <tbody>
     <tr><th scope="row">Mixed retrieval</th><td>Answer a manageable set across categories and item formats before viewing rationales.</td><td>Reduce set size if review is repeatedly unfinished; increase challenge only when the full cycle remains sustainable.</td></tr>
@@ -347,7 +347,7 @@ export const SKILL_ARTICLES = [
 <h2>Fit the workload to real constraints</h2>
 <ul>
   <li><b>Plan from available sessions.</b> Mark work, school, caregiving, appointments and rest before assigning study.</li>
-  <li><b>Use a minimum viable session.</b> On a constrained day, complete a small retrieval-and-review cycle rather than chasing an arbitrary item quota.</li>
+  <li><b>Use a short session.</b> On a constrained day, complete a small retrieval-and-review cycle rather than chasing an arbitrary item quota.</li>
   <li><b>Protect review time.</b> If you can answer more items than you can examine carefully, shrink the set.</li>
   <li><b>Use recovery rules.</b> When a session is missed, move the highest-priority task or resume the next planned cycle instead of doubling the next workload automatically.</li>
   <li><b>Seek support when needed.</b> Persistent content, language, test-anxiety or accessibility barriers may require an educator, clinician or the applicable testing-accommodation process rather than more question volume.</li>
@@ -367,7 +367,7 @@ export const SKILL_ARTICLES = [
   {
     slug: "spaced-repetition-for-nursing-students",
     topic: "Study strategy",
-    title: "Spaced repetition for nursing: evidence and safe use",
+    title: "Spaced repetition for nursing: evidence and how to use it",
     h1: "How nursing students can use spaced repetition",
     description: "Use retrieval across separated sessions, build source-linked cards, adjust intervals from performance, and pair factual recall with clinical scenarios.",
     published: "2026-08-03",
@@ -403,7 +403,7 @@ export const SKILL_ARTICLES = [
     <tr><th scope="row">Focused prompt</th><td>One clear retrieval target or one short decision with enough context.</td><td>Avoids grading a multi-part card as known when only one part was recalled.</td></tr>
     <tr><th scope="row">Answer and units</th><td>The complete answer, including units, population or condition when relevant.</td><td>Prevents a number or rule from being rehearsed without its safety context.</td></tr>
     <tr><th scope="row">Authoritative source</th><td>Publisher, link and precise section or label locator.</td><td>Makes the claim traceable instead of relying on an unsourced deck.</td></tr>
-    <tr><th scope="row">Source/review date</th><td>When the source was updated and when the card was last checked.</td><td>Supports review when guidelines, labels or exam scope change.</td></tr>
+    <tr><th scope="row">Source and review dates</th><td>When the source was updated and when the card was last checked.</td><td>Supports review when guidelines, labels or exam scope change.</td></tr>
     <tr><th scope="row">Qualification</th><td>Exceptions, variability or a reminder to apply patient and policy context.</td><td>Reduces unsafe memorization of an absolute rule.</td></tr>
   </tbody>
 </table>
@@ -427,8 +427,8 @@ export const SKILL_ARTICLES = [
   {
     slug: "failed-the-nclex-what-now",
     topic: "Study strategy",
-    title: "Failed the NCLEX? What to do next",
-    h1: "If you did not pass: a practical next step",
+    title: "Failed the NCLEX? Retake rules and next steps",
+    h1: "Failed the NCLEX? Your retake plan",
     description: "Use your official Candidate Performance Report, confirm retake rules, and build a source-bound remediation plan without treating category labels as exact scores.",
     published: "2026-08-03",
     updated: "2026-08-28",
@@ -488,7 +488,7 @@ export const SKILL_ARTICLES = [
       { q: "How soon can I retake the NCLEX?", a: "NCSBN's policy allows retesting 45 days after the previous exam, but some nursing regulatory bodies require a longer interval or impose stricter annual attempt limits. Confirm the current rule with your NRB and use the validity dates on your new ATT." },
       { q: "What is the Candidate Performance Report?", a: "The CPR is NCSBN's individualized report for a candidate who did not pass. It gives below-, near- and above-standard indicators across test-plan content and clinical-judgment categories, but it is not a section grade or exact score. A candidate who did not answer the minimum number of items receives an abbreviated report without further diagnostic detail." },
       { q: "What should I change before an NCLEX retake?", a: "There is no single change for every candidate. Start with the CPR and current test plan, collect repeated practice evidence, identify the specific cue, content or reasoning errors you can observe, and use retrieval, feedback and delayed reassessment. Seek qualified educator or accommodation support when needed." },
-      { q: "Does failing the NCLEX mean I cannot become a nurse?", a: "A failing result means this attempt did not meet the NCLEX passing standard; it is not a prediction of your future result. You still must satisfy your nursing regulatory body's eligibility requirements and pass the licensure examination." },
+      { q: "Does failing the NCLEX mean I cannot become a nurse?", a: "A failing result means this attempt did not meet the NCLEX passing standard; it is not a prediction of your future result. You must still meet your nursing regulatory body's eligibility requirements and pass the licensure examination." },
     ],
   },
 ];

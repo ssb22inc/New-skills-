@@ -26,7 +26,7 @@
         "audience": "NCLEX-RN candidates and nursing educators",
         "risk": "exam"
       },
-      "contentSha256": "c7c31c7bc7a0b33324c79869b4833dadaa720f88ce861ec4ba174684ddff4cd0",
+      "contentSha256": "5c0e5fdc02c2a70c562e909e9f106b64f982246f240983e2c6f11efa8855a980",
       "sourceSetSha256": "de0e7d6629009d46b75b16980bdca9780a13b2a2cf0f5520bc0d4e61bd2384c2",
       "sources": [
         {
@@ -65,8 +65,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-09-03",
-        "scope": "Full RN exam-policy, educational, clinical-judgment, and source review of the exact 2026 NCLEX-RN Test Plan authority-hub content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN exam-policy, educational, clinical-judgment, and source review of the exact 2026 NCLEX-RN Test Plan authority-hub content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "test-plan-purpose-effective-period-and-development",
@@ -148,7 +148,7 @@
         "audience": "NCLEX-RN candidates and nursing educators",
         "risk": "exam"
       },
-      "contentSha256": "86a8a3f3986e1f8fe23c8101f35a017796b81605dbc604bb2f462a6fa84efcd9",
+      "contentSha256": "303144843b2d832091e5f3c9ca30a61a22929bed27ef09d74b39d9f544b1f0c6",
       "sourceSetSha256": "de0e7d6629009d46b75b16980bdca9780a13b2a2cf0f5520bc0d4e61bd2384c2",
       "sources": [
         {
@@ -187,8 +187,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-09-03",
-        "scope": "Full RN exam-policy, clinical-judgment, educational, and source review of the exact NCLEX clinical-judgment authority-hub content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN exam-policy, clinical-judgment, educational, and source review of the exact NCLEX clinical-judgment authority-hub content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "clinical-judgment-definition-and-iterative-process",
@@ -281,7 +281,7 @@
         "audience": "NCLEX-RN candidates",
         "risk": "exam"
       },
-      "contentSha256": "b26d42c8a4781b1f8985c511ff9c7c6a21766118bd4a3bc50d37fbb715891d24",
+      "contentSha256": "8f2099a5cdb33332129c66fdcc3f576212bd253d58e2cedfd097ddd9cada7c9a",
       "sourceSetSha256": "2a2b6363d44e1f2e3b35113dfdb4d40d923f10b076c0acce267971b9e37b5897",
       "sources": [
         {
@@ -324,8 +324,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-08-28",
-        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 13 how-is-the-nclex-scored content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 13 how-is-the-nclex-scored content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "nclex-pass-fail-cat-and-partial-credit-scope",
@@ -432,7 +432,7 @@
         "audience": "NCLEX-RN candidates",
         "risk": "exam"
       },
-      "contentSha256": "ec1dd8c4d5e7439dbeb22cb8213d3537308ce59d30ee58d0f9c37c9254126944",
+      "contentSha256": "9f8fae50f5fc7c1a34d0496a0499145d602e2363787db545de5173321715189e",
       "sourceSetSha256": "4e4d4a22601926c9f6d51e37e6318a7aef7013d9b78ed1a2e4e441396949066d",
       "sources": [
         {
@@ -475,8 +475,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-08-28",
-        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 14 how-many-questions-is-the-nclex content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 14 how-many-questions-is-the-nclex content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "nclex-2026-item-range-duration-and-effective-period",
@@ -736,7 +736,7 @@
         "audience": "NCLEX-RN candidates",
         "risk": "exam"
       },
-      "contentSha256": "c42b12ab69070103fc9904b45d220c80cd1f9e645f2fca0e0f423e1e67d2187b",
+      "contentSha256": "d8b5424212f625694ad55a9aa8951b7b79d9ef5063ecf94395ac3a9606ca58f0",
       "sourceSetSha256": "7a0255cf7cd9f1ca126f2db1a01e1d98accaa72b8ccf8bac976c613558b2c343",
       "sources": [
         {
@@ -779,8 +779,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-08-28",
-        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 16 nclex-test-day-what-to-expect content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 16 nclex-test-day-what-to-expect content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "test-day-current-source-and-appointment-boundary",
@@ -889,7 +889,7 @@
         "audience": "prospective NCLEX-RN candidates",
         "risk": "exam"
       },
-      "contentSha256": "93859d2b0462e9bf7e6484ce0de27c3c868398ea8eea289f0910295a87832c86",
+      "contentSha256": "91e26326db49c8794f949fe6a67aa132f5f8721b5d43d250f8bdc55ff49ff2bf",
       "sourceSetSha256": "5dd7f6f56f8f680e3f9556dad905d18bf9db48585b4d80475f0ff22b1f6a78b2",
       "sources": [
         {
@@ -956,8 +956,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-09-02",
-        "scope": "Full RN exam-policy, educational, and source review of the exact how-to-register-for-the-nclex content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN exam-policy, educational, and source review of the exact how-to-register-for-the-nclex content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "registration-sequence-and-organizational-responsibility",
@@ -1015,7 +1015,7 @@
         "audience": "registered NCLEX-RN candidates",
         "risk": "exam"
       },
-      "contentSha256": "0dabecd40c3f337b868082658eb54ac8247f368a0e064af153ab19dd3b684024",
+      "contentSha256": "575e3fd16150afb72446aab261df641d4eb5527fb595fa3a73e645da01bb0294",
       "sourceSetSha256": "7066aa1e09e804df8b746e67cdf74644e2239d5c73bde3cd5baee38cca0e1a3e",
       "sources": [
         {
@@ -1076,8 +1076,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-09-02",
-        "scope": "Full RN exam-policy, educational, and source review of the exact nclex-authorization-to-test-att content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN exam-policy, educational, and source review of the exact nclex-authorization-to-test-att content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "att-definition-and-prerequisites",
@@ -1136,7 +1136,7 @@
         "audience": "NCLEX-RN candidates with an ATT",
         "risk": "exam"
       },
-      "contentSha256": "a2f8b7a9ca52aa44532ed378f9a5423a3380439ac9da3464ad3454897bdf4cd8",
+      "contentSha256": "56723df95eb889c466d631aa1d442d92980946340181f05fbd180dac9d9bce02",
       "sourceSetSha256": "d2b4ce7f5fa92ea86bb85ee21a80ebf16fcd8225d66d9f696fb0abae08c462c8",
       "sources": [
         {
@@ -1187,8 +1187,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-09-02",
-        "scope": "Full RN exam-policy, educational, and source review of the exact schedule-reschedule-cancel-nclex content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN exam-policy, educational, and source review of the exact schedule-reschedule-cancel-nclex content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "scheduling-att-channel-and-confirmation-requirements",
@@ -1252,7 +1252,7 @@
         "audience": "prospective NCLEX-RN candidates",
         "risk": "exam"
       },
-      "contentSha256": "2a4fa78bd0f9de7a67976ead4283bca8ffa2cfce2a512303f86ae55edf7f1b5c",
+      "contentSha256": "ec2c6667d3b99bcbc7743847b1fc2f2677273504f7023472426d64ddc09e8de9",
       "sourceSetSha256": "40fe2680d7b3cd5f92f42afc806ff667f037d3711505469688e3fc0cc1e65cb3",
       "sources": [
         {
@@ -1304,8 +1304,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-09-02",
-        "scope": "Full RN exam-policy, educational, pricing, and source review of the exact nclex-fees-and-payment content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN exam-policy, educational, pricing, and source review of the exact nclex-fees-and-payment content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "fees-current-registration-international-and-change-table",
@@ -1368,7 +1368,7 @@
         "audience": "NCLEX-RN candidates requesting accommodations",
         "risk": "exam"
       },
-      "contentSha256": "d94cceac779e8ff59ec2bbc976efc7ec9ea12bf6902c059bd84030f01173a209",
+      "contentSha256": "cb04b827f1617d4e6121da8ef87737475cecee6e078b7ddeb4b846b8a9172aca",
       "sourceSetSha256": "b03b9fd71a313021dd49aa8d63c93acff54f3bc1b4858eb15818f93ed47a0964",
       "sources": [
         {
@@ -1435,8 +1435,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-09-02",
-        "scope": "Full RN exam-policy, educational, accessibility-process, and source review of the exact nclex-testing-accommodations content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN exam-policy, educational, accessibility-process, and source review of the exact nclex-testing-accommodations content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "accommodations-nrb-control-and-pre-registration-timing",
@@ -1502,7 +1502,7 @@
         "audience": "recent NCLEX-RN candidates",
         "risk": "exam"
       },
-      "contentSha256": "7d67d0d3e04f874c2da39a86c96307cac61fb806cae4a33d6258335cfec63df0",
+      "contentSha256": "0a1f462c46d60817cf788d705aff1997add5a036cd9d5797c5e54bcbe030c541",
       "sourceSetSha256": "87c8ab8dbee50a56e4771723044e1f9c2200385c476ac2a061201d539418f340",
       "sources": [
         {
@@ -1538,8 +1538,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-09-02",
-        "scope": "Full RN exam-policy, educational, results-channel, and source review of the exact nclex-quick-results-vs-official-results content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN exam-policy, educational, results-channel, and source review of the exact nclex-quick-results-vs-official-results content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "results-unofficial-quick-versus-official-nrb-boundary",
@@ -1596,7 +1596,7 @@
         "audience": "NCLEX-RN retake candidates",
         "risk": "exam"
       },
-      "contentSha256": "1233bad8d15c6db021aa72cf9a0bf3dea11776838318b6f8e309a8a99b0a7412",
+      "contentSha256": "f24b2012546f44075ebec6889ed8ac8818dcb89695265b3649dab5ad93eef28e",
       "sourceSetSha256": "d8b27ccf2f6e707b4a617de61848e27b0542a29eaa8c5768ac163e6bc2e682ce",
       "sources": [
         {
@@ -1641,8 +1641,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-09-02",
-        "scope": "Full RN exam-policy, educational, remediation, and source review of the exact how-to-read-nclex-candidate-performance-report content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN exam-policy, educational, remediation, and source review of the exact how-to-read-nclex-candidate-performance-report content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "cpr-purpose-audience-and-two-page-format",
@@ -1705,7 +1705,7 @@
         "audience": "international NCLEX-RN candidates",
         "risk": "exam"
       },
-      "contentSha256": "e220660fc053ec591aa1ea753bea7e2f350268fb2b612689f5a3638c5719423f",
+      "contentSha256": "c86e50add2189b0fe54e000f2d476cdbafaf4f13bf90f5269f609cdb8de142fa",
       "sourceSetSha256": "ba631518228419e071c5685412cbda7a7e65db569d9e7228375b7e5bd0ba2558",
       "sources": [
         {
@@ -1771,8 +1771,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-09-02",
-        "scope": "Full RN exam-policy, educational, international-scheduling, and source review of the exact international-nclex-testing content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN exam-policy, educational, international-scheduling, and source review of the exact international-nclex-testing content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "international-domestic-definition-by-licensure-destination",
@@ -1836,7 +1836,7 @@
         "audience": "NCLEX-RN candidates",
         "risk": "exam"
       },
-      "contentSha256": "2440e4ee6369a2fc174e3a7764d521bfbf06d0afb4f66a81b1a3a814f3f0b1a1",
+      "contentSha256": "38a421eb9b185db8beac706e688c6ec48003ae65e80836e8ceedbcf79f209127",
       "sourceSetSha256": "da905d4a1796bf78c83cdbdad1d122f7ad9e6d17db5622ab264d1e424fc264c2",
       "sources": [
         {
@@ -1870,8 +1870,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-08-28",
-        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 17 bow-tie-questions content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 17 bow-tie-questions content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "bow-tie-five-selection-structure",
@@ -1952,7 +1952,7 @@
         "audience": "NCLEX-RN candidates",
         "risk": "exam"
       },
-      "contentSha256": "6281f9f3e7717b7d885662b2e5a0e9eb50ed83b0cbebec2eac015a5646ae939d",
+      "contentSha256": "8a2abd50d61e809e87d573e090e8b951fb3ccfcca85df8ca4a15015b423350fc",
       "sourceSetSha256": "da905d4a1796bf78c83cdbdad1d122f7ad9e6d17db5622ab264d1e424fc264c2",
       "sources": [
         {
@@ -1986,8 +1986,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-08-28",
-        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 18 matrix-grid-questions content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 18 matrix-grid-questions content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "matrix-grid-row-column-classification-format",
@@ -2061,7 +2061,7 @@
         "audience": "NCLEX-RN candidates",
         "risk": "exam"
       },
-      "contentSha256": "49a5d6dfaef8bbd9fd8e97a5a17c8e94d065e4a49f7cfe290ed9445dc5872bd9",
+      "contentSha256": "050ab038927e4229cf04dbefb0c4401c8b7b461be17cfc93511c7c707940f8dc",
       "sourceSetSha256": "da905d4a1796bf78c83cdbdad1d122f7ad9e6d17db5622ab264d1e424fc264c2",
       "sources": [
         {
@@ -2095,8 +2095,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-08-28",
-        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 19 cloze-drop-down-questions content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 19 cloze-drop-down-questions content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "cloze-drop-down-format",
@@ -2170,7 +2170,7 @@
         "audience": "NCLEX-RN candidates",
         "risk": "exam"
       },
-      "contentSha256": "cae7a731e21f0d67385dc9307a86c27622506b5ffeabe2d940dca3a7396f4a90",
+      "contentSha256": "edd5ac315b9dfcc49676c9eb17348cbb6c9b3e7d209a8ef2b04cd9e38155cba7",
       "sourceSetSha256": "da905d4a1796bf78c83cdbdad1d122f7ad9e6d17db5622ab264d1e424fc264c2",
       "sources": [
         {
@@ -2204,8 +2204,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-08-29",
-        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 20 highlight-questions content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 20 highlight-questions content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "highlight-item-text-selection-format",
@@ -2280,7 +2280,7 @@
         "audience": "NCLEX-RN candidates",
         "risk": "exam"
       },
-      "contentSha256": "c3afb8bd58cd3521d36504a7ea4750300320da040fddd997a9323fe34dd4c159",
+      "contentSha256": "50f812f30eb201ce17cde7791cb9ff8d97f3676aaa0a0745d5bc115dc1552ea8",
       "sourceSetSha256": "da905d4a1796bf78c83cdbdad1d122f7ad9e6d17db5622ab264d1e424fc264c2",
       "sources": [
         {
@@ -2314,8 +2314,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-08-29",
-        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 21 select-all-that-apply-strategy content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 21 select-all-that-apply-strategy content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "multiple-response-select-every-supported-option-format",
@@ -2389,7 +2389,7 @@
         "audience": "NCLEX-RN candidates",
         "risk": "exam"
       },
-      "contentSha256": "1c32e92fccab9f202adfc136bda3828e36bb8f5bd3e376f8d80d8bb0dabb4a9f",
+      "contentSha256": "74483c549a9c83d8f6d5c72325dbf9ba75331ea4ddd31c317da5ad5ed8c63ee1",
       "sourceSetSha256": "da905d4a1796bf78c83cdbdad1d122f7ad9e6d17db5622ab264d1e424fc264c2",
       "sources": [
         {
@@ -2423,8 +2423,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-08-29",
-        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 22 drag-and-drop-ordering-questions content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 22 drag-and-drop-ordering-questions content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "ordering-and-drag-interface-format-boundary",
@@ -2498,7 +2498,7 @@
         "audience": "NCLEX-RN candidates",
         "risk": "clinical"
       },
-      "contentSha256": "719cf02f930d752ca04965b3bbb07f48f6cfbde1f9cbe99cdb00e11253f2add5",
+      "contentSha256": "10b653c5d53a4ef0da84069f2a1fb101567c923d24936e50cd59a1cfac6d776b",
       "sourceSetSha256": "f1216fab579c7917936c1be320ca9d06d495d987bd83af8c69faa3bd254f9cad",
       "sources": [
         {
@@ -2532,8 +2532,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-08-29",
-        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 23 lab-values-to-memorize content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 23 lab-values-to-memorize content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "laboratory-reference-range-method-and-population-variation",
@@ -2604,7 +2604,7 @@
         "audience": "NCLEX-RN candidates",
         "risk": "clinical"
       },
-      "contentSha256": "4cc71368c819558ec37ee6c36257aaaea73c5389dc878ce31fed7b932e0c3166",
+      "contentSha256": "bb1c90886740aa1d56c11cd424769226bdbe0626fbe4deacbaf38330a0d9b3c8",
       "sourceSetSha256": "897d728338a16872e1438b68ab3270ba4539f270cadc473183a2f823307fcc98",
       "sources": [
         {
@@ -2647,8 +2647,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-08-26",
-        "scope": "Full RN clinical and source review of the exact Guide 1 ABG content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN clinical and source review of the exact Guide 1 ABG content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "abg-purpose-and-components",
@@ -2736,7 +2736,7 @@
         "audience": "NCLEX-RN candidates",
         "risk": "clinical"
       },
-      "contentSha256": "52256cc286865ec11a47d5416bec41fa575a4d888e33fb0e7cd35d87936f5383",
+      "contentSha256": "bf0e9fde6c6cf379be6c9e3ffbd6fdc07f1b9bcbbc1f8e46ee5ef2db89e25997",
       "sourceSetSha256": "9de71ddc0623cd55e62a42c83201872548e69b3d51aef3ecd873a162e6a29bf2",
       "sources": [
         {
@@ -2833,8 +2833,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-08-27",
-        "scope": "Full RN clinical and source review of the exact Guide 2 electrolyte-imbalances content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN clinical and source review of the exact Guide 2 electrolyte-imbalances content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "electrolyte-assessment-and-urgent-findings",
@@ -2944,7 +2944,7 @@
         "audience": "NCLEX-RN candidates",
         "risk": "clinical"
       },
-      "contentSha256": "488d688a7c7dd0922c453edf367345fd61c3a44abfed69a62fd539f543b07156",
+      "contentSha256": "7f4a1396eccb9114fbe633e5cd62210ab4adc4086176be4a84b6fd34b6e0c4ef",
       "sourceSetSha256": "2b5a29aca50788c46f08c4c7666bd8fe0fe6f930f6952bc7f61eb3a47981212c",
       "sources": [
         {
@@ -3014,8 +3014,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-08-27",
-        "scope": "Full RN clinical and source review of the exact Guide 3 infection-control-precautions content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN clinical and source review of the exact Guide 3 infection-control-precautions content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "infection-control-standard-and-transmission-based-framework",
@@ -3103,7 +3103,7 @@
         "audience": "NCLEX-RN candidates",
         "risk": "clinical"
       },
-      "contentSha256": "a49ad5567061a952e8f7671e2d6a8afde560e74685ea76f20aa50dd43fd29dd6",
+      "contentSha256": "eb026b5564028cfdae13b2bc85c4668a68ddaacdadc69b0b29bf8949e7111ee1",
       "sourceSetSha256": "3b0d47187acf1bd444d28c7362dd080f2aaafa6f662b1184b5dde85a51f9e3c5",
       "sources": [
         {
@@ -3173,8 +3173,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-08-27",
-        "scope": "Full RN clinical and source review of the exact Guide 4 insulin-types-and-timing content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN clinical and source review of the exact Guide 4 insulin-types-and-timing content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "insulin-product-route-and-administration-safety-boundary",
@@ -3269,7 +3269,7 @@
         "audience": "NCLEX-RN candidates",
         "risk": "clinical"
       },
-      "contentSha256": "4b9333991566244b9c6a57c4c6a8b99310e8e0f627925a987d761b48c7907abc",
+      "contentSha256": "3af6a6b0986a7fc4061d4c69c213d524717a7a599b7f81bef0a9ee34fd2208d5",
       "sourceSetSha256": "187410cae562b5e40b98c4632562b053dd9422fa2f7269ab26bc0d17416915e8",
       "sources": [
         {
@@ -3375,8 +3375,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-08-27",
-        "scope": "Full RN clinical and source review of the exact Guide 5 high-alert-medications content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN clinical and source review of the exact Guide 5 high-alert-medications content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "high-alert-definition-and-safety-boundary",
@@ -3468,7 +3468,7 @@
         "audience": "NCLEX-RN candidates",
         "risk": "clinical"
       },
-      "contentSha256": "593f70ffc8e9c3f654cbd636712ec5feec560be75deeb279661589a53ad5cd4f",
+      "contentSha256": "08d720ed292a0e5b4dee7374bda8b376d2892d03d1c44d0ee0c71a9415b07538",
       "sourceSetSha256": "2645b7c1ae74a863333b0a551823a1279bee07b55b025913e968322729cb7669",
       "sources": [
         {
@@ -3502,8 +3502,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-08-27",
-        "scope": "Full RN clinical and source review of the exact Guide 6 prioritization-abc-maslow content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN clinical and source review of the exact Guide 6 prioritization-abc-maslow content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "prioritization-clinical-judgment-sequence",
@@ -3588,7 +3588,7 @@
         "audience": "NCLEX-RN candidates",
         "risk": "clinical"
       },
-      "contentSha256": "a2a254264aa027f2ff9adac1148af9804f5ab944ab5d5e90dce9b5ce597f905e",
+      "contentSha256": "d8b5986bb6728eb0502daffaf966d6bdfe9513b4f733aa0a8fccafdb5b0fc8f8",
       "sourceSetSha256": "ac3a93df4bfccd62851a8d874487fc76a767b7b5f5acfd1166d97d58d9aaaa54",
       "sources": [
         {
@@ -3622,8 +3622,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-08-27",
-        "scope": "Full RN clinical and source review of the exact Guide 7 delegation-and-assignment content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN clinical and source review of the exact Guide 7 delegation-and-assignment content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "delegation-nclex-framework-and-safety-boundary",
@@ -3709,7 +3709,7 @@
         "audience": "NCLEX-RN candidates",
         "risk": "clinical"
       },
-      "contentSha256": "e51357e7f9f5932cf4b03f89f2c20c3d2d87953a26af0bfff422b99aa4c838f7",
+      "contentSha256": "6cb05321af280da9135a4d3e89b927e65415a7bc381a3ca0a3bfa6eb5018cca9",
       "sourceSetSha256": "67f827a14c2b045e4e24e8bb75fac69d0f499fdd420b7e97bcee7cea7509b05e",
       "sources": [
         {
@@ -3752,8 +3752,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-08-27",
-        "scope": "Full RN clinical and source review of the exact Guide 8 therapeutic-communication content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN clinical and source review of the exact Guide 8 therapeutic-communication content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "therapeutic-communication-purpose-and-safety-boundary",
@@ -3843,7 +3843,7 @@
         "audience": "NCLEX-RN candidates",
         "risk": "clinical"
       },
-      "contentSha256": "7090723b9c97fc4c0ed38e9b365a02f03c14f4b39ee8d0766e7a6dbf0325c824",
+      "contentSha256": "20974c5c704f1412451aeaada2a3077b1b5ea9c7a07fb5b8d6d940bd9221ef50",
       "sourceSetSha256": "ffae2149ee574a1ddf529bd3bb57bf104da100e9fde02446e7e1b0fb0347bcdb",
       "sources": [
         {
@@ -3877,8 +3877,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-08-27",
-        "scope": "Full RN clinical and source review of the exact Guide 9 dosage-calculation-formulas content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN clinical and source review of the exact Guide 9 dosage-calculation-formulas content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "dosage-calculation-purpose-and-safety-boundary",
@@ -3971,7 +3971,7 @@
         "audience": "NCLEX-RN candidates",
         "risk": "education"
       },
-      "contentSha256": "c5b1a9027585071faf9c65cc6588568c1036b5ef5a9bd7512db3d407cc6d8a66",
+      "contentSha256": "84bfee73b3ffe29b7a8f470973a4c2f95ca1a74e2b44cea43aca4b608c126c5a",
       "sourceSetSha256": "d243782dd6ddfa49e7d70db9edefab2093199321768c946882b5a3de7ba0fab0",
       "sources": [
         {
@@ -4005,8 +4005,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-08-28",
-        "scope": "Full RN clinical, educational, and source review of the exact Guide 10 nclex-study-plan content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN clinical, educational, and source review of the exact Guide 10 nclex-study-plan content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "study-plan-scope-and-no-readiness-guarantee",
@@ -4095,7 +4095,7 @@
         "audience": "nursing students",
         "risk": "education"
       },
-      "contentSha256": "85b2c1878dc68a51360655f365189a1dad27d48bf02161eb1a7e35c104967eeb",
+      "contentSha256": "26909e715a7d1f6fcaf9951bb671927f536ff4ed700e9ee12b163129eeca4017",
       "sourceSetSha256": "d243782dd6ddfa49e7d70db9edefab2093199321768c946882b5a3de7ba0fab0",
       "sources": [
         {
@@ -4129,8 +4129,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-08-28",
-        "scope": "Full RN clinical, educational, and source review of the exact Guide 11 spaced-repetition-for-nursing-students content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN clinical, educational, and source review of the exact Guide 11 spaced-repetition-for-nursing-students content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "spaced-repetition-scope-and-safety-boundary",
@@ -4218,7 +4218,7 @@
         "audience": "NCLEX-RN retake candidates",
         "risk": "education"
       },
-      "contentSha256": "9757cdf4bf97a2641de69ab79fdda756f561df5f3c669d1b06246f1179e10b99",
+      "contentSha256": "7c3817ef0cf684c2b1bef72cbc4590176728620b92c4f6ec0050f6ee9ef15359",
       "sourceSetSha256": "30b27ec996717c17b35ef788f1fc44fa59fab6aaf5d4d14959e056479ae378e3",
       "sources": [
         {
@@ -4290,8 +4290,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-08-28",
-        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 12 failed-the-nclex-what-now content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 12 failed-the-nclex-what-now content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "nclex-failure-result-and-cpr-interpretation-boundary",
@@ -4395,7 +4395,7 @@
         "audience": "NCLEX-RN candidates",
         "risk": "clinical"
       },
-      "contentSha256": "c3b0e07a8b83c49121600aaf2fae0421062caff23d32393d3458ccd3b2a1dd2f",
+      "contentSha256": "0e2c7f5a66f2fe4b6d4054a6b07759ac37d0c19cf50ac8d3055c368a378a9c46",
       "sourceSetSha256": "a0c38d611028de5d3b2cb617393c325ca1f79cef7574704709219b08b9fd7c30",
       "sources": [
         {
@@ -4465,8 +4465,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-08-29",
-        "scope": "Full RN clinical, educational, item-key, rationale, and source review of the exact public pharmacology sample-set content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN clinical, educational, item-key, rationale, and source review of the exact public pharmacology sample-set content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "pharmacology-high-alert-definition",
@@ -4529,7 +4529,7 @@
         "audience": "NCLEX-RN candidates",
         "risk": "clinical"
       },
-      "contentSha256": "689cb2df200b88bc09713661b10902a9f12ba392e0c41bb33801a9c401611942",
+      "contentSha256": "bc11072a5e1ffb0681e624b408e10f15f5dcf7d3b266e44c3e7d9534f2be1218",
       "sourceSetSha256": "2645b7c1ae74a863333b0a551823a1279bee07b55b025913e968322729cb7669",
       "sources": [
         {
@@ -4563,8 +4563,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-08-29",
-        "scope": "Full RN clinical, educational, item-key, rationale, and source review of the exact public prioritization sample-set content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN clinical, educational, item-key, rationale, and source review of the exact public prioritization sample-set content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "prioritization-cardiac-arrest-recognition-response",
@@ -4631,7 +4631,7 @@
         "audience": "NCLEX-RN candidates",
         "risk": "clinical"
       },
-      "contentSha256": "76cf923b2db04f098f0682f17bc06b45e51be0001f95a749b0ac15c62f4f193b",
+      "contentSha256": "4d8184c4077e7c75a34751a554421a12d7300e659944c94f63d8e52876198e68",
       "sourceSetSha256": "ffae2149ee574a1ddf529bd3bb57bf104da100e9fde02446e7e1b0fb0347bcdb",
       "sources": [
         {
@@ -4665,8 +4665,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-08-29",
-        "scope": "Full RN clinical, educational, arithmetic, unit, rationale, and source review of the exact public dosage-calculation sample-set content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN clinical, educational, arithmetic, unit, rationale, and source review of the exact public dosage-calculation sample-set content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "dosage-tablet-calculation",
@@ -4729,7 +4729,7 @@
         "audience": "NCLEX-RN candidates",
         "risk": "clinical"
       },
-      "contentSha256": "f70984039383685fac87199d057c89c1e07f064c78fb93e3668de20de254607b",
+      "contentSha256": "6e4b0aad7fb832b4cceea8452322f8fe3628f67c68c0ef8224462a8f7049f652",
       "sourceSetSha256": "4503c3137871c310437019cbbf74a5b680c22b4f96280df58d89d085bd946efd",
       "sources": [
         {
@@ -4826,8 +4826,8 @@
       "review": {
         "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": "2026-08-29",
-        "scope": "Full RN clinical, educational, item-key, rationale, and source review of the exact public NGN bow-tie sample-set content and source-set digests",
+        "reviewedAt": "2026-11-28",
+        "scope": "Full RN clinical, educational, item-key, rationale, and source review of the exact public NGN bow-tie sample-set content and source-set digests. Re-reviewed Nov 28, 2026: RN approved the scoring, factual and wording edits in the guide sign-off document.",
         "claims": [
           {
             "id": "bow-tie-format-selection-structure",
