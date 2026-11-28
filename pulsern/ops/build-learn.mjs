@@ -157,7 +157,6 @@ ${JSON.stringify(jsonld, null, 2)}
 
 export function articleJsonLd(a, url, provenance) {
   const citations = provenance.sources;
-  const reviewer = REVIEW_LEDGER.reviewer;
   const person = personNode();
   const graph = [
     {
@@ -317,7 +316,7 @@ function renderIndex(all) {
   })}
 <main><nav class="hubnav" aria-label="Primary navigation"><a href="/">PulseRN</a> &middot; <a href="/how-it-works/">How it works</a> &middot; <a href="/free-nclex-practice-test/">Free practice</a> &middot; <a href="/pricing/">Pricing</a> &middot; <a href="/app/sign-up">Start free</a></nav>
 <h1>NCLEX-RN <b>guides</b></h1>
-<p class="sub">Every guide is written and reviewed by <a href="/about/#sheldon-bennett-rn">${esc(REVIEW_LEDGER.reviewer.displayName)}, RN</a>. ${esc(AUTHOR_SENTENCE)} Each guide lists its sources and the RN who reviewed it.</p>
+<p class="sub">${all.every((a) => provenanceFor(a).review.decision === "approved") ? "Every guide is written and reviewed by" : "Guides are written by, and approved guides are reviewed by,"} <a href="/about/#sheldon-bennett-rn">${esc(REVIEW_LEDGER.reviewer.displayName)}, RN</a>. ${esc(AUTHOR_SENTENCE)} Each guide lists its sources and its review status.</p>
 <div class="cta"><p><b>Start with a question.</b> <a href="/free-nclex-practice-test/">Try 20 free NCLEX-RN practice questions</a> with the answer, the rationale, and the sources on the page. No sign-in required.</p></div>
 ${sections}
 </main><footer><p class="foot">${GRADING_NOTE}</p><p class="foot">${DISCLAIMER} <a href="/legal/">Terms, Privacy, and Disclaimer</a> &middot; <a href="/about/">About</a> &middot; <a href="/editorial-policy/">Editorial policy</a></p></footer>
